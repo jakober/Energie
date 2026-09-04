@@ -90,11 +90,11 @@ class EnergyRepository(
         val car = carResult?.getOrNull()
         if (carResult != null) lastCarFetch = now
         val carForSample = car ?: _state.value.car?.takeIf { now - it.at < 30.minutes }
-        val consumptionNow = senec?.system?.meter?.consumption
-        val carPowerW = carChargePower(carForSample, consumptionNow, s.carFallbackPowerW.toDouble())
         val senec = senecResult?.getOrNull()
         val fritzData = fritzResult?.getOrNull()
         val meter = fritzData?.second
+        val consumptionNow = senec?.system?.meter?.consumption
+        val carPowerW = carChargePower(carForSample, consumptionNow, s.carFallbackPowerW.toDouble())
 
         val sample = EnergySample(
             at = now,

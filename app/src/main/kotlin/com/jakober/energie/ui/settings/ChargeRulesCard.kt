@@ -69,7 +69,7 @@ fun ChargeRulesCard(
             draft = draft.copy(minCommandGapMinutes = (it / 5).roundToInt() * 5)
         }
 
-        Text("Nachtsperre (kein Laden, außer unter der Reserve). Gleiche Zeiten = keine Sperre.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Nachtsperre, optional: In dieser Zeit lädt das Auto nicht aus dem Hausspeicher, außer es liegt unter der Reserve. Gleiche Zeiten = aus (Standard).", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             TimeField("Von", draft.nightStartMinutes, Modifier.weight(1f)) { draft = draft.copy(nightStartMinutes = it) }
             TimeField("Bis", draft.nightEndMinutes, Modifier.weight(1f)) { draft = draft.copy(nightEndMinutes = it) }

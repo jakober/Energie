@@ -15,10 +15,10 @@ data class ChargeRules(
     val batteryOffPercent: Int = 50,
     /** Laden auch erlaubt, wenn so viel PV-Ueberschuss da ist (W). */
     val surplusOnW: Int = 2000,
-    /** Nachtsperre von ... */
-    val nightStartMinutes: Int = 22 * 60,
-    /** ... bis (Minuten seit Mitternacht). Gleich = keine Sperre. */
-    val nightEndMinutes: Int = 6 * 60,
+    /** Nachtsperre von ... (Minuten seit Mitternacht). */
+    val nightStartMinutes: Int = 0,
+    /** ... bis. Gleich = keine Sperre; das ist der Standard, die Speicherregel reicht meist. */
+    val nightEndMinutes: Int = 0,
     /** Unter dieser Autoladung wird immer geladen, egal was der Speicher sagt. */
     val carReservePercent: Int = 50,
     /** Mindestabstand zwischen zwei Befehlen, gegen Flattern. */

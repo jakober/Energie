@@ -8,7 +8,7 @@ import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.minutes
 
 class ChargeRuleEngineTest {
-    private val rules = ChargeRules(enabled = true)
+    private val rules = ChargeRules(enabled = true, nightStartMinutes = 22 * 60, nightEndMinutes = 6 * 60)
     private val t0 = Instant.parse("2026-09-05T10:00:00Z")
 
     private fun input(

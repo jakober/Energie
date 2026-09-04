@@ -9,6 +9,7 @@ import com.jakober.energie.core.history.EnergyTotals
 import com.jakober.energie.core.senec.SenecConnectClient
 import com.jakober.energie.core.smartcar.SmartcarClient
 import com.jakober.energie.data.CarCommand
+import com.jakober.energie.data.FordCommand
 import com.jakober.energie.data.LiveState
 import com.jakober.energie.data.Settings
 import kotlinx.coroutines.Dispatchers
@@ -252,6 +253,103 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
                     }
                 }
                 .onFailure { _carResult.value = "Fehler: ${it.message ?: it}" }
+        }
+    }
+
+    // --- FordPass (inoffiziell) ---
+
+    private val _fordResult = MutableStateFlow<String?>(null)
+    val fordResult: StateFlow<String?> = _fordResult
+    private val _fordRaw = MutableStateFlow<String?>(null)
+    val fordRaw: StateFlow<String?> = _fordRaw
+    private var fordVerifier: String? = null
+
+    /** Login-Adresse fuer den eingebauten Browser; der PKCE-Wert bleibt bis zur Rueckkehr im Speicher. */
+    fun fordLoginUrl(): String {
+        val client = repo.fordpass(settings.value)
+        val verifier = fordVerifier ?: client.newCodeVerifier().also { fordVerifier = it }
+        return client.loginUrl(verifier)
+    }
+
+    /** Nimmt die Rueckkehr-Adresse (fordapp://userauthorized?code=...) entgegen. */
+    fun fordExchange(codeOrUrl: String) {
+        val verifier = fordVerifier
+        if (verifier == null) { _fordResult.value = "Bitte zuerst „Bei Ford anmelden“ drücken, dann die Adresse einfügen."; return }
+        viewModelScope.launch {
+            _fordResult.value = "Tausche Anmeldecode …"
+            runCatching {
+                val s = container.settings.current()
+                val client = repo.fordpass(s)
+                client.exchangeCode(codeOrUrl, verifier)
+                fordVerifier = null
+                _fordResult.value = "Angemeldet. Suche Fahrzeuge …"
+                val vehicles = client.vehicles()
+                _fordRaw.value = vehicles.joinToString("\n") { "${it.vin}  ${it.year ?: ""} ${it.model ?: ""} ${it.nickname ?: ""}" }
+                val chosen = vehicles.firstOrNull { it.model?.contains("Mach", ignoreCase = true) == true } ?: vehicles.firstOrNull()
+                    ?: error("FordPass kennt fuer dieses Konto kein Fahrzeug. Ist das Zweitkonto als Fahrer freigegeben?")
+                container.settings.saveFordVehicle(chosen.vin)
+                _fordResult.value = "Fahrzeug: ${chosen.model ?: chosen.vin} (${chosen.vin})"
+                fordStatus()
+            }.onFailure { _fordResult.value = "Fehler: ${it.message ?: it}" }
+        }
+    }
+
+    fun fordStatus() {
+        viewModelScope.launch {
+            val s = container.settings.current()
+            if (!s.fordConnected) { _fordResult.value = "Nicht bei Ford angemeldet."; return@launch }
+            _fordResult.value = "Lese Fahrzeugstatus bei Ford …"
+            runCatching { repo.fordRefreshNow(s) }
+                .onSuccess { c ->
+                    _fordRaw.value = c.raw.values.joinToString("\n")
+                    _fordResult.value = "Ladung ${Format.percentValue(c.socPercent)}" +
+                        (c.rangeKm?.let { ", Reichweite ${it.toInt()} km" } ?: "") +
+                        ", " + when {
+                            c.isCharging == true -> "lädt"
+                            c.isPluggedIn == true -> "steckt, lädt nicht"
+                            c.isPluggedIn == false -> "nicht angeschlossen"
+                            else -> "Status unbekannt"
+                        } + (c.chargingStatus?.let { " ($it)" } ?: "") +
+                        (c.chargePowerW?.let { ", ${Format.power(it)}" } ?: "")
+                }
+                .onFailure { _fordResult.value = "Fehler: ${it.message ?: it}" }
+        }
+    }
+
+    fun fordLocations() {
+        viewModelScope.launch {
+            val s = container.settings.current()
+            if (!s.fordConnected) { _fordResult.value = "Nicht bei Ford angemeldet."; return@launch }
+            runCatching { repo.fordLocations(s) }
+                .onSuccess { list ->
+                    _fordRaw.value = list.joinToString("\n") { "${it.id}  ${it.name ?: ""} (${it.type ?: ""}) Ziel ${it.targetSoc ?: "-"} % Modus ${it.chargeMode ?: "-"}" }
+                    _fordResult.value = if (list.isEmpty()) "Ford kennt keinen Ladeort. In der FordPass-App einen Ladeort „Zuhause“ anlegen." else "${list.size} Ladeort(e), siehe Rohantwort."
+                }
+                .onFailure { _fordResult.value = "Fehler: ${it.message ?: it}" }
+        }
+    }
+
+    fun fordCommand(command: FordCommand) {
+        viewModelScope.launch {
+            val s = container.settings.current()
+            if (!s.fordConnected) { _fordResult.value = "Nicht bei Ford angemeldet."; return@launch }
+            _fordResult.value = "${command.label} wird gesendet …"
+            runCatching { repo.fordCommand(s, command) }
+                .onSuccess { r ->
+                    _fordRaw.value = r.body
+                    _fordResult.value = if (r.accepted) "${command.label}: Ford hat den Befehl angenommen (HTTP ${r.status}). In 1–2 Minuten in der FordPass-App prüfen."
+                    else "${command.label}: abgelehnt mit HTTP ${r.status}. Rohantwort unten."
+                }
+                .onFailure { _fordResult.value = "Fehler: ${it.message ?: it}" }
+        }
+    }
+
+    fun fordLogout() {
+        viewModelScope.launch {
+            container.settings.clearFord()
+            fordVerifier = null
+            _fordResult.value = "Ford-Anmeldung entfernt."
+            _fordRaw.value = null
         }
     }
 

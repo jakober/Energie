@@ -30,6 +30,10 @@ import android.net.Uri
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.jakober.energie.data.CarCommand
+import com.jakober.energie.data.FordCommand
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.app.Activity
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -60,6 +64,15 @@ fun SettingsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
     var showCarRaw by rememberSaveable { mutableStateOf(false) }
     val carResult by vm.carResult.collectAsStateWithLifecycle()
     val carRaw by vm.carRaw.collectAsStateWithLifecycle()
+    val fordResult by vm.fordResult.collectAsStateWithLifecycle()
+    val fordRaw by vm.fordRaw.collectAsStateWithLifecycle()
+    var showFordRaw by rememberSaveable { mutableStateOf(false) }
+    var fordPaste by rememberSaveable { mutableStateOf("") }
+    val fordLogin = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            result.data?.getStringExtra(FordLoginActivity.RESULT_URL)?.let { vm.fordExchange(it) }
+        }
+    }
     val context = LocalContext.current
     val dirty = draft != saved
 
@@ -187,6 +200,52 @@ fun SettingsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
         }
 
         item {
+            EnergieCard(title = "FordPass (Steuerung, inoffiziell)", accent = EnergyColors.car) {
+                Text(
+                    "Nutzt Fords eigene App-Schnittstelle, die Ford nicht offiziell freigibt. Bitte mit einem Zweitkonto anmelden, das im Auto als weiterer Fahrer freigegeben ist. Liefert Laden pausieren, fortsetzen und Ladeziel je Ladeort.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (!saved.fordConnected) {
+                    OutlinedButton(
+                        onClick = {
+                            val intent = Intent(context, FordLoginActivity::class.java).putExtra(FordLoginActivity.EXTRA_URL, vm.fordLoginUrl())
+                            fordLogin.launch(intent)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("Bei Ford anmelden") }
+                    Text("Falls der Rücksprung nicht klappt: Adresse aus der Browserzeile (fordapp://userauthorized?code=…) hier einfügen.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    OutlinedTextField(
+                        value = fordPaste, onValueChange = { fordPaste = it },
+                        label = { Text("Rückkehr-Adresse oder Code") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                        textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                    )
+                    TextButton(onClick = { vm.fordExchange(fordPaste); fordPaste = "" }, enabled = fordPaste.isNotBlank()) { Text("Code einlösen") }
+                } else {
+                    Text("Angemeldet, Fahrzeug ${saved.fordVin}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = vm::fordStatus, modifier = Modifier.weight(1f)) { Text("Status lesen") }
+                        OutlinedButton(onClick = vm::fordLocations, modifier = Modifier.weight(1f)) { Text("Ladeorte") }
+                    }
+                    Text("Testbefehle:", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { vm.fordCommand(FordCommand.PAUSE) }, modifier = Modifier.weight(1f)) { Text("Pausieren") }
+                        OutlinedButton(onClick = { vm.fordCommand(FordCommand.RESUME) }, modifier = Modifier.weight(1f)) { Text("Fortsetzen") }
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { vm.fordCommand(FordCommand.TARGET_50) }, modifier = Modifier.weight(1f)) { Text("Ziel 50 %") }
+                        OutlinedButton(onClick = { vm.fordCommand(FordCommand.TARGET_100) }, modifier = Modifier.weight(1f)) { Text("Ziel 100 %") }
+                    }
+                    TextButton(onClick = vm::fordLogout) { Text("Ford-Anmeldung entfernen") }
+                }
+                fordResult?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                if (fordRaw != null) {
+                    TextButton(onClick = { showFordRaw = !showFordRaw }) { Text(if (showFordRaw) "Rohantwort ausblenden" else "Rohantwort anzeigen") }
+                    if (showFordRaw) Text(fordRaw ?: "", style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace))
+                }
+            }
+        }
+
+        item {
             EnergieCard(title = "Abfrage") {
                 Text("Alle ${draft.pollSeconds} s, solange die App offen ist", style = MaterialTheme.typography.titleMedium)
                 Slider(
@@ -275,6 +334,7 @@ private val SettingsSaver = androidx.compose.runtime.saveable.Saver<Settings, Li
             it.fritzHost, it.fritzUser, it.fritzPassword, it.senecKey, it.senecBaseUrl, it.pollSeconds.toString(),
             it.pricePerKwh.toString(), it.feedInPerKwh.toString(), it.keepDays.toString(),
             it.smartcarAppId, it.smartcarClientId, it.smartcarClientSecret, it.smartcarVehicleId, it.smartcarUserId, it.carFallbackPowerW.toString(),
+            it.fordTokensJson, it.fordVin, it.fordLocationId,
         )
     },
     restore = {
@@ -283,6 +343,7 @@ private val SettingsSaver = androidx.compose.runtime.saveable.Saver<Settings, Li
             pollSeconds = it[5].toInt(), pricePerKwh = it[6].toDouble(), feedInPerKwh = it[7].toDouble(), keepDays = it[8].toInt(),
             smartcarAppId = it[9], smartcarClientId = it[10], smartcarClientSecret = it[11], smartcarVehicleId = it[12], smartcarUserId = it[13],
             carFallbackPowerW = it[14].toInt(),
+            fordTokensJson = it.getOrElse(15) { "" }, fordVin = it.getOrElse(16) { "" }, fordLocationId = it.getOrElse(17) { "" },
         )
     },
 )

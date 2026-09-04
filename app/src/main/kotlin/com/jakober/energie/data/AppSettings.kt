@@ -39,7 +39,12 @@ data class Settings(
     val smartcarUserId: String = "",
     /** Ladeleistung in W, wenn Smartcar keine liefert (Ladeziegel: 2200). */
     val carFallbackPowerW: Int = 2200,
+    /** FordPass (inoffiziell): Tokens als JSON, Fahrzeug und bevorzugter Ladeort. */
+    val fordTokensJson: String = "",
+    val fordVin: String = "",
+    val fordLocationId: String = "",
 ) {
+    val fordConnected: Boolean get() = fordTokensJson.isNotBlank() && fordVin.isNotBlank()
     val fritzConfigured: Boolean get() = fritzHost.isNotBlank() && fritzPassword.isNotBlank()
     val senecConfigured: Boolean get() = senecKey.isNotBlank()
     val smartcarConfigured: Boolean get() = smartcarClientId.isNotBlank() && smartcarClientSecret.isNotBlank()
@@ -71,6 +76,9 @@ class AppSettings(private val context: Context) {
             smartcarVehicleId = p[SMARTCAR_VEHICLE_ID] ?: "",
             smartcarUserId = p[SMARTCAR_USER_ID] ?: "",
             carFallbackPowerW = p[CAR_FALLBACK_POWER] ?: 2200,
+            fordTokensJson = p[FORD_TOKENS] ?: "",
+            fordVin = p[FORD_VIN] ?: "",
+            fordLocationId = p[FORD_LOCATION] ?: "",
         )
     }
 
@@ -96,6 +104,14 @@ class AppSettings(private val context: Context) {
         }
     }
 
+    suspend fun saveFordTokens(json: String) { context.dataStore.edit { it[FORD_TOKENS] = json } }
+
+    suspend fun saveFordVehicle(vin: String) { context.dataStore.edit { it[FORD_VIN] = vin } }
+
+    suspend fun saveFordLocation(id: String) { context.dataStore.edit { it[FORD_LOCATION] = id } }
+
+    suspend fun clearFord() { context.dataStore.edit { it.remove(FORD_TOKENS); it.remove(FORD_VIN); it.remove(FORD_LOCATION) } }
+
     /** Merkt sich das verbundene Fahrzeug. */
     suspend fun saveCar(vehicleId: String, userId: String?) {
         context.dataStore.edit { p ->
@@ -120,5 +136,8 @@ class AppSettings(private val context: Context) {
         val SMARTCAR_VEHICLE_ID = stringPreferencesKey("smartcar_vehicle_id")
         val SMARTCAR_USER_ID = stringPreferencesKey("smartcar_user_id")
         val CAR_FALLBACK_POWER = intPreferencesKey("car_fallback_power")
+        val FORD_TOKENS = stringPreferencesKey("ford_tokens")
+        val FORD_VIN = stringPreferencesKey("ford_vin")
+        val FORD_LOCATION = stringPreferencesKey("ford_location")
     }
 }

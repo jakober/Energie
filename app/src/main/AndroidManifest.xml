@@ -32,6 +32,11 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".ui.settings.FordLoginActivity"
+            android:exported="false"
+            android:label="Bei Ford anmelden" />
+
         <!-- WorkManager initialisieren wir selbst (siehe EnergieApp), damit der
              Worker an den Repository-Container kommt. -->
         <provider

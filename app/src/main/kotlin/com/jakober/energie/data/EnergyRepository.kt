@@ -9,7 +9,13 @@ import com.jakober.energie.core.history.HistoryStore
 import com.jakober.energie.core.model.EnergySample
 import com.jakober.energie.core.senec.SenecConnectClient
 import com.jakober.energie.core.senec.SenecSystem
+import com.jakober.energie.core.fordpass.FordCarState
+import com.jakober.energie.core.fordpass.FordChargeLocation
+import com.jakober.energie.core.fordpass.FordCommandResult
+import com.jakober.energie.core.fordpass.FordPassClient
+import com.jakober.energie.core.fordpass.FordTokens
 import com.jakober.energie.core.smartcar.CarState
+import kotlinx.serialization.json.Json
 import com.jakober.energie.core.smartcar.CommandResult
 import com.jakober.energie.core.smartcar.ConnectionsResult
 import com.jakober.energie.core.smartcar.SmartcarClient
@@ -80,7 +86,7 @@ class EnergyRepository(
                 // Das Auto seltener: Smartcar zaehlt Aufrufe, und der Ladezustand aendert sich langsam.
                 val carJob = async {
                     val due = lastCarFetch?.let { clock.now() - it >= CAR_INTERVAL } ?: true
-                    if (s.carConnected && due) runCatching { fetchCar(s) } else null
+                    if ((s.carConnected || s.fordConnected) && due) runCatching { fetchCar(s) } else null
                 }
                 Triple(senecJob.await(), fritzJob.await(), carJob.await())
             }
@@ -177,6 +183,66 @@ class EnergyRepository(
         return p
     }
 
+    // --- FordPass (inoffiziell) ---
+
+    private var ford: FordPassClient? = null
+    private var fordKey: String? = null
+    private val tokenJson = Json { ignoreUnknownKeys = true }
+
+    fun fordpass(s: Settings): FordPassClient {
+        val key = s.fordTokensJson
+        ford?.takeIf { fordKey == key }?.let { return it }
+        val tokens = s.fordTokensJson.takeIf { it.isNotBlank() }?.let { runCatching { tokenJson.decodeFromString(FordTokens.serializer(), it) }.getOrNull() }
+        return FordPassClient(http, tokens, onTokens = { t ->
+            val encoded = tokenJson.encodeToString(FordTokens.serializer(), t)
+            fordKey = encoded
+            settings.saveFordTokens(encoded)
+        }, clock = clock).also {
+            ford = it
+            fordKey = key
+        }
+    }
+
+    private fun FordCarState.toCarState(): CarState = CarState(
+        at = at,
+        vehicleId = vin,
+        socPercent = socPercent,
+        rangeKm = rangeKm,
+        isCharging = isCharging,
+        isPluggedIn = isPluggedIn,
+        chargeLimitPercent = null,
+        chargingStatus = listOfNotNull(chargeStatus, plugStatus).joinToString(" / ").ifBlank { null },
+        chargePowerW = chargePowerW?.let { it / SmartcarClient.CHARGER_EFFICIENCY },
+        raw = mapOf("fordpass-telemetry" to raw),
+    )
+
+    suspend fun fordRefreshNow(s: Settings): CarState = withContext(Dispatchers.IO) {
+        val state = fordpass(s).state(s.fordVin).toCarState()
+        lastCarFetch = clock.now()
+        _state.update { it.copy(car = state, carError = null) }
+        state
+    }
+
+    suspend fun fordLocations(s: Settings): List<FordChargeLocation> = withContext(Dispatchers.IO) { fordpass(s).chargeLocations(s.fordVin) }
+
+    suspend fun fordCommand(s: Settings, command: FordCommand): FordCommandResult = withContext(Dispatchers.IO) {
+        val client = fordpass(s)
+        when (command) {
+            FordCommand.PAUSE -> client.pauseCharge(s.fordVin)
+            FordCommand.RESUME -> client.startCharge(s.fordVin)
+            FordCommand.CANCEL -> client.cancelCharge(s.fordVin)
+            FordCommand.TARGET_50, FordCommand.TARGET_100 -> {
+                val locations = client.chargeLocations(s.fordVin)
+                val loc = locations.firstOrNull { it.id == s.fordLocationId }
+                    ?: locations.firstOrNull { it.type?.uppercase() == "HOME" }
+                    ?: locations.firstOrNull()
+                    ?: return@withContext FordCommandResult(404, "Ford kennt fuer dieses Auto keinen Ladeort. In der FordPass-App unter Laden einen Ladeort 'Zuhause' anlegen.")
+                if (loc.id != s.fordLocationId) settings.saveFordLocation(loc.id)
+                client.setTargetSoc(s.fordVin, loc, if (command == FordCommand.TARGET_50) 50 else 100)
+            }
+        }
+    }
+
     fun smartcar(s: Settings): SmartcarClient {
         val key = "${s.smartcarClientId}|${s.smartcarClientSecret}"
         return smartcar?.takeIf { smartcarKey == key } ?: SmartcarClient(http, s.smartcarClientId, s.smartcarClientSecret, clock = clock).also {
@@ -186,6 +252,9 @@ class EnergyRepository(
     }
 
     private suspend fun fetchCar(s: Settings): CarState {
+        // FordPass liefert direkt vom Hersteller und zaehlt nicht aufs Smartcar-Kontingent;
+        // wenn angemeldet, hat es Vorrang.
+        if (s.fordConnected) return fordpass(s).state(s.fordVin).toCarState()
         val client = smartcar(s)
         val state = client.state(s.smartcarVehicleId, s.smartcarUserId.ifBlank { null })
         // Alle Signale gescheitert mit 404: Das Fahrzeug hat bei Smartcar eine neue ID
@@ -258,6 +327,14 @@ class EnergyRepository(
         val MIN_STORE_INTERVAL = 55.seconds
         val CAR_INTERVAL = 5.minutes
     }
+}
+
+enum class FordCommand(val label: String) {
+    PAUSE("Laden pausieren"),
+    RESUME("Laden fortsetzen"),
+    CANCEL("Laden abbrechen"),
+    TARGET_50("Ladeziel 50 %"),
+    TARGET_100("Ladeziel 100 %"),
 }
 
 enum class CarCommand(val label: String) {

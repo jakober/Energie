@@ -94,9 +94,10 @@ fun DashboardScreen(vm: EnergieViewModel, onOpenSettings: () -> Unit, contentPad
         live.senecError?.let { item { ErrorCard("SENEC", it) } }
         live.fritzError?.let { item { ErrorCard("FRITZ!Box", it) } }
 
-        item { FlowDiagram(live.sample, showCar = settings.carConnected || live.car != null) }
+        val carActive = settings.carConnected || settings.fordConnected || live.car != null
+        item { FlowDiagram(live.sample, showCar = carActive) }
 
-        if (settings.carConnected || live.car != null) {
+        if (carActive) {
             item { CarCard(live, settings) }
         }
 

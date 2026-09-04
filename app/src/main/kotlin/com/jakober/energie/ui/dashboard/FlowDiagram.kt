@@ -201,8 +201,9 @@ fun FlowDiagram(sample: EnergySample?, showCar: Boolean = false, modifier: Modif
             FlowNode(
                 Icons.Rounded.ElectricCar, EnergyColors.car, Format.power(carPower),
                 when {
-                    carPower > 15 -> "Auto lädt"
-                    sample?.carPluggedIn == true -> "Auto steckt"
+                    carPower > 15 || sample?.carCharging == true -> "Auto lädt"
+                    sample?.carPluggedIn == true -> "Auto steckt, pausiert"
+                    sample?.carPluggedIn == false -> "Auto nicht angeschlossen"
                     else -> "Auto"
                 },
                 Modifier.align(Alignment.CenterEnd).padding(end = EdgeInset).offset(y = 86.dp), textBelow = true,

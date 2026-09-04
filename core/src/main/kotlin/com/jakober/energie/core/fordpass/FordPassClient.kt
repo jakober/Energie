@@ -309,14 +309,14 @@ class FordPassClient(
 
     private fun parse(text: String) = runCatching { json.parseToJsonElement(text) }.getOrElse { JsonObject(emptyMap()) }
 
+    // Kein eigenes "Accept-Encoding": Setzt man es selbst, reicht OkHttp die
+    // Antwort gepackt durch, statt sie zu entpacken - dann kommt Zeichensalat.
     private fun io.ktor.client.request.HttpRequestBuilder.apiHeaders() {
         header("User-Agent", USER_AGENT)
-        header("Accept-Encoding", "gzip")
     }
 
     private fun io.ktor.client.request.HttpRequestBuilder.loginHeaders() {
         header("User-Agent", USER_AGENT)
-        header("Accept-Encoding", "gzip")
     }
 
     companion object {

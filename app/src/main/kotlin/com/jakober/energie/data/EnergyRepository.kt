@@ -7,6 +7,9 @@ import com.jakober.energie.core.history.DayStatistics
 import com.jakober.energie.core.history.EnergyTotals
 import com.jakober.energie.core.history.HistoryStore
 import com.jakober.energie.core.model.EnergySample
+import com.jakober.energie.core.rules.ChargeAction
+import com.jakober.energie.core.rules.ChargeInput
+import com.jakober.energie.core.rules.ChargeRuleEngine
 import com.jakober.energie.core.senec.SenecConnectClient
 import com.jakober.energie.core.senec.SenecSystem
 import com.jakober.energie.core.fordpass.FordCarState
@@ -51,6 +54,8 @@ data class LiveState(
     val refreshing: Boolean = false,
     /** Letzte Rohantwort von SENEC, fuer die Ansicht in den Einstellungen. */
     val senecRaw: String? = null,
+    /** Letzte Entscheidung der Ladeautomatik in Worten. */
+    val automationStatus: String? = null,
 )
 
 /**
@@ -141,7 +146,55 @@ class EnergyRepository(
             senecRaw = senec?.raw ?: _state.value.senecRaw,
         )
         _state.value = newState
-        newState
+        runCatching { runAutomation(s, newState) }
+        _state.value
+    }
+
+    /**
+     * Ladeautomatik: entscheidet aus Speicher, Netz und Autozustand, ob das Auto
+     * pausieren oder weiterladen soll, und schickt den Befehl ueber FordPass.
+     */
+    private suspend fun runAutomation(s0: Settings, live: LiveState) {
+        val s = settings.current() // Regeln koennten sich seit Beginn des Refresh geaendert haben
+        if (!s.fordConnected || !s.chargeRules.enabled) return
+        val car = live.car ?: return
+        val sample = live.sample
+        val now = clock.now()
+
+        // Abgesteckt: Handschalter zuruecksetzen.
+        if (car.isPluggedIn == false && s.chargeOverride) settings.saveChargeOverride(false)
+
+        val input = ChargeInput(
+            now = now,
+            localTime = now.toLocalDateTime(TimeZone.currentSystemDefault()).time,
+            houseBatteryPercent = sample?.batterySocPercent,
+            gridPowerW = sample?.senecGridPowerW ?: sample?.meterGridPowerW,
+            carSocPercent = car.socPercent,
+            carPluggedIn = car.isPluggedIn,
+            carCharging = car.isCharging,
+            carChargePowerW = sample?.carChargePowerW ?: car.chargePowerW ?: s.carFallbackPowerW.toDouble(),
+            lastCommandAt = s.chargeLastCommandAt.takeIf { it > 0 }?.let { Instant.fromEpochSeconds(it) },
+            overrideFullCharge = s.chargeOverride && car.isPluggedIn != false,
+        )
+        val decision = ChargeRuleEngine.decide(s.chargeRules, input)
+        val time = now.toLocalDateTime(TimeZone.currentSystemDefault()).time
+        val stamp = "%02d:%02d".format(time.hour, time.minute)
+
+        when (decision.action) {
+            ChargeAction.NONE -> _state.update { it.copy(automationStatus = decision.reason) }
+            ChargeAction.PAUSE, ChargeAction.RESUME -> {
+                val result = withContext(Dispatchers.IO) {
+                    if (decision.action == ChargeAction.PAUSE) fordpass(s).pauseCharge(s.fordVin) else fordpass(s).startCharge(s.fordVin)
+                }
+                val verb = if (decision.action == ChargeAction.PAUSE) "Pausiert" else "Fortgesetzt"
+                val line = if (result.accepted) "$stamp $verb: ${decision.reason}" else "$stamp $verb FEHLGESCHLAGEN (HTTP ${result.status}): ${decision.reason}"
+                settings.noteChargeCommand(now.epochSeconds)
+                settings.appendChargeLog(line)
+                _state.update { it.copy(automationStatus = line) }
+                // Den neuen Zustand bald nachlesen, nicht erst in 5 Minuten.
+                lastCarFetch = now - CAR_INTERVAL + 90.seconds
+            }
+        }
     }
 
     /** Hoechstens ein gespeicherter Messpunkt je Minute, damit der Verlauf klein bleibt. */

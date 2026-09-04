@@ -74,7 +74,10 @@ fun SettingsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
         }
     }
     val context = LocalContext.current
-    val dirty = draft != saved
+    // Nur die hier editierbaren Felder vergleichen; Automatik, Ford-Tokens und Protokoll
+    // aendern sich im Hintergrund und gehoeren nicht zum Entwurf.
+    val dirty = draft.copy(chargeRules = saved.chargeRules, chargeLastCommandAt = saved.chargeLastCommandAt, chargeOverride = saved.chargeOverride, chargeLog = saved.chargeLog,
+        fordTokensJson = saved.fordTokensJson, fordVin = saved.fordVin, fordLocationId = saved.fordLocationId, smartcarVehicleId = saved.smartcarVehicleId, smartcarUserId = saved.smartcarUserId) != saved
 
     LaunchedEffect(Unit) { vm.clearTestResult() }
 
@@ -243,6 +246,16 @@ fun SettingsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
                     if (showFordRaw) Text(fordRaw ?: "", style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace))
                 }
             }
+        }
+
+        item {
+            ChargeRulesCard(
+                saved = saved.chargeRules,
+                fordConnected = saved.fordConnected,
+                status = live.automationStatus,
+                log = saved.chargeLog,
+                onSave = vm::saveRules,
+            )
         }
 
         item {

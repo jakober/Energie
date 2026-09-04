@@ -10,6 +10,7 @@ import com.jakober.energie.core.senec.SenecConnectClient
 import com.jakober.energie.core.smartcar.SmartcarClient
 import com.jakober.energie.data.CarCommand
 import com.jakober.energie.data.FordCommand
+import com.jakober.energie.core.rules.ChargeRules
 import com.jakober.energie.data.LiveState
 import com.jakober.energie.data.Settings
 import kotlinx.coroutines.Dispatchers
@@ -341,6 +342,22 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
                     else "${command.label}: abgelehnt mit HTTP ${r.status}. Rohantwort unten."
                 }
                 .onFailure { _fordResult.value = "Fehler: ${it.message ?: it}" }
+        }
+    }
+
+    fun saveRules(rules: ChargeRules) {
+        viewModelScope.launch {
+            // Aus-Schwelle muss unter der Ein-Schwelle liegen.
+            val fixed = if (rules.batteryOffPercent >= rules.batteryOnPercent) rules.copy(batteryOffPercent = (rules.batteryOnPercent - 10).coerceAtLeast(0)) else rules
+            container.settings.saveRules(fixed)
+            runCatching { repo.refresh() }
+        }
+    }
+
+    fun setChargeOverride(on: Boolean) {
+        viewModelScope.launch {
+            container.settings.saveChargeOverride(on)
+            runCatching { repo.refresh() }
         }
     }
 

@@ -8,7 +8,11 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.jakober.energie.core.rules.ChargeRules
 import com.jakober.energie.core.senec.SenecConnectClient
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
+import kotlinx.serialization.json.Json
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -43,6 +47,14 @@ data class Settings(
     val fordTokensJson: String = "",
     val fordVin: String = "",
     val fordLocationId: String = "",
+    /** Ladeautomatik. */
+    val chargeRules: ChargeRules = ChargeRules(),
+    /** Zeitpunkt des letzten Befehls der Automatik, Unix-Sekunden, 0 = nie. */
+    val chargeLastCommandAt: Long = 0,
+    /** Handschalter "jetzt voll laden" bis zum Abstecken. */
+    val chargeOverride: Boolean = false,
+    /** Letzte Entscheidungen der Automatik, neueste zuerst, eine je Zeile. */
+    val chargeLog: String = "",
 ) {
     val fordConnected: Boolean get() = fordTokensJson.isNotBlank() && fordVin.isNotBlank()
     val fritzConfigured: Boolean get() = fritzHost.isNotBlank() && fritzPassword.isNotBlank()
@@ -79,6 +91,10 @@ class AppSettings(private val context: Context) {
             fordTokensJson = p[FORD_TOKENS] ?: "",
             fordVin = p[FORD_VIN] ?: "",
             fordLocationId = p[FORD_LOCATION] ?: "",
+            chargeRules = p[CHARGE_RULES]?.let { runCatching { rulesJson.decodeFromString(ChargeRules.serializer(), it) }.getOrNull() } ?: ChargeRules(),
+            chargeLastCommandAt = p[CHARGE_LAST_CMD] ?: 0,
+            chargeOverride = p[CHARGE_OVERRIDE] ?: false,
+            chargeLog = p[CHARGE_LOG] ?: "",
         )
     }
 
@@ -98,9 +114,22 @@ class AppSettings(private val context: Context) {
             p[SMARTCAR_APP_ID] = s.smartcarAppId.trim()
             p[SMARTCAR_CLIENT_ID] = s.smartcarClientId.trim()
             p[SMARTCAR_CLIENT_SECRET] = s.smartcarClientSecret.trim()
-            p[SMARTCAR_VEHICLE_ID] = s.smartcarVehicleId.trim()
-            p[SMARTCAR_USER_ID] = s.smartcarUserId.trim()
+            // Fahrzeug-Zuordnung, Ford-Tokens, Automatik und Protokoll pflegt die App selbst - nicht ueberschreiben.
             p[CAR_FALLBACK_POWER] = s.carFallbackPowerW.coerceIn(0, 22_000)
+        }
+    }
+
+    suspend fun saveRules(rules: ChargeRules) { context.dataStore.edit { it[CHARGE_RULES] = rulesJson.encodeToString(ChargeRules.serializer(), rules) } }
+
+    suspend fun saveChargeOverride(on: Boolean) { context.dataStore.edit { it[CHARGE_OVERRIDE] = on } }
+
+    suspend fun noteChargeCommand(atEpochSeconds: Long) { context.dataStore.edit { it[CHARGE_LAST_CMD] = atEpochSeconds } }
+
+    /** Haengt eine Zeile vorn an das Protokoll, hoechstens 30 Zeilen. */
+    suspend fun appendChargeLog(line: String) {
+        context.dataStore.edit { p ->
+            val old = p[CHARGE_LOG] ?: ""
+            p[CHARGE_LOG] = (listOf(line) + old.lines().filter { it.isNotBlank() }).take(30).joinToString("\n")
         }
     }
 
@@ -139,5 +168,10 @@ class AppSettings(private val context: Context) {
         val FORD_TOKENS = stringPreferencesKey("ford_tokens")
         val FORD_VIN = stringPreferencesKey("ford_vin")
         val FORD_LOCATION = stringPreferencesKey("ford_location")
+        val CHARGE_RULES = stringPreferencesKey("charge_rules")
+        val CHARGE_LAST_CMD = longPreferencesKey("charge_last_cmd")
+        val CHARGE_OVERRIDE = booleanPreferencesKey("charge_override")
+        val CHARGE_LOG = stringPreferencesKey("charge_log")
+        private val rulesJson = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     }
 }

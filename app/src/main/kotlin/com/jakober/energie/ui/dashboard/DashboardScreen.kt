@@ -25,6 +25,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Switch
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -98,7 +99,7 @@ fun DashboardScreen(vm: EnergieViewModel, onOpenSettings: () -> Unit, contentPad
         item { FlowDiagram(live.sample, showCar = carActive) }
 
         if (carActive) {
-            item { CarCard(live, settings) }
+            item { CarCard(live, settings, onOverride = vm::setChargeOverride) }
         }
 
         item { BatteryAndGridRow(live) }
@@ -256,7 +257,7 @@ private fun TodayCard(stats: DayStatistics?, settings: Settings) {
 }
 
 @Composable
-private fun CarCard(live: LiveState, settings: Settings) {
+private fun CarCard(live: LiveState, settings: Settings, onOverride: (Boolean) -> Unit = {}) {
     val car = live.car
     EnergieCard(title = "Auto", accent = EnergyColors.car) {
         if (car == null) {
@@ -293,6 +294,19 @@ private fun CarCard(live: LiveState, settings: Settings) {
             }
         }
         live.carError?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
+        if (settings.fordConnected) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Jetzt voll laden", style = MaterialTheme.typography.titleSmall)
+                    Text("Automatik aussetzen, bis das Auto abgesteckt wird", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(checked = settings.chargeOverride, onCheckedChange = onOverride)
+            }
+            Text(
+                if (settings.chargeRules.enabled) "Automatik: ${live.automationStatus ?: "wartet auf erste Messung"}" else "Automatik aus",
+                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 

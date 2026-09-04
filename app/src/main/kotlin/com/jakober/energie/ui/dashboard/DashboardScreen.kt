@@ -94,7 +94,7 @@ fun DashboardScreen(vm: EnergieViewModel, onOpenSettings: () -> Unit, contentPad
         live.senecError?.let { item { ErrorCard("SENEC", it) } }
         live.fritzError?.let { item { ErrorCard("FRITZ!Box", it) } }
 
-        item { EnergieCard { FlowDiagram(live.sample) } }
+        item { FlowDiagram(live.sample) }
 
         item { BatteryAndGridRow(live) }
 
@@ -173,7 +173,10 @@ private fun BatteryAndGridRow(live: LiveState) {
                         style = MaterialTheme.typography.titleMedium,
                     )
                     Text(Format.power(p?.let { abs(it) }), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    s?.batteryState?.let { Text(it.lowercase().replaceFirstChar { c -> c.uppercase() }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    // SENEC liefert den Zustand als Zahlencode; nur Klartext anzeigen.
+                    s?.batteryState?.takeIf { st -> st.any { ch -> ch.isLetter() } }?.let {
+                        Text(it.lowercase().replaceFirstChar { c -> c.uppercase() }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
         }

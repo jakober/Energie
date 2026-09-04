@@ -50,6 +50,7 @@ data class RangeStatistics(
         batteryChargeWh = days.sumOf { it.totals.batteryChargeWh },
         batteryDischargeWh = days.sumOf { it.totals.batteryDischargeWh },
         carChargeWh = days.sumOf { it.totals.carChargeWh },
+        carFromGridWh = days.sumOf { it.totals.carFromGridWh },
         meterImportWh = days.mapNotNull { it.totals.meterImportWh }.takeIf { it.isNotEmpty() }?.sum(),
         meterExportWh = days.mapNotNull { it.totals.meterExportWh }.takeIf { it.isNotEmpty() }?.sum(),
     )
@@ -97,6 +98,11 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
                 RangeStatistics(from, to, list)
             }
         }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** Alles seit dem ersten Messpunkt, fuer die Auto-Gesamtrechnung. */
+    val lifetime: StateFlow<EnergyTotals?> = updates
+        .mapLatest { withContext(Dispatchers.IO) { repo.lifetimeTotals() } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     val storedDays: StateFlow<Int> = updates

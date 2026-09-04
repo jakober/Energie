@@ -54,6 +54,27 @@ class HistoryStoreTest {
     }
 
     @Test
+    fun autoladungNachQuelleAufgeteilt() {
+        val t0 = Instant.parse("2026-09-04T10:00:00Z")
+        // Eine Stunde: Haus 3000 W, davon Auto 2200 W; Netzbezug 1500 W -> Netzanteil 50 %
+        val samples = (0..6).map { i ->
+            EnergySample(
+                at = t0 + kotlin.time.Duration.parse("${i * 10}m"),
+                consumptionW = 3000.0, productionW = 1500.0, senecGridPowerW = 1500.0, carChargePowerW = 2200.0,
+            )
+        }
+        val t = EnergyTotals.of(samples)
+        assertEquals(2200.0, t.carChargeWh, 1e-6)
+        assertEquals(1100.0, t.carFromGridWh, 1e-6)
+        assertEquals(1100.0, t.carFromSolarWh, 1e-6)
+        assertEquals(0.5, t.carSolarShare!!, 1e-9)
+        assertEquals(1.1 * 0.30, t.carCostPaid(0.30), 1e-9)
+        assertEquals(2.2 * 0.30, t.carCostIfGrid(0.30), 1e-9)
+        assertEquals(1.1 * 0.30, t.carSaved(0.30), 1e-9)
+        assertEquals(1.1 * 0.08, t.carForgoneFeedIn(0.08), 1e-9)
+    }
+
+    @Test
     fun grosseLueckenWerdenUebersprungen() {
         val t0 = Instant.parse("2026-09-04T10:00:00Z")
         val samples = listOf(

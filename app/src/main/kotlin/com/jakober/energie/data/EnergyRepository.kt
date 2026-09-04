@@ -4,6 +4,7 @@ import com.jakober.energie.core.fritz.FritzBoxClient
 import com.jakober.energie.core.fritz.FritzDevice
 import com.jakober.energie.core.fritz.SmartMeterReading
 import com.jakober.energie.core.history.DayStatistics
+import com.jakober.energie.core.history.EnergyTotals
 import com.jakober.energie.core.history.HistoryStore
 import com.jakober.energie.core.model.EnergySample
 import com.jakober.energie.core.senec.SenecConnectClient
@@ -209,8 +210,29 @@ class EnergyRepository(
         }
     }
 
-    fun dayStatistics(date: LocalDate, zone: TimeZone = TimeZone.currentSystemDefault()): DayStatistics =
-        DayStatistics.of(date, history.day(date), zone)
+    // Vergangene Tage aendern sich nicht mehr - einmal rechnen reicht.
+    private val dayCache = java.util.concurrent.ConcurrentHashMap<LocalDate, DayStatistics>()
+
+    fun dayStatistics(date: LocalDate, zone: TimeZone = TimeZone.currentSystemDefault()): DayStatistics {
+        if (date >= today(zone)) return DayStatistics.of(date, history.day(date), zone)
+        return dayCache.getOrPut(date) { DayStatistics.of(date, history.day(date), zone) }
+    }
+
+    /** Summe ueber alle gespeicherten Tage. */
+    fun lifetimeTotals(): EnergyTotals {
+        val days = history.days().map { dayStatistics(it).totals }
+        return EnergyTotals(
+            productionWh = days.sumOf { it.productionWh },
+            consumptionWh = days.sumOf { it.consumptionWh },
+            gridImportWh = days.sumOf { it.gridImportWh },
+            gridExportWh = days.sumOf { it.gridExportWh },
+            batteryChargeWh = days.sumOf { it.batteryChargeWh },
+            batteryDischargeWh = days.sumOf { it.batteryDischargeWh },
+            carChargeWh = days.sumOf { it.carChargeWh },
+            carFromGridWh = days.sumOf { it.carFromGridWh },
+            meterImportWh = null, meterExportWh = null,
+        )
+    }
 
     fun today(zone: TimeZone = TimeZone.currentSystemDefault()): LocalDate = clock.now().toLocalDateTime(zone).date
 

@@ -59,6 +59,7 @@ fun StatisticsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
     val day by vm.dayStats.collectAsStateWithLifecycle()
     val rangeStats by vm.rangeStats.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
+    val lifetime by vm.lifetime.collectAsStateWithLifecycle()
 
     LazyColumn(
         Modifier.fillMaxSize(),
@@ -102,6 +103,11 @@ fun StatisticsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
         when (range) {
             Range.DAY -> dayItems(day, settings)
             else -> rangeItems(rangeStats, settings, range)
+        }
+
+        val periodTotals = if (range == Range.DAY) day?.totals else rangeStats?.totals
+        if (settings.carConnected || (lifetime?.carChargeWh ?: 0.0) > 0) {
+            item { CarStatsCard(periodTotals, lifetime, settings) }
         }
     }
 }
@@ -228,6 +234,38 @@ private fun androidx.compose.foundation.lazy.LazyListScope.rangeItems(r: RangeSt
             r.averageConsumptionWh?.let { ValueRow("Verbrauch je Tag", Format.energy(it), "Durchschnitt") }
         }
     }
+}
+
+@Composable
+private fun CarStatsCard(period: EnergyTotals?, lifetime: EnergyTotals?, settings: Settings) {
+    EnergieCard(title = "Auto laden", accent = EnergyColors.car) {
+        if (period != null && period.carChargeWh > 50) {
+            Text("Dieser Zeitraum", style = MaterialTheme.typography.titleSmall)
+            CarStatsBlock(period, settings)
+            Spacer(Modifier.height(8.dp))
+        } else {
+            Text("In diesem Zeitraum wurde zu Hause nicht geladen.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (lifetime != null && lifetime.carChargeWh > 50) {
+            Text("Seit Beginn der Aufzeichnung", style = MaterialTheme.typography.titleSmall)
+            CarStatsBlock(lifetime, settings)
+        }
+    }
+}
+
+@Composable
+private fun CarStatsBlock(t: EnergyTotals, settings: Settings) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        BigValue(Format.energy(t.carChargeWh), "Geladen", EnergyColors.car, Modifier.weight(1f))
+        BigValue(Format.energy(t.carFromSolarWh), "Sonne & Speicher", EnergyColors.sun, Modifier.weight(1f))
+        BigValue(Format.energy(t.carFromGridWh), "Netz", EnergyColors.grid, Modifier.weight(1f))
+    }
+    ShareBar("Anteil Sonne & Speicher", t.carSolarShare, EnergyColors.sun)
+    ValueRow("Bezahlt (Netzanteil)", Format.euro(t.carCostPaid(settings.pricePerKwh)), "bei ${Format.euro(settings.pricePerKwh)}/kWh")
+    ValueRow("Gespart gegenüber Netzladung", Format.euro(t.carSaved(settings.pricePerKwh)), color = EnergyColors.battery)
+    ValueRow("Entgangene Einspeisung", Format.euro(t.carForgoneFeedIn(settings.feedInPerKwh)), "Sonnenstrom, der sonst ins Netz gegangen wäre")
+    ValueRow("Echte Kosten", Format.euro(t.carCostPaid(settings.pricePerKwh) + t.carForgoneFeedIn(settings.feedInPerKwh)), "Netzanteil plus entgangene Einspeisung")
+    ValueRow("Zum Vergleich: alles aus dem Netz", Format.euro(t.carCostIfGrid(settings.pricePerKwh)))
 }
 
 @Composable

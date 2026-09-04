@@ -314,8 +314,10 @@ private fun CarCard(live: LiveState, settings: Settings, onOverride: (Boolean) -
                 iconTint = if (locked) EnergyColors.battery else MaterialTheme.colorScheme.error,
             )
         }
-        if (car.latitude != null && car.longitude != null) {
-            CarLocation(car.latitude, car.longitude, car.distanceHomeM)
+        val carLat = car.latitude
+        val carLon = car.longitude
+        if (carLat != null && carLon != null) {
+            CarLocation(carLat, carLon, car.distanceHomeM)
         }
         live.carError?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
         if (settings.fordConnected) {

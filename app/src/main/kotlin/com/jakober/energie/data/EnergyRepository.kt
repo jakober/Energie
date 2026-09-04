@@ -269,7 +269,10 @@ class EnergyRepository(
         }
     }
 
-    private fun FordCarState.toCarState(s: Settings): CarState = CarState(
+    private fun FordCarState.toCarState(s: Settings): CarState {
+        val lat = latitude
+        val lon = longitude
+        return CarState(
         at = at,
         vehicleId = vin,
         socPercent = socPercent,
@@ -282,9 +285,10 @@ class EnergyRepository(
         latitude = latitude,
         longitude = longitude,
         lockState = lockState,
-        distanceHomeM = if (latitude != null && longitude != null && (s.homeLat != 0.0 || s.homeLon != 0.0)) distanceMeters(latitude, longitude, s.homeLat, s.homeLon) else null,
+        distanceHomeM = if (lat != null && lon != null && (s.homeLat != 0.0 || s.homeLon != 0.0)) distanceMeters(lat, lon, s.homeLat, s.homeLon) else null,
         raw = mapOf("fordpass-telemetry" to raw),
-    )
+        )
+    }
 
     suspend fun fordRefreshNow(s: Settings): CarState = withContext(Dispatchers.IO) {
         val state = fetchCar(s)

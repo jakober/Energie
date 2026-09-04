@@ -48,7 +48,12 @@ class SmartcarClient(
     suspend fun accessToken(): String = lock.withLock {
         val now = clock.now()
         token?.takeIf { now < tokenValidUntil }?.let { return@withLock it }
-        val response = http.submitForm(
+
+        // Erst Zugangsdaten im Formular, dann als HTTP-Basic-Kopfzeile: OAuth-Server
+        // akzeptieren mal das eine, mal das andere. Beide Antworten landen in der
+        // Fehlermeldung, damit die Ursache (falsches Secret, falsche Form) sichtbar wird.
+        val attempts = ArrayList<String>()
+        val first = http.submitForm(
             url = tokenUrl,
             formParameters = parameters {
                 append("grant_type", "client_credentials")
@@ -56,12 +61,24 @@ class SmartcarClient(
                 append("client_secret", clientSecret)
             },
         )
-        val body = response.bodyAsText()
-        if (response.status.value !in 200..299) {
-            throw SmartcarException(response.status.value, "Smartcar-Anmeldung fehlgeschlagen (${response.status.value}): ${body.take(200)}")
+        var body = first.bodyAsText()
+        var status = first.status.value
+        if (status !in 200..299) {
+            attempts += "Formular: HTTP $status ${body.take(200)}"
+            val basic = "Basic " + java.util.Base64.getEncoder().encodeToString("$clientId:$clientSecret".toByteArray(Charsets.UTF_8))
+            val second = http.submitForm(
+                url = tokenUrl,
+                formParameters = parameters { append("grant_type", "client_credentials") },
+            ) { header("Authorization", basic) }
+            body = second.bodyAsText()
+            status = second.status.value
+            if (status !in 200..299) {
+                attempts += "Basic-Auth: HTTP $status ${body.take(200)}"
+                throw SmartcarException(status, "Smartcar-Anmeldung fehlgeschlagen. " + attempts.joinToString(" | "))
+            }
         }
         val el = json.parseToJsonElement(body)
-        val t = JsonPick.string(el, "access_token") ?: throw SmartcarException(500, "Smartcar-Antwort ohne access_token")
+        val t = JsonPick.string(el, "access_token") ?: throw SmartcarException(500, "Smartcar-Antwort ohne access_token: ${body.take(200)}")
         val expires = JsonPick.number(el, "expires_in")?.toLong() ?: 3600L
         token = t
         // Eine Minute Puffer, damit kein Aufruf mit einem gerade ablaufenden Token startet.

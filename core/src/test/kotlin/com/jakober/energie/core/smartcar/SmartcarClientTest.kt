@@ -89,14 +89,37 @@ class SmartcarClientTest {
     }
 
     @Test
-    fun fehlerhafteAnmeldung() = runTest {
-        val engine = MockEngine { respond("""{"error":"invalid_client"}""", HttpStatusCode.Unauthorized) }
+    fun fehlerhafteAnmeldungNenntBeideVersuche() = runTest {
+        var calls = 0
+        val engine = MockEngine { calls++; respond("""{"error":"invalid_client"}""", HttpStatusCode.Unauthorized) }
         val client = SmartcarClient(HttpClient(engine), "x", "y")
         try {
             client.connections()
             error("erwartete Ausnahme")
         } catch (e: SmartcarException) {
             assertEquals(401, e.status)
+            assertTrue(e.message!!.contains("Formular"), e.message)
+            assertTrue(e.message!!.contains("Basic-Auth"), e.message)
+            assertTrue(e.message!!.contains("invalid_client"), e.message)
         }
+        assertEquals(2, calls)
+    }
+
+    @Test
+    fun basicAuthAlsZweiterVersuch() = runTest {
+        val engine = MockEngine { req ->
+            val auth = req.headers["Authorization"]
+            when {
+                req.url.host == "iam.smartcar.com" && auth == null -> respond("""{"error":"invalid_client"}""", HttpStatusCode.Unauthorized)
+                req.url.host == "iam.smartcar.com" -> {
+                    assertEquals("Basic " + java.util.Base64.getEncoder().encodeToString("x:y".toByteArray()), auth)
+                    respond("""{"access_token":"tok-basic","expires_in":3600}""")
+                }
+                else -> respond("""{"data":[]}""")
+            }
+        }
+        val client = SmartcarClient(HttpClient(engine), "x", "y")
+        assertEquals("tok-basic", client.accessToken())
+        assertTrue(client.connections().isEmpty())
     }
 }

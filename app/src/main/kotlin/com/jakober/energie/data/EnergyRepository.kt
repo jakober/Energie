@@ -185,8 +185,21 @@ class EnergyRepository(
         }
     }
 
-    private suspend fun fetchCar(s: Settings): CarState =
-        smartcar(s).state(s.smartcarVehicleId, s.smartcarUserId.ifBlank { null })
+    private suspend fun fetchCar(s: Settings): CarState {
+        val client = smartcar(s)
+        val state = client.state(s.smartcarVehicleId, s.smartcarUserId.ifBlank { null })
+        // Alle Signale gescheitert mit 404: Das Fahrzeug hat bei Smartcar eine neue ID
+        // (etwa nach Trennen und Neuverbinden). Verbindungen neu lesen und uebernehmen.
+        val allMissing = state.raw.isNotEmpty() && state.raw.values.all { it.contains("Fehler") && (it.contains(" 404") || it.contains("NOT_FOUND")) }
+        if (allMissing) {
+            val fresh = client.connections().connections.firstOrNull()
+            if (fresh != null && fresh.vehicleId != s.smartcarVehicleId) {
+                settings.saveCar(fresh.vehicleId, fresh.userId)
+                return client.state(fresh.vehicleId, fresh.userId)
+            }
+        }
+        return state
+    }
 
     suspend fun carConnections(s: Settings): ConnectionsResult = withContext(Dispatchers.IO) { smartcar(s).connections() }
 

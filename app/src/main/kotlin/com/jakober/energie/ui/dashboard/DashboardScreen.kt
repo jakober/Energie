@@ -1,0 +1,260 @@
+package com.jakober.energie.ui.dashboard
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.BatteryChargingFull
+import androidx.compose.material.icons.rounded.Bolt
+import androidx.compose.material.icons.rounded.ElectricCar
+import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Speed
+import androidx.compose.material.icons.rounded.WbSunny
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.jakober.energie.core.history.DayStatistics
+import com.jakober.energie.data.LiveState
+import com.jakober.energie.data.Settings
+import com.jakober.energie.ui.BigValue
+import com.jakober.energie.ui.EnergieCard
+import com.jakober.energie.ui.EnergieViewModel
+import com.jakober.energie.ui.Format
+import com.jakober.energie.ui.ShareBar
+import com.jakober.energie.ui.ValueRow
+import com.jakober.energie.ui.charts.RingGauge
+import com.jakober.energie.ui.theme.EnergyColors
+import kotlinx.coroutines.delay
+import kotlinx.datetime.Clock
+import kotlin.math.abs
+
+@Composable
+fun DashboardScreen(vm: EnergieViewModel, onOpenSettings: () -> Unit, contentPadding: PaddingValues) {
+    val live by vm.live.collectAsStateWithLifecycle()
+    val settings by vm.settings.collectAsStateWithLifecycle()
+    val today by vm.todayStats.collectAsStateWithLifecycle()
+
+    // "vor 12 s" soll mitlaufen, ohne dass sich sonst etwas aendert.
+    var now by remember { mutableStateOf(Clock.System.now()) }
+    LaunchedEffect(Unit) { while (true) { delay(1000); now = Clock.System.now() } }
+
+    LazyColumn(
+        Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            start = 16.dp, end = 16.dp,
+            top = contentPadding.calculateTopPadding() + 8.dp,
+            bottom = contentPadding.calculateBottomPadding() + 24.dp,
+        ),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Energie", style = MaterialTheme.typography.displaySmall)
+                    Text(
+                        "Aktualisiert ${Format.ago(live.lastUpdate, now)}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (live.refreshing) CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+                else IconButton(onClick = vm::refreshNow) { Icon(Icons.Rounded.Refresh, "Aktualisieren") }
+            }
+        }
+
+        if (!settings.anythingConfigured) {
+            item { SetupHint(onOpenSettings) }
+        }
+
+        live.senecError?.let { item { ErrorCard("SENEC", it) } }
+        live.fritzError?.let { item { ErrorCard("FRITZ!Box", it) } }
+
+        item { EnergieCard { FlowDiagram(live.sample) } }
+
+        item { BatteryAndGridRow(live) }
+
+        item { TodayCard(today, settings) }
+
+        if (live.meter != null || live.sample?.meterImportWh != null) {
+            item { MeterCard(live) }
+        }
+
+        live.senec?.evse?.firstOrNull()?.let { evse ->
+            item {
+                EnergieCard(title = "Wallbox", accent = EnergyColors.car) {
+                    ValueRow(
+                        if (evse.evCharging == true) "Auto lädt" else if (evse.evConnected == true) "Auto angesteckt" else "Kein Auto",
+                        Format.power(evse.chargingPower), icon = Icons.Rounded.ElectricCar, iconTint = EnergyColors.car,
+                    )
+                }
+            }
+        }
+
+        live.senec?.bessNameplate?.let { np ->
+            item {
+                EnergieCard(title = "Anlage") {
+                    ValueRow("Modell", np.model ?: "–")
+                    ValueRow("Kapazität", Format.energy(np.designCapacityWh))
+                    ValueRow("Max. Laden / Entladen", "${Format.power(np.activeChargePowerW)} / ${Format.power(np.activeDischargePowerW)}")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SetupHint(onOpenSettings: () -> Unit) {
+    EnergieCard(title = "Einrichtung") {
+        Text("Noch keine Quelle eingerichtet. Trage den SENEC-Schlüssel und die FRITZ!Box-Zugangsdaten ein, dann geht es los.")
+        Button(onClick = onOpenSettings) { Text("Zu den Einstellungen") }
+    }
+}
+
+@Composable
+private fun ErrorCard(source: String, message: String) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+        shape = MaterialTheme.shapes.large,
+    ) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Icon(Icons.Rounded.ErrorOutline, null, tint = MaterialTheme.colorScheme.onErrorContainer)
+            Column {
+                Text(source, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onErrorContainer)
+                Text(message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
+            }
+        }
+    }
+}
+
+@Composable
+private fun BatteryAndGridRow(live: LiveState) {
+    val s = live.sample
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        EnergieCard(Modifier.weight(1f), title = "Speicher", accent = EnergyColors.battery) {
+            val soc = s?.batterySocPercent
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                RingGauge(((soc ?: 0.0) / 100).toFloat(), EnergyColors.battery, Modifier.size(84.dp), strokeWidth = 10.dp) {
+                    Text(Format.percentValue(soc), style = MaterialTheme.typography.titleMedium)
+                }
+                Column {
+                    val p = s?.batteryPowerW
+                    Text(
+                        when {
+                            p == null -> "–"
+                            p > 15 -> "lädt"
+                            p < -15 -> "gibt ab"
+                            else -> "ruht"
+                        },
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    Text(Format.power(p?.let { abs(it) }), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    s?.batteryState?.let { Text(it.lowercase().replaceFirstChar { c -> c.uppercase() }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                }
+            }
+        }
+        EnergieCard(Modifier.weight(1f), title = "Netz", accent = EnergyColors.grid) {
+            val meter = s?.meterGridPowerW
+            val senec = s?.senecGridPowerW
+            val grid = meter ?: senec
+            BigValue(
+                Format.power(grid?.let { abs(it) }),
+                when {
+                    grid == null -> "keine Daten"
+                    grid < -15 -> "Einspeisung"
+                    grid > 15 -> "Bezug"
+                    else -> "ausgeglichen"
+                },
+                color = if ((grid ?: 0.0) < -15) EnergyColors.export else EnergyColors.grid,
+            )
+            if (meter != null && senec != null) {
+                Text(
+                    "Zähler ${Format.power(meter, signed = true)} · SENEC ${Format.power(senec, signed = true)}",
+                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else if (meter != null) {
+                Text("vom Stromzähler", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+@Composable
+private fun TodayCard(stats: DayStatistics?, settings: Settings) {
+    EnergieCard(title = "Heute") {
+        if (stats == null || stats.sampleCount == 0) {
+            Text("Noch keine Messpunkte für heute.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            return@EnergieCard
+        }
+        val t = stats.totals
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            BigValue(Format.energy(t.productionWh), "Erzeugt", EnergyColors.sun, Modifier.weight(1f))
+            BigValue(Format.energy(t.consumptionWh), "Verbraucht", EnergyColors.house, Modifier.weight(1f))
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            BigValue(Format.energy(t.gridImportWh), "Bezogen", EnergyColors.grid, Modifier.weight(1f))
+            BigValue(Format.energy(t.gridExportWh), "Eingespeist", EnergyColors.export, Modifier.weight(1f))
+        }
+        Spacer(Modifier.height(4.dp))
+        ShareBar("Autarkie", t.selfSufficiency, EnergyColors.battery)
+        ShareBar("Eigenverbrauch", t.selfConsumptionShare, EnergyColors.sun)
+        Spacer(Modifier.height(4.dp))
+        stats.peakConsumption?.let {
+            ValueRow("Höchster Verbrauch", Format.power(it.value), "um ${Format.time(it.at)}", icon = Icons.Rounded.Home, iconTint = EnergyColors.house)
+        }
+        stats.peakProduction?.let {
+            ValueRow("Höchste Erzeugung", Format.power(it.value), "um ${Format.time(it.at)}", icon = Icons.Rounded.WbSunny, iconTint = EnergyColors.sun)
+        }
+        stats.baseLoadW?.let {
+            ValueRow("Grundlast", Format.power(it), "kleinstes 15-min-Mittel", icon = Icons.Rounded.Bolt, iconTint = EnergyColors.neutral)
+        }
+        stats.socMin?.let { mn ->
+            stats.socMax?.let { mx ->
+                ValueRow("Speicher", "${Format.percentValue(mn.value)} – ${Format.percentValue(mx.value)}", "Tief um ${Format.time(mn.at)}, Hoch um ${Format.time(mx.at)}", icon = Icons.Rounded.BatteryChargingFull, iconTint = EnergyColors.battery)
+            }
+        }
+        val cost = t.gridImportWh / 1000 * settings.pricePerKwh
+        val income = t.gridExportWh / 1000 * settings.feedInPerKwh
+        val saved = t.selfConsumptionWh / 1000 * settings.pricePerKwh
+        ValueRow("Stromkosten heute", Format.euro(cost), "Einspeisung ${Format.euro(income)} · gespart ${Format.euro(saved)}")
+    }
+}
+
+@Composable
+private fun MeterCard(live: LiveState) {
+    val s = live.sample
+    EnergieCard(title = "Stromzähler", accent = EnergyColors.grid) {
+        ValueRow("Bezug (1.8.0)", Format.meterReading(s?.meterImportWh), icon = Icons.Rounded.Speed, iconTint = EnergyColors.grid)
+        ValueRow("Einspeisung (2.8.0)", Format.meterReading(s?.meterExportWh), icon = Icons.Rounded.Speed, iconTint = EnergyColors.export)
+        live.meter?.let {
+            Text(
+                "Lesekopf ${it.importAin}" + (it.exportAin?.let { e -> " / $e" } ?: ""),
+                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}

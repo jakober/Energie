@@ -1,0 +1,44 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  android:
+    name: Android
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: JDK 17 einrichten
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Gradle einrichten
+        uses: gradle/actions/setup-gradle@v4
+
+      # Sicherheitsnetz: Commits von Windows aus verlieren gelegentlich das
+      # Ausfuehrbar-Bit, und dann scheitert der Build mit "Permission denied".
+      - name: gradlew ausfuehrbar machen
+        run: chmod +x gradlew
+
+      - name: Kern-Tests (Schnittstellen, Statistik)
+        run: ./gradlew :core:test --stacktrace
+
+      - name: Debug-APK bauen
+        run: ./gradlew :app:assembleDebug --stacktrace
+
+      # Ein Aussetzer bei GitHubs Artefaktdienst soll den Build nicht rot
+      # faerben - gebaut und geprueft ist zu diesem Zeitpunkt bereits alles.
+      - name: APK als Artefakt hochladen
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: energie-android-debug
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error

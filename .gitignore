@@ -1,0 +1,27 @@
+# Gradle
+.gradle/
+build/
+*/build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Lokale Konfiguration (SDK-Pfad, Schluessel) gehoert nicht ins Repo
+local.properties
+secrets.properties
+*.keystore
+*.jks
+
+# Kotlin
+.kotlin/
+
+# IDEs
+.idea/
+*.iml
+.fleet/
+
+# Build-Artefakte
+*.apk
+*.aab
+
+# macOS / Windows
+.DS_Store
+Thumbs.db

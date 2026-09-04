@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Die FRITZ!Box im Heimnetz spricht unverschluesselt (http://fritz.box oder
+     eine 192.168.x.x-Adresse, die der Nutzer frei eintraegt). Deshalb ist
+     Klartext grundsaetzlich erlaubt; SENEC laeuft ohnehin ueber HTTPS und
+     der Client wuerde eine Herabstufung nicht mitmachen. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

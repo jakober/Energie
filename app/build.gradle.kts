@@ -34,6 +34,17 @@ android {
         }
     }
 
+    // Fester Debug-Schluessel im Repository. Ohne ihn erzeugt jeder Build auf
+    // GitHub einen neuen Schluessel, und Android verweigert dann das Update
+    // ("App nicht installiert"). Der Schluessel taugt nur zum Aufspielen von
+    // Hand; fuer den Play Store gilt der Release-Schluessel oben.
+    signingConfigs.getByName("debug") {
+        storeFile = file("debug.keystore")
+        storePassword = "energie-debug"
+        keyAlias = "energie"
+        keyPassword = "energie-debug"
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true

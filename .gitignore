@@ -9,6 +9,8 @@ local.properties
 secrets.properties
 *.keystore
 *.jks
+# Ausnahme: der feste Debug-Schluessel, siehe app/build.gradle.kts
+!app/debug.keystore
 
 # Kotlin
 .kotlin/

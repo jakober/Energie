@@ -70,7 +70,7 @@ data class DayStatistics(
             fun peakMin(sel: (EnergySample) -> Double?): Peak? =
                 sorted.mapNotNull { s -> sel(s)?.let { Peak(s.at, it) } }.minByOrNull { it.value }
 
-            val grid: (EnergySample) -> Double? = { it.senecGridPowerW ?: it.meterGridPowerW }
+            val grid: (EnergySample) -> Double? = { it.gridPowerW }
             val socs = sorted.mapNotNull { s -> s.batterySocPercent?.let { Peak(s.at, it) } }
             val producing = sorted.filter { (it.productionW ?: 0.0) > 10.0 }
 

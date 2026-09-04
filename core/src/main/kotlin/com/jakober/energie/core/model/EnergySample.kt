@@ -41,6 +41,9 @@ data class EnergySample(
     /** Ladeleistung des Autos in W, gemessen oder angenommen, nur wenn es zu Hause laedt. */
     val carChargePowerW: Double? = null,
 ) {
+    /** Netzleistung, bevorzugt vom geeichten Zaehler, sonst von SENEC. */
+    val gridPowerW: Double? get() = meterGridPowerW ?: senecGridPowerW
+
     /** Hausverbrauch ohne das Auto. */
     val householdW: Double? get() = consumptionW?.let { c -> (c - (carChargePowerW ?: 0.0)).coerceAtLeast(0.0) }
 
@@ -51,7 +54,7 @@ data class EnergySample(
     val selfSufficiency: Double? get() {
         val c = consumptionW ?: return null
         if (c <= 0) return null
-        val grid = (senecGridPowerW ?: meterGridPowerW ?: return null).coerceAtLeast(0.0)
+        val grid = (gridPowerW ?: return null).coerceAtLeast(0.0)
         return (1.0 - grid / c).coerceIn(0.0, 1.0)
     }
 }

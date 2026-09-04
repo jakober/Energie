@@ -105,16 +105,26 @@ class EnergyRepository(
         val senec = senecResult?.getOrNull()
         val fritzData = fritzResult?.getOrNull()
         val meter = fritzData?.second
-        val consumptionNow = senec?.system?.meter?.consumption
+        // Hausverbrauch bevorzugt aus der Bilanz mit dem geeichten Zaehler:
+        // Verbrauch = PV + Netz (Bezug positiv) - Speicherleistung (Laden positiv).
+        // SENECs Verbrauchsfeld und Netzfeld stammen aus verschiedenen Momenten
+        // und passen nicht immer zusammen.
+        val production = senec?.system?.meter?.production
+        val batteryPower = senec?.system?.battery?.power
+        val consumption = if (meter != null && production != null && batteryPower != null) {
+            (production + meter.gridPowerWatt - batteryPower).coerceAtLeast(0.0)
+        } else senec?.system?.meter?.consumption
+
+        val consumptionNow = consumption
         val carPowerW = carChargePower(carForSample, consumptionNow, s.carFallbackPowerW.toDouble())
 
         val sample = EnergySample(
             at = now,
             batterySocPercent = senec?.system?.battery?.stateOfCharge,
-            batteryPowerW = senec?.system?.battery?.power,
+            batteryPowerW = batteryPower,
             batteryState = senec?.system?.battery?.state,
-            productionW = senec?.system?.meter?.production,
-            consumptionW = senec?.system?.meter?.consumption,
+            productionW = production,
+            consumptionW = consumption,
             senecGridPowerW = senec?.system?.meter?.gridPower,
             evseChargingPowerW = senec?.system?.evse?.firstOrNull()?.chargingPower,
             evConnected = senec?.system?.evse?.firstOrNull()?.evConnected,
@@ -169,7 +179,7 @@ class EnergyRepository(
             now = now,
             localTime = now.toLocalDateTime(TimeZone.currentSystemDefault()).time,
             houseBatteryPercent = sample?.batterySocPercent,
-            gridPowerW = sample?.senecGridPowerW ?: sample?.meterGridPowerW,
+            gridPowerW = sample?.gridPowerW,
             carSocPercent = car.socPercent,
             carPluggedIn = car.isPluggedIn,
             carCharging = car.isCharging,

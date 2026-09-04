@@ -62,7 +62,7 @@ data class EnergyTotals(
                 fun mean(x: Double?, y: Double?): Double? = if (x != null && y != null) (x + y) / 2 else x ?: y
                 mean(a.productionW, b.productionW)?.let { prod += it * h }
                 mean(a.consumptionW, b.consumptionW)?.let { cons += it * h }
-                mean(a.senecGridPowerW ?: a.meterGridPowerW, b.senecGridPowerW ?: b.meterGridPowerW)?.let {
+                mean(a.gridPowerW, b.gridPowerW)?.let {
                     if (it >= 0) imp += it * h else exp += -it * h
                 }
                 mean(a.batteryPowerW, b.batteryPowerW)?.let {
@@ -71,7 +71,7 @@ data class EnergyTotals(
                 mean(a.carChargePowerW, b.carChargePowerW)?.let { carW ->
                     car += carW * h
                     val consW = mean(a.consumptionW, b.consumptionW)
-                    val gridW = mean(a.senecGridPowerW ?: a.meterGridPowerW, b.senecGridPowerW ?: b.meterGridPowerW)?.coerceAtLeast(0.0)
+                    val gridW = mean(a.gridPowerW, b.gridPowerW)?.coerceAtLeast(0.0)
                     if (consW != null && consW > 0 && gridW != null) {
                         carGrid += carW * h * (gridW / consW).coerceIn(0.0, 1.0)
                     }

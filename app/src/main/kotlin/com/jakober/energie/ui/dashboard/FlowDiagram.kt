@@ -72,7 +72,7 @@ fun FlowDiagram(sample: EnergySample?, showCar: Boolean = false, modifier: Modif
     val carPower = if (showCar) sample?.carChargePowerW ?: 0.0 else 0.0
     // Mit Auto-Knoten zeigt das Haus nur den Rest ohne Ladeleistung.
     val consumption = ((sample?.consumptionW ?: 0.0) - carPower).coerceAtLeast(0.0)
-    val grid = sample?.senecGridPowerW ?: sample?.meterGridPowerW ?: 0.0
+    val grid = sample?.gridPowerW ?: 0.0
     val battery = sample?.batteryPowerW ?: 0.0
     val soc = sample?.batterySocPercent
     val autarky = sample?.selfSufficiency

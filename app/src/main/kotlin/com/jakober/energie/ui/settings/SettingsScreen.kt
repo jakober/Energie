@@ -91,12 +91,12 @@ fun SettingsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
         item {
             EnergieCard(title = "FRITZ!Box", accent = EnergyColors.grid) {
                 Text(
-                    "Nur im Heimnetz erreichbar. Der Benutzer braucht in der FRITZ!Box das Recht „Smart Home“.",
+                    "Im Heimnetz „fritz.box“, von unterwegs die MyFRITZ!-Adresse mit https://, etwa https://abc123.myfritz.net. Der Benutzer braucht in der FRITZ!Box die Rechte „Smart Home“ und „Zugang aus dem Internet“.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 OutlinedTextField(
                     value = draft.fritzHost, onValueChange = { draft = draft.copy(fritzHost = it) },
-                    label = { Text("Adresse") }, placeholder = { Text("fritz.box") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Adresse") }, placeholder = { Text("fritz.box oder https://…myfritz.net") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                 )
                 OutlinedTextField(

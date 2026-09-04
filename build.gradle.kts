@@ -1,13 +1,31 @@
-// Alle Kotlin-Plugins einmal hier laden (ohne sie anzuwenden), damit die
-// Module dieselbe Version aus einem Klassenpfad bekommen. Sonst meldet
-// Gradle "plugin is already on the classpath with an unknown version",
-// sobald core kotlin-jvm und app kotlin-android anfordern.
+// Alle Gradle-Plugins landen einmal hier auf dem Klassenpfad des Root-Builds,
+// die Module wenden sie nur noch per id an. Grund: Das Kotlin-Android-Plugin
+// muss das Android-Gradle-Plugin im selben Klassenlader sehen, und Gradle
+// verweigert es, ein Plugin ein zweites Mal mit Version anzufordern, wenn es
+// schon ueber den Eltern-Klassenpfad da ist.
 //
-// Das Android-Gradle-Plugin bleibt bewusst nur im app-Modul: So laesst sich
-// der Kern auch ohne Zugang zu Googles Maven-Repository bauen.
-plugins {
-    alias(libs.plugins.kotlinJvm) apply false
-    alias(libs.plugins.kotlinAndroid) apply false
-    alias(libs.plugins.composeCompiler) apply false
-    alias(libs.plugins.kotlinSerialization) apply false
+// Mit -PcoreOnly bleibt das Android-Plugin draussen; dann laesst sich der
+// Kern auch ohne Zugang zu Googles Maven-Repository bauen und testen.
+//
+// Versionen bitte zusammen mit gradle/libs.versions.toml pflegen.
+buildscript {
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+        google {
+            mavenContent {
+                includeGroupAndSubgroups("androidx")
+                includeGroupAndSubgroups("com.android")
+                includeGroupAndSubgroups("com.google")
+            }
+        }
+    }
+    dependencies {
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.21")
+        classpath("org.jetbrains.kotlin:kotlin-serialization:2.1.21")
+        classpath("org.jetbrains.kotlin:compose-compiler-gradle-plugin:2.1.21")
+        if (!providers.gradleProperty("coreOnly").isPresent) {
+            classpath("com.android.tools.build:gradle:8.7.3")
+        }
+    }
 }

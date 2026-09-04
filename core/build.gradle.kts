@@ -1,8 +1,8 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
-    alias(libs.plugins.kotlinJvm)
-    alias(libs.plugins.kotlinSerialization)
+    id("org.jetbrains.kotlin.jvm")
+    id("org.jetbrains.kotlin.plugin.serialization")
 }
 
 // Reiner Kotlin/JVM-Code ohne Android-Abhaengigkeiten: die Schnittstellen zu

@@ -47,6 +47,9 @@ data class Settings(
     val fordTokensJson: String = "",
     val fordVin: String = "",
     val fordLocationId: String = "",
+    /** Koordinaten des Ladeorts Zuhause (aus FordPass), 0 = unbekannt. */
+    val homeLat: Double = 0.0,
+    val homeLon: Double = 0.0,
     /** Ladeautomatik. */
     val chargeRules: ChargeRules = ChargeRules(),
     /** Zeitpunkt des letzten Befehls der Automatik, Unix-Sekunden, 0 = nie. */
@@ -91,6 +94,8 @@ class AppSettings(private val context: Context) {
             fordTokensJson = p[FORD_TOKENS] ?: "",
             fordVin = p[FORD_VIN] ?: "",
             fordLocationId = p[FORD_LOCATION] ?: "",
+            homeLat = p[HOME_LAT] ?: 0.0,
+            homeLon = p[HOME_LON] ?: 0.0,
             chargeRules = p[CHARGE_RULES]?.let { runCatching { rulesJson.decodeFromString(ChargeRules.serializer(), it) }.getOrNull() } ?: ChargeRules(),
             chargeLastCommandAt = p[CHARGE_LAST_CMD] ?: 0,
             chargeOverride = p[CHARGE_OVERRIDE] ?: false,
@@ -139,6 +144,8 @@ class AppSettings(private val context: Context) {
 
     suspend fun saveFordLocation(id: String) { context.dataStore.edit { it[FORD_LOCATION] = id } }
 
+    suspend fun saveHome(lat: Double, lon: Double) { context.dataStore.edit { it[HOME_LAT] = lat; it[HOME_LON] = lon } }
+
     suspend fun clearFord() { context.dataStore.edit { it.remove(FORD_TOKENS); it.remove(FORD_VIN); it.remove(FORD_LOCATION) } }
 
     /** Merkt sich das verbundene Fahrzeug. */
@@ -168,6 +175,8 @@ class AppSettings(private val context: Context) {
         val FORD_TOKENS = stringPreferencesKey("ford_tokens")
         val FORD_VIN = stringPreferencesKey("ford_vin")
         val FORD_LOCATION = stringPreferencesKey("ford_location")
+        val HOME_LAT = doublePreferencesKey("home_lat")
+        val HOME_LON = doublePreferencesKey("home_lon")
         val CHARGE_RULES = stringPreferencesKey("charge_rules")
         val CHARGE_LAST_CMD = longPreferencesKey("charge_last_cmd")
         val CHARGE_OVERRIDE = booleanPreferencesKey("charge_override")

@@ -208,6 +208,10 @@ class FordPassClient(
         val metrics = (parse(text) as? JsonObject)?.get("metrics") as? JsonObject
         fun metricNumber(key: String) = (metrics?.get(key) as? JsonObject)?.get("value")?.let { (it as? JsonPrimitive)?.doubleOrNull }
         fun metricString(key: String) = (metrics?.get(key) as? JsonObject)?.get("value")?.let { (it as? JsonPrimitive)?.contentOrNull }
+        // Position: metrics.position.value.location.{lat,lon}
+        val location = ((metrics?.get("position") as? JsonObject)?.get("value") as? JsonObject)?.get("location") as? JsonObject
+        val lat = (location?.get("lat") as? JsonPrimitive)?.doubleOrNull
+        val lon = (location?.get("lon") as? JsonPrimitive)?.doubleOrNull
         return FordCarState(
             at = clock.now(),
             vin = vin,
@@ -217,6 +221,8 @@ class FordPassClient(
             plugStatus = metricString("xevPlugChargerStatus"),
             chargerVoltage = metricNumber("xevBatteryChargerVoltageOutput"),
             chargerCurrent = metricNumber("xevBatteryChargerCurrentOutput"),
+            latitude = lat,
+            longitude = lon,
             raw = text,
         )
     }

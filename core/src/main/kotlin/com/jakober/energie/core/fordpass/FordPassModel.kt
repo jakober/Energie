@@ -34,6 +34,8 @@ data class FordCarState(
     val plugStatus: String?,
     val chargerVoltage: Double?,
     val chargerCurrent: Double?,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
     val raw: String,
 ) {
     val isCharging: Boolean? get() = chargeStatus?.let { it.uppercase() == "IN_PROGRESS" } ?: plugStatus?.let { it.uppercase().startsWith("CHARGING") }

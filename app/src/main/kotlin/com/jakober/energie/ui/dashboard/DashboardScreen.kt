@@ -26,6 +26,14 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Switch
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.platform.LocalContext
+import android.content.Intent
+import android.location.Geocoder
+import android.net.Uri
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -293,6 +301,9 @@ private fun CarCard(live: LiveState, settings: Settings, onOverride: (Boolean) -
                 Text("Stand ${Format.time(car.at)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
+        if (car.latitude != null && car.longitude != null) {
+            CarLocation(car.latitude, car.longitude, car.distanceHomeM)
+        }
         live.carError?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
         if (settings.fordConnected) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -307,6 +318,39 @@ private fun CarCard(live: LiveState, settings: Settings, onOverride: (Boolean) -
                 style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+    }
+}
+
+/** Standort des Autos: zu Hause oder Adresse, plus Sprung in die Karten-App. */
+@Composable
+private fun CarLocation(lat: Double, lon: Double, distanceHomeM: Double?) {
+    val context = LocalContext.current
+    // Adresse per Geocoder nachschlagen; schlaegt das fehl, bleiben die Koordinaten.
+    val address by produceState<String?>(initialValue = null, lat, lon) {
+        value = withContext(Dispatchers.IO) {
+            runCatching {
+                @Suppress("DEPRECATION")
+                Geocoder(context, java.util.Locale.GERMANY).getFromLocation(lat, lon, 1)?.firstOrNull()?.let { a ->
+                    listOfNotNull(a.thoroughfare?.let { t -> t + (a.subThoroughfare?.let { " $it" } ?: "") }, a.locality).joinToString(", ")
+                }
+            }.getOrNull()
+        }
+    }
+    val where = when {
+        distanceHomeM != null && distanceHomeM < 300 -> "zu Hause"
+        distanceHomeM != null && distanceHomeM < 10_000 -> "unterwegs, ${(distanceHomeM / 100).toInt() / 10.0} km von zu Hause"
+        distanceHomeM != null -> "unterwegs, ${(distanceHomeM / 1000).toInt()} km von zu Hause"
+        else -> "Standort"
+    }
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(where, style = MaterialTheme.typography.titleSmall)
+            Text(address ?: String.format(java.util.Locale.GERMANY, "%.5f, %.5f", lat, lon), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        TextButton(onClick = {
+            val uri = Uri.parse("geo:$lat,$lon?q=$lat,$lon(Auto)")
+            runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
+        }) { Text("Karte") }
     }
 }
 

@@ -63,7 +63,7 @@ class FordPassClientTest {
                 }
                 path.endsWith("/telemetry/sources/fordpass/vehicles/WF0XXXMACHE123456") -> {
                     assertEquals("Bearer auto-access", req.headers["Authorization"])
-                    respond("""{"metrics":{"xevBatteryStateOfCharge":{"value":62.5},"xevBatteryRange":{"value":268.0},"xevBatteryChargeDisplayStatus":{"value":"IN_PROGRESS"},"xevPlugChargerStatus":{"value":"CONNECTED"},"xevBatteryChargerVoltageOutput":{"value":346},"xevBatteryChargerCurrentOutput":{"value":5.4}}}""")
+                    respond("""{"metrics":{"xevBatteryStateOfCharge":{"value":62.5},"xevBatteryRange":{"value":268.0},"xevBatteryChargeDisplayStatus":{"value":"IN_PROGRESS"},"xevPlugChargerStatus":{"value":"CONNECTED"},"xevBatteryChargerVoltageOutput":{"value":346},"xevBatteryChargerCurrentOutput":{"value":5.4},"position":{"value":{"location":{"lat":48.137,"lon":11.575,"alt":520}}}}}""")
                 }
                 path.endsWith("/command/vehicles/WF0XXXMACHE123456/commands") -> {
                     assertEquals("""{"tags":{},"type":"pauseGlobalChargeCommand","version":"1.0.1","wakeUp":true}""", body)
@@ -95,6 +95,11 @@ class FordPassClientTest {
         assertEquals(true, state.isCharging)
         assertEquals(true, state.isPluggedIn)
         assertEquals(346 * 5.4, state.chargePowerW!!, 1e-9)
+        assertEquals(48.137, state.latitude)
+        assertEquals(11.575, state.longitude)
+        // Marienplatz -> Olympiapark rund 4,5 km
+        val d = com.jakober.energie.core.smartcar.distanceMeters(48.137, 11.575, 48.175, 11.552)
+        assertTrue(d > 4000 && d < 5000, "$d")
         assertTrue(saved.any { it.autoAccessToken == "auto-access" })
 
         assertTrue(client.pauseCharge("WF0XXXMACHE123456").accepted)

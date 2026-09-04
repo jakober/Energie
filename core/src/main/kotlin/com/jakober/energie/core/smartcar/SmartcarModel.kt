@@ -25,6 +25,10 @@ data class CarState(
     val chargingStatus: String? = null,
     /** Gemessene Ladeleistung in W, aus Wattage oder Spannung mal Strom. */
     val chargePowerW: Double? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    /** Entfernung zum Ladeort Zuhause in Metern, wenn beides bekannt ist. */
+    val distanceHomeM: Double? = null,
     /** Rohantworten je Signalcode. */
     val raw: Map<String, String> = emptyMap(),
 )
@@ -33,6 +37,16 @@ data class CarState(
 data class ConnectionsResult(val connections: List<SmartcarConnection>, val raw: String)
 
 /** Ergebnis eines Befehls: HTTP-Status und Rohantwort. */
+/** Luftlinie zwischen zwei Koordinaten in Metern (Haversine). */
+fun distanceMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+    val r = 6_371_000.0
+    val dLat = Math.toRadians(lat2 - lat1)
+    val dLon = Math.toRadians(lon2 - lon1)
+    val a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2)
+    return 2 * r * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
 data class CommandResult(val status: Int, val body: String) {
     val ok: Boolean get() = status in 200..299
 }

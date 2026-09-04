@@ -18,6 +18,7 @@ import com.jakober.energie.core.fordpass.FordCommandResult
 import com.jakober.energie.core.fordpass.FordPassClient
 import com.jakober.energie.core.fordpass.FordTokens
 import com.jakober.energie.core.smartcar.CarState
+import com.jakober.energie.core.smartcar.distanceMeters
 import kotlinx.serialization.json.Json
 import com.jakober.energie.core.smartcar.CommandResult
 import com.jakober.energie.core.smartcar.ConnectionsResult
@@ -231,6 +232,8 @@ class EnergyRepository(
      */
     private fun carChargePower(car: CarState?, consumptionW: Double?, fallbackW: Double): Double? {
         if (car == null || car.isCharging != true) return null
+        // Weit weg von zu Hause laedt das Auto woanders - nicht dem Haus zurechnen.
+        car.distanceHomeM?.let { if (it > 300) return null }
         val p = car.chargePowerW?.takeIf { it > 100 } ?: fallbackW
         if (consumptionW != null && consumptionW < p * 0.8) return null
         return p
@@ -256,7 +259,7 @@ class EnergyRepository(
         }
     }
 
-    private fun FordCarState.toCarState(): CarState = CarState(
+    private fun FordCarState.toCarState(s: Settings): CarState = CarState(
         at = at,
         vehicleId = vin,
         socPercent = socPercent,
@@ -266,11 +269,14 @@ class EnergyRepository(
         chargeLimitPercent = null,
         chargingStatus = listOfNotNull(chargeStatus, plugStatus).joinToString(" / ").ifBlank { null },
         chargePowerW = chargePowerW?.let { it / SmartcarClient.CHARGER_EFFICIENCY },
+        latitude = latitude,
+        longitude = longitude,
+        distanceHomeM = if (latitude != null && longitude != null && (s.homeLat != 0.0 || s.homeLon != 0.0)) distanceMeters(latitude, longitude, s.homeLat, s.homeLon) else null,
         raw = mapOf("fordpass-telemetry" to raw),
     )
 
     suspend fun fordRefreshNow(s: Settings): CarState = withContext(Dispatchers.IO) {
-        val state = fordpass(s).state(s.fordVin).toCarState()
+        val state = fetchCar(s)
         lastCarFetch = clock.now()
         _state.update { it.copy(car = state, carError = null) }
         state
@@ -307,7 +313,22 @@ class EnergyRepository(
     private suspend fun fetchCar(s: Settings): CarState {
         // FordPass liefert direkt vom Hersteller und zaehlt nicht aufs Smartcar-Kontingent;
         // wenn angemeldet, hat es Vorrang.
-        if (s.fordConnected) return fordpass(s).state(s.fordVin).toCarState()
+        if (s.fordConnected) {
+            val state = fordpass(s).state(s.fordVin)
+            var home = s
+            // Zuhause einmal aus Fords Ladeorten lernen (Ort vom Typ HOME).
+            if (s.homeLat == 0.0 && s.homeLon == 0.0) {
+                runCatching { fordpass(s).chargeLocations(s.fordVin) }.getOrNull()
+                    ?.let { list -> list.firstOrNull { it.type?.uppercase() == "HOME" } ?: list.firstOrNull() }
+                    ?.let { loc ->
+                        val location = loc.raw["location"] as? kotlinx.serialization.json.JsonObject
+                        val lat = (location?.get("latitude") as? kotlinx.serialization.json.JsonPrimitive)?.content?.toDoubleOrNull()
+                        val lon = (location?.get("longitude") as? kotlinx.serialization.json.JsonPrimitive)?.content?.toDoubleOrNull()
+                        if (lat != null && lon != null) { settings.saveHome(lat, lon); home = s.copy(homeLat = lat, homeLon = lon) }
+                    }
+            }
+            return state.toCarState(home)
+        }
         val client = smartcar(s)
         val state = client.state(s.smartcarVehicleId, s.smartcarUserId.ifBlank { null })
         // Alle Signale gescheitert mit 404: Das Fahrzeug hat bei Smartcar eine neue ID

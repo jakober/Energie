@@ -211,10 +211,11 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             _carResult.value = "Suche verbundene Fahrzeuge …"
             runCatching { repo.carConnections(s) }
-                .onSuccess { list ->
-                    _carRaw.value = list.firstOrNull()?.raw
+                .onSuccess { result ->
+                    val list = result.connections
+                    _carRaw.value = result.raw
                     if (list.isEmpty()) {
-                        _carResult.value = "Smartcar erreichbar, aber noch kein Fahrzeug verbunden. Erst „Auto verbinden“ ausführen."
+                        _carResult.value = "Smartcar erreichbar, aber in der Antwort ist kein Fahrzeug erkennbar. Bitte „Rohantwort anzeigen“ und den Text schicken."
                     } else {
                         val c = list.first()
                         container.settings.saveCar(c.vehicleId, c.userId)

@@ -29,6 +29,9 @@ data class CarState(
     val raw: Map<String, String> = emptyMap(),
 )
 
+/** Verbindungsliste mit allen Rohantworten, auch wenn nichts erkannt wurde. */
+data class ConnectionsResult(val connections: List<SmartcarConnection>, val raw: String)
+
 /** Ergebnis eines Befehls: HTTP-Status und Rohantwort. */
 data class CommandResult(val status: Int, val body: String) {
     val ok: Boolean get() = status in 200..299

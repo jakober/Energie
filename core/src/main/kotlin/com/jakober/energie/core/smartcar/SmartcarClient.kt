@@ -18,6 +18,7 @@ import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.contentOrNull
 import kotlin.time.Duration.Companion.seconds
 
 class SmartcarException(val status: Int, message: String) : Exception(message)
@@ -86,14 +87,58 @@ class SmartcarClient(
         t
     }
 
-    /** Alle Fahrzeugverbindungen der Anwendung. */
-    suspend fun connections(): List<SmartcarConnection> {
-        val body = getText("$baseUrl/connections?page[size]=50", userId = null)
-        val el = json.parseToJsonElement(body)
-        return JsonPick.objectsWith(el, "vehicleId").mapNotNull { obj ->
-            val vehicleId = JsonPick.string(obj, "vehicleId") ?: return@mapNotNull null
-            SmartcarConnection(vehicleId = vehicleId, userId = JsonPick.string(obj, "userId"), raw = body)
-        }.distinctBy { it.vehicleId }
+    /**
+     * Alle Fahrzeuge der Anwendung. Erst `/connections`, dann als Rueckfall
+     * `/vehicles`. Die Antwortform ist nicht dokumentiert verfuegbar, deshalb
+     * werden mehrere Schreibweisen erkannt und alle Rohantworten mitgegeben.
+     */
+    suspend fun connections(): ConnectionsResult {
+        val raws = ArrayList<String>()
+        val found = LinkedHashMap<String, SmartcarConnection>()
+
+        fun harvest(body: String) {
+            val el = runCatching { json.parseToJsonElement(body) }.getOrNull() ?: return
+            // Schreibweise 1: Objekte mit vehicleId / vehicle_id
+            for (key in listOf("vehicleId", "vehicle_id")) {
+                JsonPick.objectsWith(el, key).forEach { obj ->
+                    val id = JsonPick.string(obj, key) ?: return@forEach
+                    found.getOrPut(id) { SmartcarConnection(id, JsonPick.string(obj, "userId", "user_id"), body) }
+                }
+            }
+            // Schreibweise 2: { "vehicle": { "id": ... }, "user": { "id": ... } }
+            JsonPick.objectsWith(el, "vehicle").forEach { obj ->
+                val v = obj["vehicle"] as? kotlinx.serialization.json.JsonObject ?: return@forEach
+                val id = JsonPick.string(v, "id") ?: return@forEach
+                val user = (obj["user"] as? kotlinx.serialization.json.JsonObject)?.let { JsonPick.string(it, "id") }
+                found.getOrPut(id) { SmartcarConnection(id, user ?: JsonPick.string(obj, "userId", "user_id"), body) }
+            }
+            // Schreibweise 3: JSON:API-Objekte vom Typ vehicle
+            JsonPick.objectsWith(el, "type").forEach { obj ->
+                if (JsonPick.string(obj, "type") == "vehicle") {
+                    val id = (obj["id"] as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull ?: return@forEach
+                    found.getOrPut(id) { SmartcarConnection(id, JsonPick.string(obj, "userId", "user_id"), body) }
+                }
+            }
+            // Schreibweise 4 (API v2): { "vehicles": ["id", ...] }
+            (el as? kotlinx.serialization.json.JsonObject)?.get("vehicles")?.let { arr ->
+                (arr as? kotlinx.serialization.json.JsonArray)?.forEach { item ->
+                    (item as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull?.let { id -> found.getOrPut(id) { SmartcarConnection(id, null, body) } }
+                }
+            }
+        }
+
+        val failures = ArrayList<Throwable>()
+        runCatching { getText("$baseUrl/connections?page[size]=50", userId = null) }
+            .onSuccess { raws += "GET /connections\n$it"; harvest(it) }
+            .onFailure { raws += "GET /connections\nFehler: ${it.message}"; failures += it }
+        if (found.isEmpty()) {
+            runCatching { getText("$baseUrl/vehicles", userId = null) }
+                .onSuccess { raws += "GET /vehicles\n$it"; harvest(it) }
+                .onFailure { raws += "GET /vehicles\nFehler: ${it.message}"; failures += it }
+        }
+        // Beide Wege gescheitert (etwa 401): den Fehler melden statt einer leeren Liste.
+        if (found.isEmpty() && failures.size == 2) throw failures.first()
+        return ConnectionsResult(found.values.toList(), raws.joinToString("\n\n"))
     }
 
     /** Rohantwort eines einzelnen Signals, z. B. `tractionbattery-stateofcharge`. */

@@ -11,8 +11,8 @@ import com.jakober.energie.core.senec.SenecConnectClient
 import com.jakober.energie.core.senec.SenecSystem
 import com.jakober.energie.core.smartcar.CarState
 import com.jakober.energie.core.smartcar.CommandResult
+import com.jakober.energie.core.smartcar.ConnectionsResult
 import com.jakober.energie.core.smartcar.SmartcarClient
-import com.jakober.energie.core.smartcar.SmartcarConnection
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -188,7 +188,7 @@ class EnergyRepository(
     private suspend fun fetchCar(s: Settings): CarState =
         smartcar(s).state(s.smartcarVehicleId, s.smartcarUserId.ifBlank { null })
 
-    suspend fun carConnections(s: Settings): List<SmartcarConnection> = withContext(Dispatchers.IO) { smartcar(s).connections() }
+    suspend fun carConnections(s: Settings): ConnectionsResult = withContext(Dispatchers.IO) { smartcar(s).connections() }
 
     /** Liest den Autozustand sofort, unabhaengig vom Intervall, und uebernimmt ihn. */
     suspend fun carRefreshNow(s: Settings): CarState = withContext(Dispatchers.IO) {

@@ -54,7 +54,7 @@ class SmartcarClientTest {
     @Test
     fun verbindungenZustandUndBefehle() = runTest {
         val client = SmartcarClient(HttpClient(engine()), "client_01X", "geheim")
-        val conns = client.connections()
+        val conns = client.connections().connections
         assertEquals(listOf("veh-1"), conns.map { it.vehicleId })
         assertEquals("usr-9", conns.single().userId)
 
@@ -80,6 +80,26 @@ class SmartcarClientTest {
     }
 
     @Test
+    fun andereSchreibweisenDerVerbindungsliste() = runTest {
+        suspend fun parse(body: String): List<SmartcarConnection> {
+            val engine = MockEngine { req ->
+                when {
+                    req.url.host == "iam.smartcar.com" -> respond("""{"access_token":"t","expires_in":3600}""")
+                    req.url.encodedPath == "/v3/connections" -> respond(body)
+                    else -> respond("""{"data":[]}""")
+                }
+            }
+            return SmartcarClient(HttpClient(engine), "x", "y").connections().connections
+        }
+        assertEquals("v-snake", parse("""{"data":[{"vehicle_id":"v-snake","user_id":"u1"}]}""").single().vehicleId)
+        val nested = parse("""{"data":[{"vehicle":{"id":"v-nested","make":"FORD"},"user":{"id":"u2"}}]}""").single()
+        assertEquals("v-nested", nested.vehicleId)
+        assertEquals("u2", nested.userId)
+        assertEquals("v-jsonapi", parse("""{"data":[{"type":"vehicle","id":"v-jsonapi","attributes":{}}]}""").single().vehicleId)
+        assertEquals(listOf("a", "b"), parse("""{"vehicles":["a","b"],"paging":{"count":2}}""").map { it.vehicleId })
+    }
+
+    @Test
     fun connectAdresse() {
         val url = SmartcarClient.connectUrl("cf56d752-8533-426a-8fec-a45c9fe81eb9")
         assertTrue(url.startsWith("https://connect.smartcar.com/oauth/authorize?response_type=none&client_id=cf56d752-8533-426a-8fec-a45c9fe81eb9&"))
@@ -102,7 +122,8 @@ class SmartcarClientTest {
             assertTrue(e.message!!.contains("Basic-Auth"), e.message)
             assertTrue(e.message!!.contains("invalid_client"), e.message)
         }
-        assertEquals(2, calls)
+        // Zwei Anmeldeversuche je Endpunkt, zwei Endpunkte (/connections, /vehicles)
+        assertEquals(4, calls)
     }
 
     @Test
@@ -120,6 +141,8 @@ class SmartcarClientTest {
         }
         val client = SmartcarClient(HttpClient(engine), "x", "y")
         assertEquals("tok-basic", client.accessToken())
-        assertTrue(client.connections().isEmpty())
+        val result = client.connections()
+        assertTrue(result.connections.isEmpty())
+        assertTrue(result.raw.contains("GET /connections") && result.raw.contains("GET /vehicles"), result.raw)
     }
 }

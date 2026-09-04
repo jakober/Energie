@@ -10,6 +10,9 @@ jobs:
   android:
     name: Android
     runs-on: ubuntu-latest
+    # Schreibrecht nur fuer den APK-Zweig (siehe letzter Schritt).
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -42,3 +45,29 @@ jobs:
           name: energie-android-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+
+      # Zusaetzlich landet die APK als einzelne Datei im Zweig "apk" - ohne
+      # Geschichte, bei jedem Build ueberschrieben. Von dort laesst sie sich
+      # per git holen, auch wo der Artefaktspeicher von GitHub nicht
+      # erreichbar ist (etwa aus der Claude-Umgebung, die die APK dann direkt
+      # in den Chat legt).
+      - name: APK im Zweig "apk" ablegen
+        if: github.ref == 'refs/heads/main'
+        continue-on-error: true
+        run: |
+          set -e
+          mkdir -p /tmp/apk
+          cp app/build/outputs/apk/debug/app-debug.apk /tmp/apk/energie-debug.apk
+          {
+            echo "Commit:  ${GITHUB_SHA}"
+            echo "Lauf:    ${GITHUB_RUN_NUMBER}"
+            echo "Zeit:    $(date -u '+%Y-%m-%d %H:%M UTC')"
+            git log -1 --pretty=%s
+          } > /tmp/apk/VERSION.txt
+          cd /tmp/apk
+          git init -q -b apk
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add .
+          git commit -q -m "APK aus Lauf ${GITHUB_RUN_NUMBER} (${GITHUB_SHA::7})"
+          git push --force "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" apk

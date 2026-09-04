@@ -36,6 +36,8 @@ data class FordCarState(
     val chargerCurrent: Double?,
     val latitude: Double? = null,
     val longitude: Double? = null,
+    /** LOCKED, PARTLY_LOCKED, UNLOCKED oder null, wenn Ford nichts liefert. */
+    val lockState: String? = null,
     val raw: String,
 ) {
     val isCharging: Boolean? get() = chargeStatus?.let { it.uppercase() == "IN_PROGRESS" } ?: plugStatus?.let { it.uppercase().startsWith("CHARGING") }

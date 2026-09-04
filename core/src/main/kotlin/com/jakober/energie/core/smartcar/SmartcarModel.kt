@@ -29,6 +29,8 @@ data class CarState(
     val longitude: Double? = null,
     /** Entfernung zum Ladeort Zuhause in Metern, wenn beides bekannt ist. */
     val distanceHomeM: Double? = null,
+    /** LOCKED, PARTLY_LOCKED, UNLOCKED oder null. */
+    val lockState: String? = null,
     /** Rohantworten je Signalcode. */
     val raw: Map<String, String> = emptyMap(),
 )

@@ -130,7 +130,10 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     fun refreshNow() {
-        viewModelScope.launch { runCatching { repo.refresh() } }
+        viewModelScope.launch {
+            repo.forceCarOnNextRefresh()
+            runCatching { repo.refresh() }
+        }
     }
 
     fun selectDate(d: LocalDate) { _selectedDate.value = d }

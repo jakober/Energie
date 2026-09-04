@@ -212,6 +212,7 @@ class FordPassClient(
         val location = ((metrics?.get("position") as? JsonObject)?.get("value") as? JsonObject)?.get("location") as? JsonObject
         val lat = (location?.get("lat") as? JsonPrimitive)?.doubleOrNull
         val lon = (location?.get("lon") as? JsonPrimitive)?.doubleOrNull
+        val lockState = lockStateOf(metrics?.get("doorLockStatus") as? JsonArray)
         return FordCarState(
             at = clock.now(),
             vin = vin,
@@ -223,8 +224,35 @@ class FordPassClient(
             chargerCurrent = metricNumber("xevBatteryChargerCurrentOutput"),
             latitude = lat,
             longitude = lon,
+            lockState = lockState,
             raw = text,
         )
+    }
+
+    /**
+     * Verriegelung aus `doorLockStatus`: Ein Eintrag ALL_DOORS = LOCKED reicht;
+     * sonst zaehlen, wie viele Tueren verriegelt sind. UNKNOWN wird ignoriert.
+     */
+    private fun lockStateOf(doors: JsonArray?): String? {
+        if (doors == null || doors.isEmpty()) return null
+        var required = 0
+        var locked = 0
+        for (d in doors.filterIsInstance<JsonObject>()) {
+            val value = (d["value"] as? JsonPrimitive)?.contentOrNull?.uppercase() ?: continue
+            val door = (d["vehicleDoor"] as? JsonPrimitive)?.contentOrNull?.uppercase()
+            if (value == "UNKNOWN") continue
+            required++
+            if (value == "LOCKED" || value == "DOUBLE_LOCKED") {
+                if (door == "ALL_DOORS") return "LOCKED"
+                locked++
+            }
+        }
+        return when {
+            required == 0 -> null
+            locked == 0 -> "UNLOCKED"
+            locked >= required -> "LOCKED"
+            else -> "PARTLY_LOCKED"
+        }
     }
 
     // ---------------------------------------------------------------- Befehle

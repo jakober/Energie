@@ -16,6 +16,8 @@ import androidx.compose.material.icons.rounded.BatteryChargingFull
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.ElectricCar
 import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Speed
@@ -300,6 +302,17 @@ private fun CarCard(live: LiveState, settings: Settings, onOverride: (Boolean) -
                 car.chargeLimitPercent?.let { Text("Ladeziel ${Format.percentValue(it)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 Text("Stand ${Format.time(car.at)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+        }
+        car.lockState?.let { lock ->
+            val locked = lock == "LOCKED"
+            ValueRow(
+                "Verriegelung",
+                when (lock) { "LOCKED" -> "abgeschlossen"; "PARTLY_LOCKED" -> "teilweise offen"; else -> "NICHT abgeschlossen" },
+                "Stand ${Format.time(car.at)}",
+                color = if (locked) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error,
+                icon = if (locked) Icons.Rounded.Lock else Icons.Rounded.LockOpen,
+                iconTint = if (locked) EnergyColors.battery else MaterialTheme.colorScheme.error,
+            )
         }
         if (car.latitude != null && car.longitude != null) {
             CarLocation(car.latitude, car.longitude, car.distanceHomeM)

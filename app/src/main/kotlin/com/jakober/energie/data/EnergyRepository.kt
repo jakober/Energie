@@ -271,6 +271,7 @@ class EnergyRepository(
         chargePowerW = chargePowerW?.let { it / SmartcarClient.CHARGER_EFFICIENCY },
         latitude = latitude,
         longitude = longitude,
+        lockState = lockState,
         distanceHomeM = if (latitude != null && longitude != null && (s.homeLat != 0.0 || s.homeLon != 0.0)) distanceMeters(latitude, longitude, s.homeLat, s.homeLon) else null,
         raw = mapOf("fordpass-telemetry" to raw),
     )
@@ -345,6 +346,9 @@ class EnergyRepository(
     }
 
     suspend fun carConnections(s: Settings): ConnectionsResult = withContext(Dispatchers.IO) { smartcar(s).connections() }
+
+    /** Naechster Refresh holt das Auto sofort, unabhaengig vom Intervall (Aktualisieren-Knopf). */
+    fun forceCarOnNextRefresh() { lastCarFetch = null }
 
     /** Liest den Autozustand sofort, unabhaengig vom Intervall, und uebernimmt ihn. */
     suspend fun carRefreshNow(s: Settings): CarState = withContext(Dispatchers.IO) {

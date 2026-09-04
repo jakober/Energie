@@ -18,6 +18,10 @@ import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlin.time.Duration.Companion.seconds
 
@@ -149,7 +153,14 @@ class SmartcarClient(
     suspend fun allSignals(vehicleId: String, userId: String?): String =
         getText("$baseUrl/vehicles/${vehicleId.encodeURLParameter()}/signals?page[size]=200", userId)
 
-    /** Holt die fuer die Ladesteuerung noetigen Signale und setzt sie zusammen. */
+    /**
+     * Holt die fuer die Ladesteuerung noetigen Signale und setzt sie zusammen.
+     *
+     * Antwortform (Smartcar v3, am Mach-E gesehen):
+     * `{"data":{"attributes":{"status":{"value":"SUCCESS"},"body":{"value":50,"unit":"percent"}}}}`
+     * Der Messwert steht in `data.attributes.body.value`; `status.value` ist nur
+     * der Erfolgsstatus und darf nicht damit verwechselt werden.
+     */
     suspend fun state(vehicleId: String, userId: String?): CarState {
         val raw = LinkedHashMap<String, String>()
         suspend fun fetch(code: String): JsonElement? = runCatching {
@@ -162,31 +173,74 @@ class SmartcarClient(
         val range = fetch(SIG_RANGE)
         val charging = fetch(SIG_IS_CHARGING)
         val plugged = fetch(SIG_PLUGGED)
-        val limit = fetch(SIG_LIMIT)
+        val limits = fetch(SIG_LIMITS)
         val status = fetch(SIG_STATUS)
-        val wattage = fetch(SIG_WATTAGE)
         val voltage = fetch(SIG_VOLTAGE)
         val amperage = fetch(SIG_AMPERAGE)
 
-        val powerW: Double? = wattage?.let { JsonPick.number(it, "wattage", "power", "value") }?.let { w -> if (w < 100) w * 1000 else w }
-            ?: run {
-                val v = voltage?.let { JsonPick.number(it, "voltage", "value") }
-                val a = amperage?.let { JsonPick.number(it, "amperage", "current", "value") }
-                if (v != null && a != null && v > 0 && a > 0) v * a else null
-            }
+        // Spannung mal Strom ist die Leistung an der Batterie; an der Steckdose
+        // kommt wegen Ladeverlusten etwas mehr an.
+        val v = voltage?.let { signalNumber(it, "voltage") }
+        val a = amperage?.let { signalNumber(it, "amperage", "current") }
+        val powerW = if (v != null && a != null && v > 0 && a > 0) v * a / CHARGER_EFFICIENCY else null
 
         return CarState(
             at = clock.now(),
             vehicleId = vehicleId,
-            socPercent = soc?.let { JsonPick.number(it, "stateOfCharge", "percentRemaining", "percent", "value") }?.let(::asPercent),
-            rangeKm = range?.let { JsonPick.number(it, "range", "distance", "value") },
-            isCharging = charging?.let { JsonPick.boolean(it, "isCharging", "value") },
-            isPluggedIn = plugged?.let { JsonPick.boolean(it, "isChargingCableConnected", "isPluggedIn", "value") },
-            chargeLimitPercent = limit?.let { JsonPick.number(it, "activeLimit", "limit", "percent", "value") }?.let(::asPercent),
-            chargingStatus = status?.let { JsonPick.string(it, "detailedChargingStatus", "status", "state", "value") },
+            socPercent = soc?.let { signalNumber(it, "stateOfCharge", "percentRemaining", "percent") }?.let(::asPercent),
+            rangeKm = range?.let { signalNumber(it, "range", "distance") },
+            isCharging = charging?.let { signalBoolean(it, "isCharging") },
+            isPluggedIn = plugged?.let { signalBoolean(it, "isChargingCableConnected", "isPluggedIn") },
+            chargeLimitPercent = limits?.let(::chargeLimit)?.let(::asPercent),
+            chargingStatus = status?.let { signalString(it, "detailedChargingStatus", "status", "state") },
             chargePowerW = powerW,
             raw = raw,
         )
+    }
+
+    /** `data.attributes.body` einer Signalantwort, falls vorhanden. */
+    private fun signalBody(el: JsonElement): JsonElement? =
+        ((el as? JsonObject)?.get("data") as? JsonObject)?.let { d -> (d["attributes"] as? JsonObject)?.get("body") }
+
+    private fun signalNumber(el: JsonElement, vararg fallbackKeys: String): Double? {
+        val body = signalBody(el)
+        if (body != null) {
+            (body as? JsonObject)?.get("value")?.let { (it as? JsonPrimitive)?.doubleOrNull }?.let { return it }
+            JsonPick.number(body, *fallbackKeys)?.let { return it }
+        }
+        return JsonPick.number(el, *fallbackKeys)
+    }
+
+    private fun signalBoolean(el: JsonElement, vararg fallbackKeys: String): Boolean? {
+        val body = signalBody(el)
+        if (body != null) {
+            (body as? JsonObject)?.get("value")?.let { (it as? JsonPrimitive)?.booleanOrNull }?.let { return it }
+            JsonPick.boolean(body, *fallbackKeys)?.let { return it }
+        }
+        return JsonPick.boolean(el, *fallbackKeys)
+    }
+
+    private fun signalString(el: JsonElement, vararg fallbackKeys: String): String? {
+        val body = signalBody(el)
+        if (body != null) {
+            (body as? JsonObject)?.get("value")?.let { p -> (p as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull }?.let { return it }
+            JsonPick.string(body, *fallbackKeys)?.let { return it }
+        }
+        return JsonPick.string(el, *fallbackKeys)
+    }
+
+    /**
+     * Ladeziel aus `charge-chargelimits`. Die Form ist noch nicht gesehen; wir
+     * nehmen ein aktives Limit, sonst das erste Limit, sonst irgendeine Zahl.
+     */
+    private fun chargeLimit(el: JsonElement): Double? {
+        val body = signalBody(el) ?: el
+        val value = (body as? JsonObject)?.get("value") ?: body
+        (value as? JsonPrimitive)?.doubleOrNull?.let { return it }
+        val objects = JsonPick.objectsWith(value, "limit") + JsonPick.objectsWith(value, "percent")
+        objects.firstOrNull { o -> JsonPick.boolean(o, "isActive", "active", "isDefault") == true }
+            ?.let { o -> JsonPick.number(o, "limit", "percent") }?.let { return it }
+        return JsonPick.number(body, "activeLimit", "limit", "percent", "value")
     }
 
     suspend fun startCharge(vehicleId: String, userId: String?): CommandResult =
@@ -238,14 +292,15 @@ class SmartcarClient(
         const val DEFAULT_BASE_URL = "https://vehicle.api.smartcar.com/v3"
         const val DEFAULT_TOKEN_URL = "https://iam.smartcar.com/oauth2/token"
         const val USER_HEADER = "sc-user-id"
+        /** Wirkungsgrad des Bordladers: Batterieleistung geteilt durch Wandleistung. */
+        const val CHARGER_EFFICIENCY = 0.88
 
         const val SIG_SOC = "tractionbattery-stateofcharge"
         const val SIG_RANGE = "tractionbattery-range"
         const val SIG_IS_CHARGING = "charge-ischarging"
         const val SIG_PLUGGED = "charge-ischargingcableconnected"
-        const val SIG_LIMIT = "charge-activelimit"
+        const val SIG_LIMITS = "charge-chargelimits"
         const val SIG_STATUS = "charge-detailedchargingstatus"
-        const val SIG_WATTAGE = "charge-wattage"
         const val SIG_VOLTAGE = "charge-voltage"
         const val SIG_AMPERAGE = "charge-amperage"
 

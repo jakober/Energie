@@ -32,15 +32,14 @@ class SmartcarClientTest {
             path == "/v3/connections" -> respond(
                 """{"data":[{"type":"connection","attributes":{"vehicleId":"veh-1","userId":"usr-9","connectedAt":"2026-09-04T18:00:00Z"}}],"meta":{"page":{"number":1}}}""",
             )
-            path.endsWith("/signals/tractionbattery-stateofcharge") -> respond("""{"data":{"code":"tractionbattery-stateofcharge","attributes":{"stateOfCharge":0.63,"unit":"%"}}}""")
-            path.endsWith("/signals/tractionbattery-range") -> respond("""{"data":{"attributes":{"range":212.5}}}""")
-            path.endsWith("/signals/charge-ischarging") -> respond("""{"data":{"attributes":{"isCharging":true}}}""")
-            path.endsWith("/signals/charge-ischargingcableconnected") -> respond("""{"data":{"attributes":{"isChargingCableConnected":true}}}""")
-            path.endsWith("/signals/charge-activelimit") -> respond("""{"data":{"attributes":{"activeLimit":90}}}""")
-            path.endsWith("/signals/charge-detailedchargingstatus") -> respond("""{"data":{"attributes":{"detailedChargingStatus":"CHARGING"}}}""")
-            path.endsWith("/signals/charge-wattage") -> respond("""{"errors":[{"status":"404"}]}""", HttpStatusCode.NotFound)
-            path.endsWith("/signals/charge-voltage") -> respond("""{"data":{"attributes":{"voltage":230}}}""")
-            path.endsWith("/signals/charge-amperage") -> respond("""{"data":{"attributes":{"amperage":10}}}""")
+            path.endsWith("/signals/tractionbattery-stateofcharge") -> respond("""{"data":{"id":"tractionbattery-stateofcharge","type":"signal","attributes":{"code":"tractionbattery-stateofcharge","status":{"value":"SUCCESS"},"body":{"value":50,"unit":"percent"}}},"included":{"vehicle":{"id":"veh-1","type":"vehicle"}}}""")
+            path.endsWith("/signals/tractionbattery-range") -> respond("""{"data":{"id":"tractionbattery-range","type":"signal","attributes":{"code":"tractionbattery-range","status":{"value":"SUCCESS"},"body":{"value":219,"type":"DEFAULT","additionalValues":[],"unit":"km"}}},"included":{"vehicle":{"id":"veh-1","type":"vehicle"}}}""")
+            path.endsWith("/signals/charge-ischarging") -> respond("""{"data":{"id":"charge-ischarging","type":"signal","attributes":{"code":"charge-ischarging","status":{"value":"SUCCESS"},"body":{"value":true}}},"included":{"vehicle":{"id":"veh-1","type":"vehicle"}}}""")
+            path.endsWith("/signals/charge-ischargingcableconnected") -> respond("""{"data":{"id":"charge-ischargingcableconnected","type":"signal","attributes":{"code":"charge-ischargingcableconnected","status":{"value":"SUCCESS"},"body":{"value":true}}},"included":{"vehicle":{"id":"veh-1","type":"vehicle"}}}""")
+            path.endsWith("/signals/charge-chargelimits") -> respond("""{"data":{"id":"charge-chargelimits","type":"signal","attributes":{"code":"charge-chargelimits","status":{"value":"SUCCESS"},"body":{"value":[{"limit":90,"isActive":true,"location":"HOME"},{"limit":100,"isActive":false}]}}},"included":{"vehicle":{"id":"veh-1","type":"vehicle"}}}""")
+            path.endsWith("/signals/charge-detailedchargingstatus") -> respond("""{"data":{"id":"charge-detailedchargingstatus","type":"signal","attributes":{"code":"charge-detailedchargingstatus","status":{"value":"SUCCESS"},"body":{"value":"CHARGING"}}},"included":{"vehicle":{"id":"veh-1","type":"vehicle"}}}""")
+            path.endsWith("/signals/charge-voltage") -> respond("""{"data":{"id":"charge-voltage","type":"signal","attributes":{"code":"charge-voltage","status":{"value":"SUCCESS"},"body":{"value":346,"unit":"volts"}}},"included":{"vehicle":{"id":"veh-1","type":"vehicle"}}}""")
+            path.endsWith("/signals/charge-amperage") -> respond("""{"data":{"id":"charge-amperage","type":"signal","attributes":{"code":"charge-amperage","status":{"value":"SUCCESS"},"body":{"value":5.4,"unit":"ampere"}}},"included":{"vehicle":{"id":"veh-1","type":"vehicle"}}}""")
             path.endsWith("/commands/charge/set-limit") -> {
                 assertEquals(HttpMethod.Post, req.method)
                 assertEquals("""{"data":{"attributes":{"percent":50}}}""", (req.body as TextContent).text)
@@ -59,14 +58,14 @@ class SmartcarClientTest {
         assertEquals("usr-9", conns.single().userId)
 
         val state = client.state("veh-1", "usr-9")
-        assertEquals(63.0, state.socPercent)
-        assertEquals(212.5, state.rangeKm)
+        assertEquals(50.0, state.socPercent)
+        assertEquals(219.0, state.rangeKm)
         assertEquals(true, state.isCharging)
         assertEquals(true, state.isPluggedIn)
         assertEquals(90.0, state.chargeLimitPercent)
         assertEquals("CHARGING", state.chargingStatus)
-        assertEquals(2300.0, state.chargePowerW)
-        assertEquals(9, state.raw.size)
+        assertEquals(346 * 5.4 / 0.88, state.chargePowerW!!, 1e-6)
+        assertEquals(8, state.raw.size)
 
         val limit = client.setChargeLimit("veh-1", "usr-9", 30) // wird auf 50 begrenzt
         assertTrue(limit.ok)

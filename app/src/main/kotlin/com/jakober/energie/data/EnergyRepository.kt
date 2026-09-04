@@ -8,6 +8,10 @@ import com.jakober.energie.core.history.HistoryStore
 import com.jakober.energie.core.model.EnergySample
 import com.jakober.energie.core.senec.SenecConnectClient
 import com.jakober.energie.core.senec.SenecSystem
+import com.jakober.energie.core.smartcar.CarState
+import com.jakober.energie.core.smartcar.CommandResult
+import com.jakober.energie.core.smartcar.SmartcarClient
+import com.jakober.energie.core.smartcar.SmartcarConnection
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -23,6 +27,7 @@ import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 /** Der aktuelle Zustand, wie ihn die Oberflaeche zeigt. */
@@ -33,6 +38,8 @@ data class LiveState(
     val fritzDevices: List<FritzDevice> = emptyList(),
     val senecError: String? = null,
     val fritzError: String? = null,
+    val car: CarState? = null,
+    val carError: String? = null,
     val lastUpdate: Instant? = null,
     val refreshing: Boolean = false,
     /** Letzte Rohantwort von SENEC, fuer die Ansicht in den Einstellungen. */
@@ -56,6 +63,9 @@ class EnergyRepository(
     private val lock = Mutex()
     private var fritz: FritzBoxClient? = null
     private var fritzKey: String? = null
+    private var smartcar: SmartcarClient? = null
+    private var smartcarKey: String? = null
+    private var lastCarFetch: Instant? = null
     private var lastStored: Instant? = history.latest()?.at
 
     /** Fragt beide Quellen ab. Fehler einer Quelle blockieren die andere nicht. */
@@ -66,11 +76,21 @@ class EnergyRepository(
             coroutineScope {
                 val senecJob = async { if (s.senecConfigured) runCatching { fetchSenec(s) } else null }
                 val fritzJob = async { if (s.fritzConfigured) runCatching { fetchFritz(s) } else null }
-                Pair(senecJob.await(), fritzJob.await())
+                // Das Auto seltener: Smartcar zaehlt Aufrufe, und der Ladezustand aendert sich langsam.
+                val carJob = async {
+                    val due = lastCarFetch?.let { clock.now() - it >= CAR_INTERVAL } ?: true
+                    if (s.carConnected && due) runCatching { fetchCar(s) } else null
+                }
+                Triple(senecJob.await(), fritzJob.await(), carJob.await())
             }
         }
-        val (senecResult, fritzResult) = result
+        val (senecResult, fritzResult, carResult) = result
         val now = clock.now()
+        val car = carResult?.getOrNull()
+        if (carResult != null) lastCarFetch = now
+        val carForSample = car ?: _state.value.car?.takeIf { now - it.at < 30.minutes }
+        val consumptionNow = senec?.system?.meter?.consumption
+        val carPowerW = carChargePower(carForSample, consumptionNow, s.carFallbackPowerW.toDouble())
         val senec = senecResult?.getOrNull()
         val fritzData = fritzResult?.getOrNull()
         val meter = fritzData?.second
@@ -88,6 +108,10 @@ class EnergyRepository(
             meterGridPowerW = meter?.gridPowerWatt,
             meterImportWh = meter?.importEnergyWh,
             meterExportWh = meter?.exportEnergyWh,
+            carSocPercent = carForSample?.socPercent,
+            carCharging = carForSample?.isCharging,
+            carPluggedIn = carForSample?.isPluggedIn,
+            carChargePowerW = carPowerW,
         )
 
         val gotSomething = sample.hasSenec || sample.hasMeter
@@ -103,6 +127,8 @@ class EnergyRepository(
             fritzDevices = fritzData?.first ?: _state.value.fritzDevices,
             senecError = senecResult?.exceptionOrNull()?.let { it.message ?: it.toString() },
             fritzError = fritzResult?.exceptionOrNull()?.let { it.message ?: it.toString() },
+            car = car ?: _state.value.car,
+            carError = carResult?.exceptionOrNull()?.let { it.message ?: it.toString() } ?: if (carResult == null) _state.value.carError else null,
             lastUpdate = if (gotSomething) now else _state.value.lastUpdate,
             refreshing = false,
             senecRaw = senec?.raw ?: _state.value.senecRaw,
@@ -137,6 +163,52 @@ class EnergyRepository(
         return devices to client.smartMeter(devices)
     }
 
+    /**
+     * Ladeleistung, die dem Haus zugerechnet wird: gemessen, sonst der
+     * Annahmewert, solange das Auto laedt. Zieht der Haushalt laut SENEC
+     * deutlich weniger als diese Leistung, laedt das Auto offenbar woanders -
+     * dann zaehlt es nicht.
+     */
+    private fun carChargePower(car: CarState?, consumptionW: Double?, fallbackW: Double): Double? {
+        if (car == null || car.isCharging != true) return null
+        val p = car.chargePowerW?.takeIf { it > 100 } ?: fallbackW
+        if (consumptionW != null && consumptionW < p * 0.8) return null
+        return p
+    }
+
+    fun smartcar(s: Settings): SmartcarClient {
+        val key = "${s.smartcarClientId}|${s.smartcarClientSecret}"
+        return smartcar?.takeIf { smartcarKey == key } ?: SmartcarClient(http, s.smartcarClientId, s.smartcarClientSecret, clock = clock).also {
+            smartcar = it
+            smartcarKey = key
+        }
+    }
+
+    private suspend fun fetchCar(s: Settings): CarState =
+        smartcar(s).state(s.smartcarVehicleId, s.smartcarUserId.ifBlank { null })
+
+    suspend fun carConnections(s: Settings): List<SmartcarConnection> = withContext(Dispatchers.IO) { smartcar(s).connections() }
+
+    /** Liest den Autozustand sofort, unabhaengig vom Intervall, und uebernimmt ihn. */
+    suspend fun carRefreshNow(s: Settings): CarState = withContext(Dispatchers.IO) {
+        val state = fetchCar(s)
+        lastCarFetch = clock.now()
+        _state.update { it.copy(car = state, carError = null) }
+        state
+    }
+
+    suspend fun carCommand(s: Settings, command: CarCommand): CommandResult = withContext(Dispatchers.IO) {
+        val client = smartcar(s)
+        val v = s.smartcarVehicleId
+        val u = s.smartcarUserId.ifBlank { null }
+        when (command) {
+            CarCommand.LIMIT_50 -> client.setChargeLimit(v, u, 50)
+            CarCommand.LIMIT_100 -> client.setChargeLimit(v, u, 100)
+            CarCommand.STOP -> client.stopCharge(v, u)
+            CarCommand.START -> client.startCharge(v, u)
+        }
+    }
+
     fun dayStatistics(date: LocalDate, zone: TimeZone = TimeZone.currentSystemDefault()): DayStatistics =
         DayStatistics.of(date, history.day(date), zone)
 
@@ -149,5 +221,13 @@ class EnergyRepository(
 
     companion object {
         val MIN_STORE_INTERVAL = 55.seconds
+        val CAR_INTERVAL = 5.minutes
     }
+}
+
+enum class CarCommand(val label: String) {
+    LIMIT_50("Ladeziel 50 %"),
+    LIMIT_100("Ladeziel 100 %"),
+    STOP("Laden stoppen"),
+    START("Laden starten"),
 }

@@ -34,7 +34,16 @@ data class EnergySample(
     val meterImportWh: Long? = null,
     /** Zaehlerstand Einspeisung in Wh. */
     val meterExportWh: Long? = null,
+    // --- Auto (Smartcar) ---
+    val carSocPercent: Double? = null,
+    val carCharging: Boolean? = null,
+    val carPluggedIn: Boolean? = null,
+    /** Ladeleistung des Autos in W, gemessen oder angenommen, nur wenn es zu Hause laedt. */
+    val carChargePowerW: Double? = null,
 ) {
+    /** Hausverbrauch ohne das Auto. */
+    val householdW: Double? get() = consumptionW?.let { c -> (c - (carChargePowerW ?: 0.0)).coerceAtLeast(0.0) }
+
     val hasSenec: Boolean get() = batterySocPercent != null || productionW != null || consumptionW != null
     val hasMeter: Boolean get() = meterGridPowerW != null || meterImportWh != null
 

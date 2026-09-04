@@ -1,5 +1,6 @@
 package com.jakober.energie
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -15,7 +16,9 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -38,21 +41,39 @@ private enum class Tab(val route: String, val label: String, val icon: ImageVect
 }
 
 class MainActivity : ComponentActivity() {
+    // Zaehlt, wie oft Smartcar Connect zurueck in die App gesprungen ist.
+    private val connectReturns = mutableIntStateOf(0)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        noteConnectReturn(intent)
         val container = (application as EnergieApp).container
         setContent {
             EnergieTheme {
-                EnergieRoot(container)
+                EnergieRoot(container, connectReturns.intValue)
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        noteConnectReturn(intent)
+    }
+
+    private fun noteConnectReturn(intent: Intent?) {
+        if (intent?.data?.scheme?.startsWith("sc") == true) connectReturns.intValue++
     }
 }
 
 @Composable
-private fun EnergieRoot(container: AppContainer) {
+private fun EnergieRoot(container: AppContainer, connectReturns: Int) {
     val vm: EnergieViewModel = viewModel { EnergieViewModel(container) }
+
+    // Zurueck aus Smartcar Connect: gleich nachsehen, ob das Auto jetzt verbunden ist.
+    LaunchedEffect(connectReturns) {
+        if (connectReturns > 0) vm.carCheck()
+    }
     val nav = rememberNavController()
     val backStack by nav.currentBackStackEntryAsState()
     val current = backStack?.destination

@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.BatteryChargingFull
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.ChevronLeft
+import androidx.compose.material.icons.rounded.ElectricCar
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.WbSunny
@@ -243,6 +244,9 @@ private fun TotalsCard(t: EnergyTotals, settings: Settings, subtitle: String) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             BigValue(Format.energy(t.batteryChargeWh), "Speicher geladen", EnergyColors.battery, Modifier.weight(1f))
             BigValue(Format.energy(t.batteryDischargeWh), "Speicher entladen", EnergyColors.battery, Modifier.weight(1f))
+        }
+        if (t.carChargeWh > 50) {
+            ValueRow("Ins Auto geladen", Format.energy(t.carChargeWh), "Haushalt ohne Auto: ${Format.energy(t.consumptionWh - t.carChargeWh)}", icon = Icons.Rounded.ElectricCar, iconTint = EnergyColors.car)
         }
         Spacer(Modifier.height(4.dp))
         ShareBar("Autarkie", t.selfSufficiency, EnergyColors.battery)

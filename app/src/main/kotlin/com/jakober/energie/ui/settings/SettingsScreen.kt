@@ -25,7 +25,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import com.jakober.energie.data.CarCommand
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -52,6 +56,11 @@ fun SettingsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
     var showFritzPw by rememberSaveable { mutableStateOf(false) }
     var showKey by rememberSaveable { mutableStateOf(false) }
     var showRaw by rememberSaveable { mutableStateOf(false) }
+    var showSecret by rememberSaveable { mutableStateOf(false) }
+    var showCarRaw by rememberSaveable { mutableStateOf(false) }
+    val carResult by vm.carResult.collectAsStateWithLifecycle()
+    val carRaw by vm.carRaw.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     val dirty = draft != saved
 
     LaunchedEffect(Unit) { vm.clearTestResult() }
@@ -115,6 +124,67 @@ fun SettingsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
         }
 
         testResult?.let { item { EnergieCard(title = "Prüfergebnis") { Text(it) } } }
+
+        item {
+            EnergieCard(title = "Smartcar (Auto)", accent = EnergyColors.car) {
+                Text(
+                    "Aus dem Smartcar-Dashboard: Application ID (öffnet Connect), Client ID und Client Secret (holen das API-Token). Nach dem Speichern „Auto verbinden“, dort mit FordPass anmelden, dann „Verbindung prüfen“.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedTextField(
+                    value = draft.smartcarAppId, onValueChange = { draft = draft.copy(smartcarAppId = it) },
+                    label = { Text("Application ID") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                )
+                OutlinedTextField(
+                    value = draft.smartcarClientId, onValueChange = { draft = draft.copy(smartcarClientId = it) },
+                    label = { Text("Client ID") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                )
+                OutlinedTextField(
+                    value = draft.smartcarClientSecret, onValueChange = { draft = draft.copy(smartcarClientSecret = it) },
+                    label = { Text("Client Secret") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    visualTransformation = if (showSecret) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = { IconButton(onClick = { showSecret = !showSecret }) { Icon(if (showSecret) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility, null) } },
+                )
+                OutlinedTextField(
+                    value = draft.carFallbackPowerW.toString(),
+                    onValueChange = { t -> t.filter { it.isDigit() }.toIntOrNull()?.let { draft = draft.copy(carFallbackPowerW = it) } },
+                    label = { Text("Angenommene Ladeleistung in W, falls das Auto keine meldet") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                )
+                if (dirty) {
+                    Text("Erst speichern, dann verbinden und testen.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(vm.connectUrl(saved)))) },
+                        enabled = !dirty && saved.smartcarAppId.isNotBlank(), modifier = Modifier.weight(1f),
+                    ) { Text("Auto verbinden") }
+                    OutlinedButton(onClick = vm::carCheck, enabled = !dirty && saved.smartcarConfigured, modifier = Modifier.weight(1f)) { Text("Verbindung prüfen") }
+                }
+                if (saved.carConnected) {
+                    Text("Verbunden: ${saved.smartcarVehicleId}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    OutlinedButton(onClick = vm::carStatus, enabled = !dirty, modifier = Modifier.fillMaxWidth()) { Text("Status lesen") }
+                    Text("Testbefehle (zählen zum Smartcar-Kontingent):", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { vm.carCommand(CarCommand.LIMIT_50) }, enabled = !dirty, modifier = Modifier.weight(1f)) { Text("Ziel 50 %") }
+                        OutlinedButton(onClick = { vm.carCommand(CarCommand.LIMIT_100) }, enabled = !dirty, modifier = Modifier.weight(1f)) { Text("Ziel 100 %") }
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { vm.carCommand(CarCommand.STOP) }, enabled = !dirty, modifier = Modifier.weight(1f)) { Text("Stoppen") }
+                        OutlinedButton(onClick = { vm.carCommand(CarCommand.START) }, enabled = !dirty, modifier = Modifier.weight(1f)) { Text("Starten") }
+                    }
+                }
+                carResult?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                if (carRaw != null) {
+                    TextButton(onClick = { showCarRaw = !showCarRaw }) { Text(if (showCarRaw) "Rohantwort ausblenden" else "Rohantwort anzeigen") }
+                    if (showCarRaw) {
+                        Text(carRaw ?: "", style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace))
+                    }
+                }
+            }
+        }
 
         item {
             EnergieCard(title = "Abfrage") {
@@ -200,11 +270,19 @@ private fun NumberField(label: String, value: Double, onChange: (Double) -> Unit
 
 /** Damit der Entwurf eine Drehung des Geraets ueberlebt. */
 private val SettingsSaver = androidx.compose.runtime.saveable.Saver<Settings, List<String>>(
-    save = { listOf(it.fritzHost, it.fritzUser, it.fritzPassword, it.senecKey, it.senecBaseUrl, it.pollSeconds.toString(), it.pricePerKwh.toString(), it.feedInPerKwh.toString(), it.keepDays.toString()) },
+    save = {
+        listOf(
+            it.fritzHost, it.fritzUser, it.fritzPassword, it.senecKey, it.senecBaseUrl, it.pollSeconds.toString(),
+            it.pricePerKwh.toString(), it.feedInPerKwh.toString(), it.keepDays.toString(),
+            it.smartcarAppId, it.smartcarClientId, it.smartcarClientSecret, it.smartcarVehicleId, it.smartcarUserId, it.carFallbackPowerW.toString(),
+        )
+    },
     restore = {
         Settings(
             fritzHost = it[0], fritzUser = it[1], fritzPassword = it[2], senecKey = it[3], senecBaseUrl = it[4],
             pollSeconds = it[5].toInt(), pricePerKwh = it[6].toDouble(), feedInPerKwh = it[7].toDouble(), keepDays = it[8].toInt(),
+            smartcarAppId = it[9], smartcarClientId = it[10], smartcarClientSecret = it[11], smartcarVehicleId = it[12], smartcarUserId = it[13],
+            carFallbackPowerW = it[14].toInt(),
         )
     },
 )

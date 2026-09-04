@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.BatteryChargingFull
 import androidx.compose.material.icons.rounded.Bolt
+import androidx.compose.material.icons.rounded.ElectricCar
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material3.Icon
@@ -66,9 +67,11 @@ private val HubRadius = 44.dp
  * Speicher-Symbol laeuft der Ladezustand als Ring.
  */
 @Composable
-fun FlowDiagram(sample: EnergySample?, modifier: Modifier = Modifier) {
+fun FlowDiagram(sample: EnergySample?, showCar: Boolean = false, modifier: Modifier = Modifier) {
     val production = sample?.productionW ?: 0.0
-    val consumption = sample?.consumptionW ?: 0.0
+    val carPower = if (showCar) sample?.carChargePowerW ?: 0.0 else 0.0
+    // Mit Auto-Knoten zeigt das Haus nur den Rest ohne Ladeleistung.
+    val consumption = ((sample?.consumptionW ?: 0.0) - carPower).coerceAtLeast(0.0)
     val grid = sample?.senecGridPowerW ?: sample?.meterGridPowerW ?: 0.0
     val battery = sample?.batteryPowerW ?: 0.0
     val soc = sample?.batterySocPercent
@@ -82,7 +85,7 @@ fun FlowDiagram(sample: EnergySample?, modifier: Modifier = Modifier) {
     Box(
         modifier
             .fillMaxWidth()
-            .height(372.dp)
+            .height(if (showCar) 400.dp else 372.dp)
             .clip(RoundedCornerShape(28.dp))
             .background(
                 Brush.linearGradient(
@@ -99,7 +102,9 @@ fun FlowDiagram(sample: EnergySample?, modifier: Modifier = Modifier) {
             val top = Offset(c.x, inset)
             val bottom = Offset(c.x, size.height - inset)
             val left = Offset(inset, c.y)
-            val right = Offset(size.width - inset, c.y)
+            val sideGap = 62.dp.toPx()
+            val right = if (showCar) Offset(size.width - inset, c.y - sideGap) else Offset(size.width - inset, c.y)
+            val carPos = Offset(size.width - inset, c.y + sideGap)
             val measure = PathMeasure()
 
             // Zarte Leuchtflecken im Hintergrund geben der Flaeche Tiefe.
@@ -153,6 +158,7 @@ fun FlowDiagram(sample: EnergySample?, modifier: Modifier = Modifier) {
             // PV liefert immer zur Mitte, das Haus nimmt immer aus der Mitte.
             link(top, production, EnergyColors.sun, towardsHub = true)
             link(right, consumption, EnergyColors.house, towardsHub = false)
+            if (showCar) link(carPos, carPower, EnergyColors.car, towardsHub = false)
             // Netz: Bezug zur Mitte, Einspeisung von der Mitte weg.
             if (grid >= 0) link(bottom, grid, EnergyColors.grid, towardsHub = true)
             else link(bottom, grid, EnergyColors.export, towardsHub = false)
@@ -186,10 +192,28 @@ fun FlowDiagram(sample: EnergySample?, modifier: Modifier = Modifier) {
             Icons.Rounded.WbSunny, EnergyColors.sun, Format.power(production), "PV",
             Modifier.align(Alignment.TopCenter).padding(top = EdgeInset), textBelow = true,
         )
-        FlowNode(
-            Icons.Rounded.Home, EnergyColors.house, Format.power(consumption), "Haus",
-            Modifier.align(Alignment.CenterEnd).padding(end = EdgeInset).offset(y = 26.dp), textBelow = true,
-        )
+        if (showCar) {
+            // Text ueber dem Haus, unter dem Auto - so bleibt zwischen beiden Platz.
+            FlowNode(
+                Icons.Rounded.Home, EnergyColors.house, Format.power(consumption), "Haus",
+                Modifier.align(Alignment.CenterEnd).padding(end = EdgeInset).offset(y = (-86).dp), textBelow = false,
+            )
+            FlowNode(
+                Icons.Rounded.ElectricCar, EnergyColors.car, Format.power(carPower),
+                when {
+                    carPower > 15 -> "Auto lädt"
+                    sample?.carPluggedIn == true -> "Auto steckt"
+                    else -> "Auto"
+                },
+                Modifier.align(Alignment.CenterEnd).padding(end = EdgeInset).offset(y = 86.dp), textBelow = true,
+                ring = sample?.carSocPercent?.let { (it / 100.0).toFloat() }, ringLabel = sample?.carSocPercent?.let { Format.percentValue(it) },
+            )
+        } else {
+            FlowNode(
+                Icons.Rounded.Home, EnergyColors.house, Format.power(consumption), "Haus",
+                Modifier.align(Alignment.CenterEnd).padding(end = EdgeInset).offset(y = 26.dp), textBelow = true,
+            )
+        }
         FlowNode(
             Icons.Rounded.Bolt, if (grid < -15) EnergyColors.export else EnergyColors.grid,
             Format.power(abs(grid)), if (grid < -15) "Einspeisung" else if (grid > 15) "Netzbezug" else "Netz",

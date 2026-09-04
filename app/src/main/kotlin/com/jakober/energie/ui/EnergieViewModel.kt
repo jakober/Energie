@@ -7,6 +7,8 @@ import com.jakober.energie.core.fritz.FritzBoxClient
 import com.jakober.energie.core.history.DayStatistics
 import com.jakober.energie.core.history.EnergyTotals
 import com.jakober.energie.core.senec.SenecConnectClient
+import com.jakober.energie.core.smartcar.SmartcarClient
+import com.jakober.energie.data.CarCommand
 import com.jakober.energie.data.LiveState
 import com.jakober.energie.data.Settings
 import kotlinx.coroutines.Dispatchers
@@ -47,6 +49,7 @@ data class RangeStatistics(
         gridExportWh = days.sumOf { it.totals.gridExportWh },
         batteryChargeWh = days.sumOf { it.totals.batteryChargeWh },
         batteryDischargeWh = days.sumOf { it.totals.batteryDischargeWh },
+        carChargeWh = days.sumOf { it.totals.carChargeWh },
         meterImportWh = days.mapNotNull { it.totals.meterImportWh }.takeIf { it.isNotEmpty() }?.sum(),
         meterExportWh = days.mapNotNull { it.totals.meterExportWh }.takeIf { it.isNotEmpty() }?.sum(),
     )
@@ -185,6 +188,80 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     fun clearTestResult() { _testResult.value = null }
+
+    // --- Auto (Smartcar) ---
+
+    private val _carResult = MutableStateFlow<String?>(null)
+    val carResult: StateFlow<String?> = _carResult
+    private val _carRaw = MutableStateFlow<String?>(null)
+    val carRaw: StateFlow<String?> = _carRaw
+
+    fun connectUrl(s: Settings): String = SmartcarClient.connectUrl(s.smartcarAppId)
+
+    /** Sucht das verbundene Fahrzeug und merkt es sich. */
+    fun carCheck() {
+        val s = settings.value
+        if (!s.smartcarConfigured) { _carResult.value = "Erst Client-ID und Secret eintragen und speichern."; return }
+        viewModelScope.launch {
+            _carResult.value = "Suche verbundene Fahrzeuge …"
+            runCatching { repo.carConnections(s) }
+                .onSuccess { list ->
+                    _carRaw.value = list.firstOrNull()?.raw
+                    if (list.isEmpty()) {
+                        _carResult.value = "Smartcar erreichbar, aber noch kein Fahrzeug verbunden. Erst „Auto verbinden“ ausführen."
+                    } else {
+                        val c = list.first()
+                        container.settings.saveCar(c.vehicleId, c.userId)
+                        _carResult.value = "Fahrzeug verbunden: ${c.vehicleId}" + (if (list.size > 1) " (${list.size} Verbindungen, erstes gewählt)" else "")
+                        carStatus()
+                    }
+                }
+                .onFailure { _carResult.value = "Fehler: ${it.message ?: it}" }
+        }
+    }
+
+    fun carStatus() {
+        viewModelScope.launch {
+            val s = container.settings.current()
+            if (!s.carConnected) { _carResult.value = "Kein Fahrzeug verbunden."; return@launch }
+            _carResult.value = "Lese Fahrzeugstatus …"
+            runCatching { repo.carRefreshNow(s) }
+                .onSuccess { c ->
+                    _carRaw.value = c.raw.entries.joinToString("\n\n") { (k, v) -> "$k\n$v" }
+                    _carResult.value = buildString {
+                        append("Ladung ${Format.percentValue(c.socPercent)}")
+                        c.rangeKm?.let { append(", Reichweite ${it.toInt()} km") }
+                        append(", ")
+                        append(
+                            when {
+                                c.isCharging == true -> "lädt"
+                                c.isPluggedIn == true -> "steckt, lädt nicht"
+                                c.isPluggedIn == false -> "nicht angeschlossen"
+                                else -> "Status unbekannt"
+                            },
+                        )
+                        c.chargeLimitPercent?.let { append(", Ladeziel ${Format.percentValue(it)}") }
+                        c.chargingStatus?.let { append(" (") ; append(it); append(")") }
+                    }
+                }
+                .onFailure { _carResult.value = "Fehler: ${it.message ?: it}" }
+        }
+    }
+
+    fun carCommand(command: CarCommand) {
+        viewModelScope.launch {
+            val s = container.settings.current()
+            if (!s.carConnected) { _carResult.value = "Kein Fahrzeug verbunden."; return@launch }
+            _carResult.value = "${command.label} wird gesendet …"
+            runCatching { repo.carCommand(s, command) }
+                .onSuccess { r ->
+                    _carRaw.value = r.body
+                    _carResult.value = if (r.ok) "${command.label}: Smartcar hat den Befehl angenommen (HTTP ${r.status}). In 1–2 Minuten in der Ford-App prüfen."
+                    else "${command.label}: abgelehnt mit HTTP ${r.status}. Rohantwort unten."
+                }
+                .onFailure { _carResult.value = "Fehler: ${it.message ?: it}" }
+        }
+    }
 
     companion object {
         fun bounds(d: LocalDate, r: Range): Pair<LocalDate, LocalDate> = when (r) {

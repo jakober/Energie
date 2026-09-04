@@ -30,9 +30,20 @@ data class Settings(
     val feedInPerKwh: Double = 0.08,
     /** So viele Tage Verlauf bleiben gespeichert. */
     val keepDays: Int = 400,
+    // Smartcar: Application ID oeffnet Connect, Client-ID und Secret holen das API-Token.
+    val smartcarAppId: String = "",
+    val smartcarClientId: String = "",
+    val smartcarClientSecret: String = "",
+    /** Nach dem Verbinden gemerkt, damit nicht jede Abfrage die Verbindungen listet. */
+    val smartcarVehicleId: String = "",
+    val smartcarUserId: String = "",
+    /** Ladeleistung in W, wenn Smartcar keine liefert (Ladeziegel: 2200). */
+    val carFallbackPowerW: Int = 2200,
 ) {
     val fritzConfigured: Boolean get() = fritzHost.isNotBlank() && fritzPassword.isNotBlank()
     val senecConfigured: Boolean get() = senecKey.isNotBlank()
+    val smartcarConfigured: Boolean get() = smartcarClientId.isNotBlank() && smartcarClientSecret.isNotBlank()
+    val carConnected: Boolean get() = smartcarConfigured && smartcarVehicleId.isNotBlank()
     val anythingConfigured: Boolean get() = fritzConfigured || senecConfigured
 }
 
@@ -54,6 +65,12 @@ class AppSettings(private val context: Context) {
             pricePerKwh = p[PRICE_PER_KWH] ?: 0.32,
             feedInPerKwh = p[FEED_IN_PER_KWH] ?: 0.08,
             keepDays = p[KEEP_DAYS] ?: 400,
+            smartcarAppId = p[SMARTCAR_APP_ID] ?: "",
+            smartcarClientId = p[SMARTCAR_CLIENT_ID] ?: "",
+            smartcarClientSecret = p[SMARTCAR_CLIENT_SECRET] ?: "",
+            smartcarVehicleId = p[SMARTCAR_VEHICLE_ID] ?: "",
+            smartcarUserId = p[SMARTCAR_USER_ID] ?: "",
+            carFallbackPowerW = p[CAR_FALLBACK_POWER] ?: 2200,
         )
     }
 
@@ -70,6 +87,20 @@ class AppSettings(private val context: Context) {
             p[PRICE_PER_KWH] = s.pricePerKwh
             p[FEED_IN_PER_KWH] = s.feedInPerKwh
             p[KEEP_DAYS] = s.keepDays.coerceIn(7, 3650)
+            p[SMARTCAR_APP_ID] = s.smartcarAppId.trim()
+            p[SMARTCAR_CLIENT_ID] = s.smartcarClientId.trim()
+            p[SMARTCAR_CLIENT_SECRET] = s.smartcarClientSecret.trim()
+            p[SMARTCAR_VEHICLE_ID] = s.smartcarVehicleId.trim()
+            p[SMARTCAR_USER_ID] = s.smartcarUserId.trim()
+            p[CAR_FALLBACK_POWER] = s.carFallbackPowerW.coerceIn(0, 22_000)
+        }
+    }
+
+    /** Merkt sich das verbundene Fahrzeug. */
+    suspend fun saveCar(vehicleId: String, userId: String?) {
+        context.dataStore.edit { p ->
+            p[SMARTCAR_VEHICLE_ID] = vehicleId
+            p[SMARTCAR_USER_ID] = userId ?: ""
         }
     }
 
@@ -83,5 +114,11 @@ class AppSettings(private val context: Context) {
         val PRICE_PER_KWH = doublePreferencesKey("price_per_kwh")
         val FEED_IN_PER_KWH = doublePreferencesKey("feed_in_per_kwh")
         val KEEP_DAYS = intPreferencesKey("keep_days")
+        val SMARTCAR_APP_ID = stringPreferencesKey("smartcar_app_id")
+        val SMARTCAR_CLIENT_ID = stringPreferencesKey("smartcar_client_id")
+        val SMARTCAR_CLIENT_SECRET = stringPreferencesKey("smartcar_client_secret")
+        val SMARTCAR_VEHICLE_ID = stringPreferencesKey("smartcar_vehicle_id")
+        val SMARTCAR_USER_ID = stringPreferencesKey("smartcar_user_id")
+        val CAR_FALLBACK_POWER = intPreferencesKey("car_fallback_power")
     }
 }

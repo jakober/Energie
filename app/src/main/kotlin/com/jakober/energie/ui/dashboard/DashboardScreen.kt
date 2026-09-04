@@ -94,7 +94,11 @@ fun DashboardScreen(vm: EnergieViewModel, onOpenSettings: () -> Unit, contentPad
         live.senecError?.let { item { ErrorCard("SENEC", it) } }
         live.fritzError?.let { item { ErrorCard("FRITZ!Box", it) } }
 
-        item { FlowDiagram(live.sample) }
+        item { FlowDiagram(live.sample, showCar = settings.carConnected || live.car != null) }
+
+        if (settings.carConnected || live.car != null) {
+            item { CarCard(live, settings) }
+        }
 
         item { BatteryAndGridRow(live) }
 
@@ -232,6 +236,9 @@ private fun TodayCard(stats: DayStatistics?, settings: Settings) {
         stats.peakProduction?.let {
             ValueRow("Höchste Erzeugung", Format.power(it.value), "um ${Format.time(it.at)}", icon = Icons.Rounded.WbSunny, iconTint = EnergyColors.sun)
         }
+        if (t.carChargeWh > 50) {
+            ValueRow("Ins Auto geladen", Format.energy(t.carChargeWh), icon = Icons.Rounded.ElectricCar, iconTint = EnergyColors.car)
+        }
         stats.baseLoadW?.let {
             ValueRow("Grundlast", Format.power(it), "kleinstes 15-min-Mittel", icon = Icons.Rounded.Bolt, iconTint = EnergyColors.neutral)
         }
@@ -244,6 +251,47 @@ private fun TodayCard(stats: DayStatistics?, settings: Settings) {
         val income = t.gridExportWh / 1000 * settings.feedInPerKwh
         val saved = t.selfConsumptionWh / 1000 * settings.pricePerKwh
         ValueRow("Stromkosten heute", Format.euro(cost), "Einspeisung ${Format.euro(income)} · gespart ${Format.euro(saved)}")
+    }
+}
+
+@Composable
+private fun CarCard(live: LiveState, settings: Settings) {
+    val car = live.car
+    EnergieCard(title = "Auto", accent = EnergyColors.car) {
+        if (car == null) {
+            Text(
+                live.carError ?: "Noch keine Daten vom Auto. Unter Einstellungen → Smartcar „Status lesen“.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            return@EnergieCard
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            RingGauge(((car.socPercent ?: 0.0) / 100).toFloat(), EnergyColors.car, Modifier.size(84.dp), strokeWidth = 10.dp) {
+                Text(Format.percentValue(car.socPercent), style = MaterialTheme.typography.titleMedium)
+            }
+            Column(Modifier.weight(1f)) {
+                Text(
+                    when {
+                        car.isCharging == true -> "lädt"
+                        car.isPluggedIn == true -> "steckt, lädt nicht"
+                        car.isPluggedIn == false -> "nicht angeschlossen"
+                        else -> "Status unbekannt"
+                    },
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                car.rangeKm?.let { Text("Reichweite ${it.toInt()} km", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                val p = live.sample?.carChargePowerW ?: car.chargePowerW
+                if (car.isCharging == true) {
+                    Text(
+                        "Ladeleistung ${Format.power(p ?: settings.carFallbackPowerW.toDouble())}" + if (car.chargePowerW == null) " (angenommen)" else "",
+                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                car.chargeLimitPercent?.let { Text("Ladeziel ${Format.percentValue(it)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                Text("Stand ${Format.time(car.at)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        live.carError?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
     }
 }
 

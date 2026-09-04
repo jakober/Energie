@@ -18,6 +18,7 @@ data class HourBucket(
     val gridExportWh: Double,
     val batteryChargeWh: Double,
     val batteryDischargeWh: Double,
+    val carChargeWh: Double,
     /** Mittlerer Ladezustand in der Stunde in Prozent. */
     val batterySocPercent: Double?,
 )
@@ -116,6 +117,7 @@ data class DayStatistics(
                     gridExportWh = t.gridExportWh,
                     batteryChargeWh = t.batteryChargeWh,
                     batteryDischargeWh = t.batteryDischargeWh,
+                    carChargeWh = t.carChargeWh,
                     batterySocPercent = if (soc.isEmpty()) null else soc.average(),
                 )
             }

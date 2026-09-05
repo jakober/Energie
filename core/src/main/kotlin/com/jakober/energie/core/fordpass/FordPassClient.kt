@@ -1,5 +1,7 @@
 package com.jakober.energie.core.fordpass
 
+import com.jakober.energie.core.model.CarExtras
+
 import com.jakober.energie.core.smartcar.JsonPick
 import io.ktor.client.HttpClient
 import io.ktor.client.request.forms.submitForm
@@ -18,6 +20,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.Clock
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -213,6 +216,7 @@ class FordPassClient(
         val lat = (location?.get("lat") as? JsonPrimitive)?.doubleOrNull
         val lon = (location?.get("lon") as? JsonPrimitive)?.doubleOrNull
         val lockState = lockStateOf(metrics?.get("doorLockStatus") as? JsonArray)
+        val extra = extrasOf(metrics, metricNumber = ::metricNumber, metricString = ::metricString)
         return FordCarState(
             at = clock.now(),
             vin = vin,
@@ -225,8 +229,63 @@ class FordPassClient(
             latitude = lat,
             longitude = lon,
             lockState = lockState,
+            extra = extra,
             raw = text,
         )
+    }
+
+    /**
+     * Sammelt die weiteren Werte: bekannte Kennungen gezielt, dazu alle
+     * skalaren Messwerte flach fuer die Vollansicht. Listen (Reifen, Tueren,
+     * Fenster) tragen ihre Position im Feld vehicleWheel/vehicleDoor/vehicleWindow.
+     */
+    private fun extrasOf(metrics: JsonObject?, metricNumber: (String) -> Double?, metricString: (String) -> String?): CarExtras? {
+        if (metrics == null) return null
+        fun perPart(key: String): Map<String, String> {
+            val arr = metrics[key] as? JsonArray ?: return emptyMap()
+            val out = LinkedHashMap<String, String>()
+            for (item in arr.filterIsInstance<JsonObject>()) {
+                val part = listOf("vehicleWheel", "vehicleDoor", "vehicleWindow", "vehicleSide", "position")
+                    .firstNotNullOfOrNull { (item[it] as? JsonPrimitive)?.contentOrNull } ?: "${out.size}"
+                val value = scalarOf(item["value"]) ?: continue
+                out[part] = value
+            }
+            return out
+        }
+        val all = LinkedHashMap<String, String>()
+        for ((key, el) in metrics) {
+            when (el) {
+                is JsonObject -> scalarOf(el["value"])?.let { all[key] = it }
+                is JsonArray -> perPart(key).forEach { (part, v) -> all["$key[$part]"] = v }
+                else -> {}
+            }
+        }
+        return CarExtras(
+            odometerKm = metricNumber("odometer"),
+            battery12V = metricNumber("batteryVoltage"),
+            battery12SocPercent = metricNumber("batteryStateOfCharge"),
+            outsideTempC = metricNumber("outsideTemperature"),
+            batteryTempC = metricNumber("xevBatteryTemperature"),
+            energyRemainingKwh = metricNumber("xevBatteryEnergyRemaining"),
+            timeToFullMinutes = metricNumber("xevBatteryTimeToFullCharge"),
+            tirePressuresKpa = perPart("tirePressure").mapNotNull { (k, v) -> v.toDoubleOrNull()?.let { k to it } }.toMap(),
+            tireStatus = perPart("tirePressureStatus"),
+            doors = perPart("doorStatus"),
+            windows = perPart("windowStatus"),
+            alarm = metricString("alarmStatus"),
+            ignition = metricString("ignitionStatus"),
+            oilLifePercent = metricNumber("oilLifeRemaining"),
+            speedKmh = metricNumber("speed"),
+            allMetrics = all,
+        )
+    }
+
+    /** Ein skalarer Wert als Text: Primitive direkt, bei Objekten der erste primitive Eintrag (etwa isOpen). */
+    private fun scalarOf(el: JsonElement?): String? = when (el) {
+        null -> null
+        is JsonPrimitive -> el.contentOrNull
+        is JsonObject -> el.values.firstNotNullOfOrNull { v -> (v as? JsonPrimitive)?.contentOrNull }
+        else -> null
     }
 
     /**

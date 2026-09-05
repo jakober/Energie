@@ -81,7 +81,9 @@ fun DashboardScreen(vm: EnergieViewModel, onOpenSettings: () -> Unit, contentPad
     val today by vm.todayStats.collectAsStateWithLifecycle()
 
     val fordResult by vm.fordResult.collectAsStateWithLifecycle()
-    var showCarCard by rememberSaveable { mutableStateOf(false) }
+    val yesterday by vm.yesterdayStats.collectAsStateWithLifecycle()
+    // Welcher Knoten des Diagramms gerade seine Detailkarte zeigt; nochmal Tippen schliesst.
+    var selectedNode by rememberSaveable { mutableStateOf<FlowNodeKind?>(null) }
 
     // "vor 12 s" soll mitlaufen, ohne dass sich sonst etwas aendert.
     var now by remember { mutableStateOf(Clock.System.now()) }
@@ -119,20 +121,29 @@ fun DashboardScreen(vm: EnergieViewModel, onOpenSettings: () -> Unit, contentPad
         live.fritzError?.let { item { ErrorCard("FRITZ!Box", it) } }
 
         val carActive = settings.carConnected || settings.fordConnected || live.car != null
-        // Die Auto-Karte erscheint erst nach Tippen auf das Auto im Diagramm, nochmal Tippen schliesst sie.
-        item { FlowDiagram(live.sample, showCar = carActive, onCarClick = if (carActive) ({ showCarCard = !showCarCard }) else null) }
+        item {
+            FlowDiagram(
+                live.sample, showCar = carActive,
+                onNodeClick = { kind -> selectedNode = if (selectedNode == kind) null else kind },
+            )
+        }
 
-        if (carActive && showCarCard) {
-            item {
+        when (selectedNode) {
+            FlowNodeKind.CAR -> if (carActive) item {
                 CarCard(
                     live, settings,
                     onOverride = vm::setChargeOverride,
                     onCommand = vm::fordCommand,
                     commandResult = fordResult,
-                    onClose = { showCarCard = false },
+                    onClose = { selectedNode = null },
                     onSavePlaces = vm::savePlaces,
                 )
             }
+            FlowNodeKind.BATTERY -> item { BatteryDetailCard(live, today, onClose = { selectedNode = null }) }
+            FlowNodeKind.PV -> item { PvDetailCard(live, today, yesterday, settings, onClose = { selectedNode = null }) }
+            FlowNodeKind.HOUSE -> item { HouseDetailCard(live, today, yesterday, settings, onClose = { selectedNode = null }) }
+            FlowNodeKind.GRID -> item { GridDetailCard(live, today, yesterday, settings, onClose = { selectedNode = null }) }
+            null -> {}
         }
 
         item { BatteryAndGridRow(live) }
@@ -301,7 +312,7 @@ private fun CarCard(
 ) {
     val car = live.car
     var confirmUnlock by rememberSaveable { mutableStateOf(false) }
-    EnergieCard(title = "Auto", accent = EnergyColors.car) {
+    EnergieCard(title = "Auto im Detail", accent = EnergyColors.car, border = EnergyColors.car, onClose = onClose) {
         if (car == null) {
             Text(
                 live.carError ?: "Noch keine Daten vom Auto. Unter Einstellungen → FordPass „Status lesen“.",
@@ -378,6 +389,7 @@ private fun CarCard(
         if (carLat != null && carLon != null) {
             CarLocation(carLat, carLon, car.distanceHomeM, settings.places, onSavePlaces)
         }
+        car.extra?.let { CarExtrasSection(it) }
         live.carError?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
         if (settings.fordConnected) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -392,7 +404,6 @@ private fun CarCard(
                 style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        TextButton(onClick = onClose, modifier = Modifier.align(Alignment.End)) { Text("Schließen") }
     }
 }
 

@@ -31,6 +31,8 @@ data class CarState(
     val distanceHomeM: Double? = null,
     /** LOCKED, PARTLY_LOCKED, UNLOCKED oder null. */
     val lockState: String? = null,
+    /** Weitere Werte (Reifendruck, Kilometerstand, ...), wenn die Quelle sie liefert. */
+    val extra: com.jakober.energie.core.model.CarExtras? = null,
     /** Rohantworten je Signalcode. */
     val raw: Map<String, String> = emptyMap(),
 )

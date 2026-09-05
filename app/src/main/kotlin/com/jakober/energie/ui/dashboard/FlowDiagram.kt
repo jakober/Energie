@@ -70,8 +70,12 @@ private val HubRadius = 44.dp
  * Leistung. In der Mitte steht die Autarkie des Augenblicks, um das
  * Speicher-Symbol laeuft der Ladezustand als Ring.
  */
+/** Die antippbaren Knoten des Diagramms. */
+enum class FlowNodeKind { PV, HOUSE, GRID, BATTERY, CAR }
+
 @Composable
-fun FlowDiagram(sample: EnergySample?, showCar: Boolean = false, onCarClick: (() -> Unit)? = null, modifier: Modifier = Modifier) {
+fun FlowDiagram(sample: EnergySample?, showCar: Boolean = false, onNodeClick: ((FlowNodeKind) -> Unit)? = null, modifier: Modifier = Modifier) {
+    fun click(kind: FlowNodeKind): (() -> Unit)? = onNodeClick?.let { cb -> { cb(kind) } }
     val production = sample?.productionW ?: 0.0
     val carPower = if (showCar) sample?.carChargePowerW ?: 0.0 else 0.0
     // Mit Auto-Knoten zeigt das Haus nur den Rest ohne Ladeleistung.
@@ -194,13 +198,13 @@ fun FlowDiagram(sample: EnergySample?, showCar: Boolean = false, onCarClick: (()
 
         FlowNode(
             Icons.Rounded.WbSunny, EnergyColors.sun, Format.power(production), "PV",
-            Modifier.align(Alignment.TopCenter).padding(top = EdgeInset), textBelow = true,
+            Modifier.align(Alignment.TopCenter).padding(top = EdgeInset), textBelow = true, onClick = click(FlowNodeKind.PV),
         )
         if (showCar) {
             // Text ueber dem Haus, unter dem Auto - so bleibt zwischen beiden Platz.
             FlowNode(
                 Icons.Rounded.Home, EnergyColors.house, Format.power(consumption), "Haus",
-                Modifier.align(Alignment.CenterEnd).offset(y = (-86).dp), textBelow = false,
+                Modifier.align(Alignment.CenterEnd).offset(y = (-86).dp), textBelow = false, onClick = click(FlowNodeKind.HOUSE),
             )
             // Auto: laedt es, steht die Leistung gross; sonst der Ladestand. Kurze
             // Beschriftung, damit nichts in die Nachbarn laeuft.
@@ -217,18 +221,18 @@ fun FlowDiagram(sample: EnergySample?, showCar: Boolean = false, onCarClick: (()
                 },
                 Modifier.align(Alignment.CenterEnd).offset(y = 86.dp), textBelow = true,
                 ring = sample?.carSocPercent?.let { (it / 100.0).toFloat() },
-                onClick = onCarClick,
+                onClick = click(FlowNodeKind.CAR),
             )
         } else {
             FlowNode(
                 Icons.Rounded.Home, EnergyColors.house, Format.power(consumption), "Haus",
-                Modifier.align(Alignment.CenterEnd).offset(y = 26.dp), textBelow = true,
+                Modifier.align(Alignment.CenterEnd).offset(y = 26.dp), textBelow = true, onClick = click(FlowNodeKind.HOUSE),
             )
         }
         FlowNode(
             Icons.Rounded.Bolt, if (grid < -15) EnergyColors.export else EnergyColors.grid,
             Format.power(abs(grid)), if (grid < -15) "Einspeisung" else if (grid > 15) "Netzbezug" else "Netz",
-            Modifier.align(Alignment.BottomCenter).padding(bottom = EdgeInset), textBelow = false,
+            Modifier.align(Alignment.BottomCenter).padding(bottom = EdgeInset), textBelow = false, onClick = click(FlowNodeKind.GRID),
         )
         FlowNode(
             Icons.Rounded.BatteryChargingFull, EnergyColors.battery, Format.power(abs(battery)),
@@ -239,6 +243,7 @@ fun FlowDiagram(sample: EnergySample?, showCar: Boolean = false, onCarClick: (()
             },
             Modifier.align(Alignment.CenterStart).offset(y = 26.dp), textBelow = true,
             ring = soc?.let { (it / 100.0).toFloat() }, ringLabel = soc?.let { Format.percentValue(it) },
+            onClick = click(FlowNodeKind.BATTERY),
         )
     }
 }

@@ -1,6 +1,10 @@
 package com.jakober.energie.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material3.IconButton
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,6 +40,9 @@ fun EnergieCard(
     modifier: Modifier = Modifier,
     title: String? = null,
     accent: Color? = null,
+    /** Farbiger Rahmen, etwa fuer die Detailkarte eines Knotens im Flussdiagramm. */
+    border: Color? = null,
+    onClose: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Card(
@@ -43,12 +50,18 @@ fun EnergieCard(
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         elevation = CardDefaults.cardElevation(0.dp),
+        border = border?.let { BorderStroke(1.5.dp, it.copy(alpha = 0.85f)) },
     ) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (title != null) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (accent != null) Box(Modifier.size(8.dp).clip(CircleShape).background(accent))
-                    Text(title.uppercase(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(title.uppercase(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                    if (onClose != null) {
+                        IconButton(onClick = onClose, modifier = Modifier.size(28.dp)) {
+                            Icon(Icons.Rounded.Close, "Schließen", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                        }
+                    }
                 }
             }
             content()

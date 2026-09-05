@@ -339,6 +339,7 @@ class EnergyRepository(
         latitude = latitude,
         longitude = longitude,
         lockState = lockState,
+        extra = extra,
         distanceHomeM = if (lat != null && lon != null && (s.homeLat != 0.0 || s.homeLon != 0.0)) distanceMeters(lat, lon, s.homeLat, s.homeLon) else null,
         raw = mapOf("fordpass-telemetry" to raw),
         )

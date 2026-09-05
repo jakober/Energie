@@ -88,6 +88,11 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
         .mapLatest { withContext(Dispatchers.IO) { repo.dayStatistics(repo.today()) } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    /** Gestern, fuer den Vergleich in den Detailkarten. */
+    val yesterdayStats: StateFlow<DayStatistics?> = updates
+        .mapLatest { withContext(Dispatchers.IO) { repo.dayStatistics(repo.today().minus(1, DateTimeUnit.DAY)) } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
     val dayStats: StateFlow<DayStatistics?> = combine(_selectedDate, updates) { d, _ -> d }
         .mapLatest { d -> withContext(Dispatchers.IO) { repo.dayStatistics(d) } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)

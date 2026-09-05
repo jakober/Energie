@@ -63,7 +63,7 @@ class FordPassClientTest {
                 }
                 path.endsWith("/telemetry/sources/fordpass/vehicles/WF0XXXMACHE123456") -> {
                     assertEquals("Bearer auto-access", req.headers["Authorization"])
-                    respond("""{"metrics":{"xevBatteryStateOfCharge":{"value":62.5},"xevBatteryRange":{"value":268.0},"xevBatteryChargeDisplayStatus":{"value":"IN_PROGRESS"},"xevPlugChargerStatus":{"value":"CONNECTED"},"xevBatteryChargerVoltageOutput":{"value":346},"xevBatteryChargerCurrentOutput":{"value":5.4},"position":{"value":{"location":{"lat":48.137,"lon":11.575,"alt":520}}},"doorLockStatus":[{"value":"LOCKED","vehicleDoor":"UNSPECIFIED_FRONT"},{"value":"LOCKED","vehicleDoor":"ALL_DOORS"}]}}""")
+                    respond("""{"metrics":{"xevBatteryStateOfCharge":{"value":62.5},"xevBatteryRange":{"value":268.0},"xevBatteryChargeDisplayStatus":{"value":"IN_PROGRESS"},"xevPlugChargerStatus":{"value":"CONNECTED"},"xevBatteryChargerVoltageOutput":{"value":346},"xevBatteryChargerCurrentOutput":{"value":5.4},"position":{"value":{"location":{"lat":48.137,"lon":11.575,"alt":520}}},"doorLockStatus":[{"value":"LOCKED","vehicleDoor":"UNSPECIFIED_FRONT"},{"value":"LOCKED","vehicleDoor":"ALL_DOORS"}],"odometer":{"value":41234.5},"batteryVoltage":{"value":12.6},"tirePressure":[{"vehicleWheel":"FRONT_LEFT","value":245.0},{"vehicleWheel":"REAR_RIGHT","value":238.0}],"doorStatus":[{"vehicleDoor":"FRONT_LEFT","value":"CLOSED"},{"vehicleDoor":"TAILGATE","value":"AJAR"}],"windowStatus":[{"vehicleWindow":"FRONT_LEFT","value":{"isOpen":false}}],"outsideTemperature":{"value":17.5}}}""")
                 }
                 path.endsWith("/command/vehicles/WF0XXXMACHE123456/commands") -> {
                     assertEquals("""{"tags":{},"type":"pauseGlobalChargeCommand","version":"1.0.1","wakeUp":true}""", body)
@@ -98,6 +98,16 @@ class FordPassClientTest {
         assertEquals(48.137, state.latitude)
         assertEquals(11.575, state.longitude)
         assertEquals("LOCKED", state.lockState)
+        val extra = state.extra!!
+        assertEquals(41234.5, extra.odometerKm)
+        assertEquals(12.6, extra.battery12V)
+        assertEquals(mapOf("FRONT_LEFT" to 245.0, "REAR_RIGHT" to 238.0), extra.tirePressuresKpa)
+        assertEquals(listOf("TAILGATE"), extra.openDoors)
+        assertEquals("false", extra.windows["FRONT_LEFT"])
+        assertTrue(extra.openWindows.isEmpty())
+        assertEquals(17.5, extra.outsideTempC)
+        assertEquals("62.5", extra.allMetrics["xevBatteryStateOfCharge"])
+        assertEquals("245.0", extra.allMetrics["tirePressure[FRONT_LEFT]"])
         // Marienplatz -> Olympiapark rund 4,5 km
         val d = com.jakober.energie.core.smartcar.distanceMeters(48.137, 11.575, 48.175, 11.552)
         assertTrue(d > 4000 && d < 5000, "$d")

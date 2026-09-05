@@ -1,5 +1,6 @@
 package com.jakober.energie.core.fordpass
 
+import com.jakober.energie.core.model.CarExtras
 import kotlinx.datetime.Instant
 import kotlinx.serialization.Serializable
 
@@ -38,6 +39,8 @@ data class FordCarState(
     val longitude: Double? = null,
     /** LOCKED, PARTLY_LOCKED, UNLOCKED oder null, wenn Ford nichts liefert. */
     val lockState: String? = null,
+    /** Reifendruck, Kilometerstand, 12-V-Batterie, Tueren, Fenster ... */
+    val extra: CarExtras? = null,
     val raw: String,
 ) {
     val isCharging: Boolean? get() = chargeStatus?.let { it.uppercase() == "IN_PROGRESS" } ?: plugStatus?.let { it.uppercase().startsWith("CHARGING") }

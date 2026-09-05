@@ -85,9 +85,10 @@ data class Settings(
 }
 
 /**
- * Einstellungen in DataStore. Die Zugangsdaten liegen im privaten
- * App-Speicher; Android verschluesselt diesen Bereich pro Geraet. Ein
- * Backup uebertraegt sie nicht (siehe AndroidManifest, allowBackup).
+ * Einstellungen in DataStore im privaten App-Speicher. Androids Auto Backup
+ * (allowBackup im Manifest) sichert diesen Bereich Ende-zu-Ende verschluesselt
+ * ins Google-Konto und stellt ihn bei Neuinstallation wieder her - bewusst so
+ * belassen, damit die Zugangsdaten nicht neu eingegeben werden muessen.
  */
 class AppSettings(private val context: Context) {
 

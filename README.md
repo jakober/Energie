@@ -78,8 +78,12 @@ GitHub-Action, die bei jedem Push das Debug-APK baut und als Artefakt ablegt.
    *FRITZ!Box* eintragen.
 3. Beide Quellen mit *prüfen* testen, dann *Speichern*.
 
-Die Zugangsdaten bleiben im privaten App-Speicher des Geräts und werden
-nirgendwo hochgeladen.
+Die Zugangsdaten bleiben im privaten App-Speicher des Geräts. Die App selbst
+schickt sie nirgendwohin; Androids Auto Backup sichert den App-Speicher
+(Einstellungen samt Zugangsdaten, Verlauf bis 25 MB) Ende-zu-Ende
+verschlüsselt ins Google-Konto und stellt ihn bei einer Neuinstallation
+wieder her. Für längere Verläufe und Geräte ohne Google-Konto gibt es die
+ZIP-Sicherung in einen Ordner deiner Wahl (siehe oben).
 
 ## Ausblick
 

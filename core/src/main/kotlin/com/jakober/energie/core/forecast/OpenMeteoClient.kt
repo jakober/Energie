@@ -41,6 +41,21 @@ class OpenMeteoClient(
         return parse(text)
     }
 
+    /**
+     * Zwei Dachseiten (etwa Ost und West): zwei Abfragen, je Tag zusammengefuehrt.
+     * Die zweite Seite landet in `irradiance2WhPerM2`.
+     */
+    suspend fun forecastTwoSides(
+        lat: Double, lon: Double,
+        tilt1: Int, azimuth1: Int,
+        tilt2: Int, azimuth2: Int,
+        days: Int = 3,
+    ): List<PvForecastDay> {
+        val first = forecast(lat, lon, tilt1, azimuth1, days)
+        val second = forecast(lat, lon, tilt2, azimuth2, days).associateBy { it.date }
+        return first.map { d -> d.copy(irradiance2WhPerM2 = second[d.date]?.irradianceWhPerM2 ?: d.irradianceWhPerM2) }
+    }
+
     fun parse(text: String): List<PvForecastDay> {
         val root = json.parseToJsonElement(text) as? JsonObject ?: return emptyList()
         val hourly = root["hourly"] as? JsonObject

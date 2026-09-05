@@ -210,19 +210,27 @@ class EnergyRepository(
         val current = s.pvForecast
         val fresh = current != null && now.epochSeconds - current.fetchedAtEpochSeconds < FORECAST_INTERVAL.inWholeSeconds && current.day(today) != null
         if (fresh) return
-        val days = withContext(Dispatchers.IO) { OpenMeteoClient(http).forecast(s.homeLat, s.homeLon, s.pvTiltDeg, s.pvAzimuthDeg) }
+        val days = withContext(Dispatchers.IO) {
+            val client = OpenMeteoClient(http)
+            if (s.pvPeakKw2 > 0) client.forecastTwoSides(s.homeLat, s.homeLon, s.pvTiltDeg, s.pvAzimuthDeg, s.pvTiltDeg2, s.pvAzimuthDeg2)
+            else client.forecast(s.homeLat, s.homeLon, s.pvTiltDeg, s.pvAzimuthDeg)
+        }
         settings.savePvForecast(PvForecast(now.epochSeconds, days))
         _state.update { it.copy(forecastError = null) }
 
         val cutoff = LocalDate.fromEpochDays(today.toEpochDays() - 7).toString()
-        val history = (s.pvForecastHistory + days.associate { it.date.toString() to it.irradianceWhPerM2 }).filterKeys { it >= cutoff }
+        // Einstrahlung beider Seiten merken (zweite unter "<datum>#2"), damit die Kalibrierung dieselbe Rechnung nutzt.
+        val history = (s.pvForecastHistory + days.flatMap { d ->
+            listOfNotNull(d.date.toString() to d.irradianceWhPerM2, d.irradiance2WhPerM2?.let { "${d.date}#2" to it })
+        }.toMap()).filterKeys { it.substringBefore('#') >= cutoff }
         settings.savePvForecastHistory(history)
 
         // Kalibrierung: gestern prognostiziert gegen gestern erzeugt.
         val peak = s.pvPeakKw.takeIf { it > 0 } ?: estimate ?: return
+        val peak2 = if (s.pvPeakKw > 0) s.pvPeakKw2 else 0.0
         val yesterday = LocalDate.fromEpochDays(today.toEpochDays() - 1)
         val irr = history[yesterday.toString()] ?: return
-        val raw = PvForecastDay(yesterday, irr).energyKwh(peak)
+        val raw = PvForecastDay(yesterday, irr, irradiance2WhPerM2 = history["$yesterday#2"]).energyKwh(peak, peak2, calibration = 1.0)
         val actual = dayStatistics(yesterday).totals.productionWh / 1000.0
         val updated = PvCalibration.update(s.pvCalibration, actual, raw)
         if (updated != s.pvCalibration) settings.savePvCalibration(updated)

@@ -14,6 +14,7 @@ import com.jakober.energie.core.places.NamedPlace
 import com.jakober.energie.core.forecast.PvForecast
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.MapSerializer
+import kotlinx.serialization.builtins.serializer
 import com.jakober.energie.core.rules.ChargeRules
 import com.jakober.energie.core.senec.SenecConnectClient
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -82,6 +83,10 @@ data class Settings(
     val pvPeakKw: Double = 0.0,
     val pvTiltDeg: Int = 30,
     val pvAzimuthDeg: Int = 0,
+    /** Zweite Dachseite (Ost-West-Dach), 0 kWp = keine. */
+    val pvPeakKw2: Double = 0.0,
+    val pvTiltDeg2: Int = 30,
+    val pvAzimuthDeg2: Int = 0,
     /** Gelernter Faktor echter Ertrag / Prognose, 1,0 = unkorrigiert. */
     val pvCalibration: Double = 1.0,
     /** Letzte Prognose von Open-Meteo, gespeichert damit nicht jede Messung abfragt. */
@@ -146,6 +151,9 @@ class AppSettings(private val context: Context) {
             pvPeakKw = p[PV_PEAK_KW] ?: 0.0,
             pvTiltDeg = p[PV_TILT] ?: 30,
             pvAzimuthDeg = p[PV_AZIMUTH] ?: 0,
+            pvPeakKw2 = p[PV_PEAK_KW2] ?: 0.0,
+            pvTiltDeg2 = p[PV_TILT2] ?: 30,
+            pvAzimuthDeg2 = p[PV_AZIMUTH2] ?: 0,
             pvCalibration = p[PV_CALIBRATION] ?: 1.0,
             pvForecast = p[PV_FORECAST]?.takeIf { it.isNotBlank() }?.let { runCatching { rulesJson.decodeFromString(PvForecast.serializer(), it) }.getOrNull() },
             pvForecastHistory = p[PV_FORECAST_HISTORY]?.let { runCatching { rulesJson.decodeFromString(historySerializer, it) }.getOrNull() } ?: emptyMap(),
@@ -182,10 +190,14 @@ class AppSettings(private val context: Context) {
             p[CAR_FALLBACK_POWER] = s.carFallbackPowerW.coerceIn(0, 22_000)
             p[SYSTEM_COST] = s.systemCostEur.coerceAtLeast(0.0)
             // Aendern sich Lage oder Groesse der Anlage, ist die alte Prognose hinfaellig.
-            val pvChanged = p[PV_PEAK_KW] != s.pvPeakKw || p[PV_TILT] != s.pvTiltDeg || p[PV_AZIMUTH] != s.pvAzimuthDeg
+            val pvChanged = p[PV_PEAK_KW] != s.pvPeakKw || p[PV_TILT] != s.pvTiltDeg || p[PV_AZIMUTH] != s.pvAzimuthDeg ||
+                p[PV_PEAK_KW2] != s.pvPeakKw2 || p[PV_TILT2] != s.pvTiltDeg2 || p[PV_AZIMUTH2] != s.pvAzimuthDeg2
             p[PV_PEAK_KW] = s.pvPeakKw.coerceIn(0.0, 1000.0)
             p[PV_TILT] = s.pvTiltDeg.coerceIn(0, 90)
             p[PV_AZIMUTH] = s.pvAzimuthDeg.coerceIn(-180, 180)
+            p[PV_PEAK_KW2] = s.pvPeakKw2.coerceIn(0.0, 1000.0)
+            p[PV_TILT2] = s.pvTiltDeg2.coerceIn(0, 90)
+            p[PV_AZIMUTH2] = s.pvAzimuthDeg2.coerceIn(-180, 180)
             if (pvChanged) p.remove(PV_FORECAST)
         }
     }
@@ -207,6 +219,7 @@ class AppSettings(private val context: Context) {
         "alerts" to rulesJson.encodeToString(AlertSettings.serializer(), s.alerts),
         "places" to rulesJson.encodeToString(placesSerializer, s.places),
         "pvPeakKw" to s.pvPeakKw.toString(), "pvTiltDeg" to s.pvTiltDeg.toString(), "pvAzimuthDeg" to s.pvAzimuthDeg.toString(), "pvCalibration" to s.pvCalibration.toString(),
+        "pvPeakKw2" to s.pvPeakKw2.toString(), "pvTiltDeg2" to s.pvTiltDeg2.toString(), "pvAzimuthDeg2" to s.pvAzimuthDeg2.toString(),
     )
 
     /** Die Geheimnisse, die nur verschluesselt in die Sicherung duerfen. */
@@ -265,6 +278,7 @@ class AppSettings(private val context: Context) {
             dbl(HOME_LAT, "homeLat"); dbl(HOME_LON, "homeLon"); str(CHARGE_RULES, "chargeRules", plain)
             lng(CHARGE_LAST_CMD, "chargeLastCommandAt"); str(CHARGE_LOG, "chargeLog", plain); str(ALERTS, "alerts", plain); str(PLACES, "places", plain)
             dbl(PV_PEAK_KW, "pvPeakKw"); int(PV_TILT, "pvTiltDeg"); int(PV_AZIMUTH, "pvAzimuthDeg"); dbl(PV_CALIBRATION, "pvCalibration")
+            dbl(PV_PEAK_KW2, "pvPeakKw2"); int(PV_TILT2, "pvTiltDeg2"); int(PV_AZIMUTH2, "pvAzimuthDeg2")
             str(SENEC_KEY, "senecKey", secrets); str(FRITZ_PASSWORD, "fritzPassword", secrets)
             str(SMARTCAR_CLIENT_SECRET, "smartcarClientSecret", secrets); str(FORD_TOKENS, "fordTokensJson", secrets)
         }
@@ -316,9 +330,12 @@ class AppSettings(private val context: Context) {
         val PV_TILT = intPreferencesKey("pv_tilt")
         val PV_AZIMUTH = intPreferencesKey("pv_azimuth")
         val PV_CALIBRATION = doublePreferencesKey("pv_calibration")
+        val PV_PEAK_KW2 = doublePreferencesKey("pv_peak_kw2")
+        val PV_TILT2 = intPreferencesKey("pv_tilt2")
+        val PV_AZIMUTH2 = intPreferencesKey("pv_azimuth2")
         val PV_FORECAST = stringPreferencesKey("pv_forecast")
         val PV_FORECAST_HISTORY = stringPreferencesKey("pv_forecast_history")
-        private val historySerializer = MapSerializer(kotlinx.serialization.builtins.serializer<String>(), kotlinx.serialization.builtins.serializer<Double>())
+        private val historySerializer = MapSerializer(String.serializer(), Double.serializer())
         private val placesSerializer = ListSerializer(NamedPlace.serializer())
         private val rulesJson = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     }

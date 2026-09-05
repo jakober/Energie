@@ -134,6 +134,12 @@ fun BatteryDetailCard(live: LiveState, today: DayStatistics?, onClose: () -> Uni
 /** Anlagenleistung fuer die Prognose: eingetragen, sonst aus dem Verlauf geschaetzt. */
 fun pvPeakKw(settings: Settings, estimate: Double?): Double? = settings.pvPeakKw.takeIf { it > 0 } ?: estimate
 
+/** Leistung der zweiten Dachseite; ohne eingetragene erste Seite gibt es keine zweite. */
+fun pvPeakKw2(settings: Settings): Double = if (settings.pvPeakKw > 0) settings.pvPeakKw2 else 0.0
+
+fun com.jakober.energie.core.forecast.PvForecastDay.energyFor(settings: Settings, peak: Double): Double =
+    energyKwh(peak, pvPeakKw2(settings), settings.pvCalibration)
+
 /** Text fuer die kleine Prognose-Anzeige im Flussdiagramm, null wenn nichts zu zeigen ist. */
 fun pvForecastBadge(settings: Settings, estimate: Double?, today: LocalDate, producedTodayWh: Double?): ForecastBadge? {
     val forecast = settings.pvForecast ?: return null
@@ -144,11 +150,11 @@ fun pvForecastBadge(settings: Settings, estimate: Double?, today: LocalDate, pro
     val detail = buildList {
         tomorrow.weatherLabel?.let { add(it) }
         if (todayDay != null) {
-            val t = "heute ≈ ${Format.energy(todayDay.energyKwh(peak, settings.pvCalibration) * 1000)}"
+            val t = "heute ≈ ${Format.energy(todayDay.energyFor(settings, peak) * 1000)}"
             add(if (producedTodayWh != null && producedTodayWh > 100) "$t, bisher ${Format.energy(producedTodayWh)}" else t)
         }
     }.joinToString(" · ")
-    return ForecastBadge("Morgen", "≈ ${Format.energy(tomorrow.energyKwh(peak, settings.pvCalibration) * 1000)}", detail.ifBlank { "PV-Prognose" })
+    return ForecastBadge("Morgen", "≈ ${Format.energy(tomorrow.energyFor(settings, peak) * 1000)}", detail.ifBlank { "PV-Prognose" })
 }
 
 @Composable
@@ -168,10 +174,10 @@ fun PvDetailCard(live: LiveState, today: DayStatistics?, yesterday: DayStatistic
                     val detail = listOfNotNull(d.weatherLabel, d.sunshineHours?.let { "${String.format(Locale.GERMANY, "%.1f", it)} h Sonne" }, "${(d.irradianceWhPerM2 / 1000).let { String.format(Locale.GERMANY, "%.1f", it) }} kWh/m²")
                         .joinToString(" · ")
                     val actual = if (offset == 0) today?.totals?.productionWh else null
-                    ValueRow(name, "≈ ${Format.energy(d.energyKwh(peak, settings.pvCalibration) * 1000)}", detail + (actual?.takeIf { it > 100 }?.let { " · bisher ${Format.energy(it)}" } ?: ""), color = EnergyColors.sun)
+                    ValueRow(name, "≈ ${Format.energy(d.energyFor(settings, peak) * 1000)}", detail + (actual?.takeIf { it > 100 }?.let { " · bisher ${Format.energy(it)}" } ?: ""), color = EnergyColors.sun)
                 }
                 Text(
-                    "Mit ${String.format(Locale.GERMANY, "%.1f", peak)} kWp" + (if (settings.pvPeakKw <= 0) " (geschätzt)" else "") +
+                    "Mit ${String.format(Locale.GERMANY, "%.2f", peak + pvPeakKw2(settings))} kWp" + (if (settings.pvPeakKw <= 0) " (geschätzt)" else if (pvPeakKw2(settings) > 0) " auf zwei Dachseiten" else "") +
                         ", Faktor ${String.format(Locale.GERMANY, "%.2f", settings.pvCalibration)} aus den echten Erträgen. Quelle Open-Meteo.",
                     style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

@@ -248,7 +248,15 @@ fun SettingsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Box(Modifier.weight(1f)) { NumberField("Neigung in °", draft.pvTiltDeg.toDouble()) { draft = draft.copy(pvTiltDeg = it.toInt()) } }
-                    Box(Modifier.weight(1f)) { NumberField("Ausrichtung (0 = Süd, -90 = Ost, 90 = West)", draft.pvAzimuthDeg.toDouble()) { draft = draft.copy(pvAzimuthDeg = it.toInt()) } }
+                    Box(Modifier.weight(1f)) { NumberField("Ausrichtung (0 Süd, -90 Ost, 90 West)", draft.pvAzimuthDeg.toDouble()) { draft = draft.copy(pvAzimuthDeg = it.toInt()) } }
+                }
+                Text("Zweite Dachseite, optional (Ost-West-Dach). Die Leistung oben ist dann nur die erste Seite.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                NumberField("Zweite Seite: Leistung in kWp (0 = keine)", draft.pvPeakKw2) { draft = draft.copy(pvPeakKw2 = it) }
+                if (draft.pvPeakKw2 > 0) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Box(Modifier.weight(1f)) { NumberField("Neigung in °", draft.pvTiltDeg2.toDouble()) { draft = draft.copy(pvTiltDeg2 = it.toInt()) } }
+                        Box(Modifier.weight(1f)) { NumberField("Ausrichtung", draft.pvAzimuthDeg2.toDouble()) { draft = draft.copy(pvAzimuthDeg2 = it.toInt()) } }
+                    }
                 }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
@@ -415,6 +423,7 @@ private val SettingsSaver = androidx.compose.runtime.saveable.Saver<Settings, Li
             it.smartcarAppId, it.smartcarClientId, it.smartcarClientSecret, it.smartcarVehicleId, it.smartcarUserId, it.carFallbackPowerW.toString(),
             it.fordTokensJson, it.fordVin, it.fordLocationId, it.systemCostEur.toString(),
             it.pvPeakKw.toString(), it.pvTiltDeg.toString(), it.pvAzimuthDeg.toString(),
+            it.pvPeakKw2.toString(), it.pvTiltDeg2.toString(), it.pvAzimuthDeg2.toString(),
         )
     },
     restore = {
@@ -428,6 +437,9 @@ private val SettingsSaver = androidx.compose.runtime.saveable.Saver<Settings, Li
             pvPeakKw = it.getOrElse(19) { "0.0" }.toDoubleOrNull() ?: 0.0,
             pvTiltDeg = it.getOrElse(20) { "30" }.toIntOrNull() ?: 30,
             pvAzimuthDeg = it.getOrElse(21) { "0" }.toIntOrNull() ?: 0,
+            pvPeakKw2 = it.getOrElse(22) { "0.0" }.toDoubleOrNull() ?: 0.0,
+            pvTiltDeg2 = it.getOrElse(23) { "30" }.toIntOrNull() ?: 30,
+            pvAzimuthDeg2 = it.getOrElse(24) { "0" }.toIntOrNull() ?: 0,
         )
     },
 )

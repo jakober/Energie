@@ -13,6 +13,8 @@ data class PvForecastDay(
     val sunshineHours: Double? = null,
     /** WMO-Wettercode des Tages, wenn geliefert. */
     val weatherCode: Int? = null,
+    /** Einstrahlung auf eine zweite Dachseite (Ost-West-Dach), wenn eingerichtet. */
+    val irradiance2WhPerM2: Double? = null,
 ) {
     /**
      * Ertrag in kWh: 1000 W/m² Einstrahlung bringen je kWp rund 1 kW, davon
@@ -21,6 +23,13 @@ data class PvForecastDay(
      */
     fun energyKwh(peakKw: Double, calibration: Double = 1.0, performanceRatio: Double = PERFORMANCE_RATIO): Double =
         irradianceWhPerM2 / 1000.0 * peakKw * performanceRatio * calibration
+
+    /** Ertrag beider Dachseiten: jede mit ihrer Einstrahlung und Leistung. */
+    fun energyKwh(peakKw1: Double, peakKw2: Double, calibration: Double, performanceRatio: Double = PERFORMANCE_RATIO): Double {
+        val first = irradianceWhPerM2 / 1000.0 * peakKw1
+        val second = (irradiance2WhPerM2 ?: irradianceWhPerM2) / 1000.0 * peakKw2
+        return (first + second) * performanceRatio * calibration
+    }
 
     val weatherLabel: String? get() = weatherCode?.let { weatherLabel(it) }
 

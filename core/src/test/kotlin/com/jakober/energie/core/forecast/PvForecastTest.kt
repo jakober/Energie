@@ -38,6 +38,20 @@ class PvForecastTest {
     }
 
     @Test
+    fun `zwei Dachseiten werden je Tag zusammengefuehrt`() = runTest {
+        val engine = MockEngine { req ->
+            val az = req.url.parameters["azimuth"]
+            if (az == "-93") respond(body) else respond(body.replace("[400.0,600.0,800.0,200.0,null]", "[200.0,300.0,400.0,100.0,null]"))
+        }
+        val days = OpenMeteoClient(HttpClient(engine)).forecastTwoSides(48.4, 10.1, 25, -93, 25, 87)
+        val today = days[0]
+        assertEquals(1800.0, today.irradianceWhPerM2)
+        assertEquals(900.0, today.irradiance2WhPerM2)
+        // Ost 4,86 kWp, West 4,05 kWp: (1,8*4,86 + 0,9*4,05) * 0,8 = 9,9144
+        assertEquals(9.9144, today.energyKwh(4.86, 4.05, calibration = 1.0), 1e-6)
+    }
+
+    @Test
     fun `ertrag aus Einstrahlung, kWp und Kalibrierung`() {
         val d = PvForecastDay(LocalDate(2026, 9, 5), irradianceWhPerM2 = 5000.0)
         // 5 kWh/m² * 9,9 kWp * 0,8 = 39,6 kWh

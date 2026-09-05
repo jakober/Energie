@@ -145,7 +145,7 @@ private fun MonthForecastCard(m: RangeStatistics, settings: Settings) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             BigValue(Format.euro(f.gridCostEur), "Stromkosten", EnergyColors.grid, Modifier.weight(1f))
             BigValue(Format.euro(f.feedInRevenueEur), "Einspeisevergütung", EnergyColors.export, Modifier.weight(1f))
-            BigValue(Format.euro(f.billEur), if (f.billEur >= 0) "Saldo zu zahlen" else "Saldo Gutschrift", Modifier.weight(1f))
+            BigValue(Format.euro(f.billEur), if (f.billEur >= 0) "Saldo zu zahlen" else "Saldo Gutschrift", modifier = Modifier.weight(1f))
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             BigValue(Format.energy(f.consumptionWh), "Verbrauch", EnergyColors.house, Modifier.weight(1f))

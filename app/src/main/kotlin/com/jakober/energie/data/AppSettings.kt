@@ -11,7 +11,9 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.jakober.energie.core.alerts.AlertSettings
 import com.jakober.energie.core.alerts.AlertState
 import com.jakober.energie.core.places.NamedPlace
+import com.jakober.energie.core.forecast.PvForecast
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.MapSerializer
 import com.jakober.energie.core.rules.ChargeRules
 import com.jakober.energie.core.senec.SenecConnectClient
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -76,6 +78,16 @@ data class Settings(
     val alertState: AlertState = AlertState(),
     /** Vom Nutzer benannte Orte (Arbeit, Oma, ...), an denen das Auto erkannt wird. */
     val places: List<NamedPlace> = emptyList(),
+    /** PV-Prognose: Anlagenleistung in kWp (0 = aus dem Verlauf schaetzen), Neigung, Azimut (0 = Sued, -90 = Ost, 90 = West). */
+    val pvPeakKw: Double = 0.0,
+    val pvTiltDeg: Int = 30,
+    val pvAzimuthDeg: Int = 0,
+    /** Gelernter Faktor echter Ertrag / Prognose, 1,0 = unkorrigiert. */
+    val pvCalibration: Double = 1.0,
+    /** Letzte Prognose von Open-Meteo, gespeichert damit nicht jede Messung abfragt. */
+    val pvForecast: PvForecast? = null,
+    /** Einstrahlungs-Prognose je Tag (ISO-Datum -> Wh/m²) der letzten Tage, fuer die Kalibrierung. */
+    val pvForecastHistory: Map<String, Double> = emptyMap(),
 ) {
     val backupConfigured: Boolean get() = backupTreeUri.isNotBlank() && backupPassword.length >= 8
     val fordConnected: Boolean get() = fordTokensJson.isNotBlank() && fordVin.isNotBlank()
@@ -131,8 +143,18 @@ class AppSettings(private val context: Context) {
             alerts = p[ALERTS]?.let { runCatching { rulesJson.decodeFromString(AlertSettings.serializer(), it) }.getOrNull() } ?: AlertSettings(),
             alertState = p[ALERT_STATE]?.let { runCatching { rulesJson.decodeFromString(AlertState.serializer(), it) }.getOrNull() } ?: AlertState(),
             places = p[PLACES]?.let { runCatching { rulesJson.decodeFromString(placesSerializer, it) }.getOrNull() } ?: emptyList(),
+            pvPeakKw = p[PV_PEAK_KW] ?: 0.0,
+            pvTiltDeg = p[PV_TILT] ?: 30,
+            pvAzimuthDeg = p[PV_AZIMUTH] ?: 0,
+            pvCalibration = p[PV_CALIBRATION] ?: 1.0,
+            pvForecast = p[PV_FORECAST]?.takeIf { it.isNotBlank() }?.let { runCatching { rulesJson.decodeFromString(PvForecast.serializer(), it) }.getOrNull() },
+            pvForecastHistory = p[PV_FORECAST_HISTORY]?.let { runCatching { rulesJson.decodeFromString(historySerializer, it) }.getOrNull() } ?: emptyMap(),
         )
     }
+
+    suspend fun savePvForecast(f: PvForecast?) { context.dataStore.edit { if (f == null) it.remove(PV_FORECAST) else it[PV_FORECAST] = rulesJson.encodeToString(PvForecast.serializer(), f) } }
+    suspend fun savePvForecastHistory(h: Map<String, Double>) { context.dataStore.edit { it[PV_FORECAST_HISTORY] = rulesJson.encodeToString(historySerializer, h) } }
+    suspend fun savePvCalibration(c: Double) { context.dataStore.edit { it[PV_CALIBRATION] = c } }
 
     suspend fun savePlaces(places: List<NamedPlace>) { context.dataStore.edit { it[PLACES] = rulesJson.encodeToString(placesSerializer, places) } }
 
@@ -159,6 +181,12 @@ class AppSettings(private val context: Context) {
             // Fahrzeug-Zuordnung, Ford-Tokens, Automatik und Protokoll pflegt die App selbst - nicht ueberschreiben.
             p[CAR_FALLBACK_POWER] = s.carFallbackPowerW.coerceIn(0, 22_000)
             p[SYSTEM_COST] = s.systemCostEur.coerceAtLeast(0.0)
+            // Aendern sich Lage oder Groesse der Anlage, ist die alte Prognose hinfaellig.
+            val pvChanged = p[PV_PEAK_KW] != s.pvPeakKw || p[PV_TILT] != s.pvTiltDeg || p[PV_AZIMUTH] != s.pvAzimuthDeg
+            p[PV_PEAK_KW] = s.pvPeakKw.coerceIn(0.0, 1000.0)
+            p[PV_TILT] = s.pvTiltDeg.coerceIn(0, 90)
+            p[PV_AZIMUTH] = s.pvAzimuthDeg.coerceIn(-180, 180)
+            if (pvChanged) p.remove(PV_FORECAST)
         }
     }
 
@@ -178,6 +206,7 @@ class AppSettings(private val context: Context) {
         "chargeLastCommandAt" to s.chargeLastCommandAt.toString(), "chargeLog" to s.chargeLog,
         "alerts" to rulesJson.encodeToString(AlertSettings.serializer(), s.alerts),
         "places" to rulesJson.encodeToString(placesSerializer, s.places),
+        "pvPeakKw" to s.pvPeakKw.toString(), "pvTiltDeg" to s.pvTiltDeg.toString(), "pvAzimuthDeg" to s.pvAzimuthDeg.toString(), "pvCalibration" to s.pvCalibration.toString(),
     )
 
     /** Die Geheimnisse, die nur verschluesselt in die Sicherung duerfen. */
@@ -235,6 +264,7 @@ class AppSettings(private val context: Context) {
             str(FORD_VIN, "fordVin", plain); str(FORD_LOCATION, "fordLocationId", plain)
             dbl(HOME_LAT, "homeLat"); dbl(HOME_LON, "homeLon"); str(CHARGE_RULES, "chargeRules", plain)
             lng(CHARGE_LAST_CMD, "chargeLastCommandAt"); str(CHARGE_LOG, "chargeLog", plain); str(ALERTS, "alerts", plain); str(PLACES, "places", plain)
+            dbl(PV_PEAK_KW, "pvPeakKw"); int(PV_TILT, "pvTiltDeg"); int(PV_AZIMUTH, "pvAzimuthDeg"); dbl(PV_CALIBRATION, "pvCalibration")
             str(SENEC_KEY, "senecKey", secrets); str(FRITZ_PASSWORD, "fritzPassword", secrets)
             str(SMARTCAR_CLIENT_SECRET, "smartcarClientSecret", secrets); str(FORD_TOKENS, "fordTokensJson", secrets)
         }
@@ -282,6 +312,13 @@ class AppSettings(private val context: Context) {
         val ALERTS = stringPreferencesKey("alerts")
         val ALERT_STATE = stringPreferencesKey("alert_state")
         val PLACES = stringPreferencesKey("places")
+        val PV_PEAK_KW = doublePreferencesKey("pv_peak_kw")
+        val PV_TILT = intPreferencesKey("pv_tilt")
+        val PV_AZIMUTH = intPreferencesKey("pv_azimuth")
+        val PV_CALIBRATION = doublePreferencesKey("pv_calibration")
+        val PV_FORECAST = stringPreferencesKey("pv_forecast")
+        val PV_FORECAST_HISTORY = stringPreferencesKey("pv_forecast_history")
+        private val historySerializer = MapSerializer(kotlinx.serialization.builtins.serializer<String>(), kotlinx.serialization.builtins.serializer<Double>())
         private val placesSerializer = ListSerializer(NamedPlace.serializer())
         private val rulesJson = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     }

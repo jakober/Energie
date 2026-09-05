@@ -41,6 +41,9 @@ import com.jakober.energie.ui.charts.LineChart
 import com.jakober.energie.ui.charts.LineSeries
 import com.jakober.energie.ui.charts.RingGauge
 import com.jakober.energie.ui.theme.EnergyColors
+import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.plus
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -128,10 +131,53 @@ fun BatteryDetailCard(live: LiveState, today: DayStatistics?, onClose: () -> Uni
     }
 }
 
+/** Anlagenleistung fuer die Prognose: eingetragen, sonst aus dem Verlauf geschaetzt. */
+fun pvPeakKw(settings: Settings, estimate: Double?): Double? = settings.pvPeakKw.takeIf { it > 0 } ?: estimate
+
+/** Text fuer die kleine Prognose-Anzeige im Flussdiagramm, null wenn nichts zu zeigen ist. */
+fun pvForecastBadge(settings: Settings, estimate: Double?, today: LocalDate, producedTodayWh: Double?): ForecastBadge? {
+    val forecast = settings.pvForecast ?: return null
+    val peak = pvPeakKw(settings, estimate)
+        ?: return ForecastBadge("PV-Prognose", "kWp fehlt", "Anlagenleistung unter Einstellungen → PV-Prognose eintragen")
+    val tomorrow = forecast.day(today.plus(1, DateTimeUnit.DAY)) ?: return null
+    val todayDay = forecast.day(today)
+    val detail = buildList {
+        tomorrow.weatherLabel?.let { add(it) }
+        if (todayDay != null) {
+            val t = "heute ≈ ${Format.energy(todayDay.energyKwh(peak, settings.pvCalibration) * 1000)}"
+            add(if (producedTodayWh != null && producedTodayWh > 100) "$t, bisher ${Format.energy(producedTodayWh)}" else t)
+        }
+    }.joinToString(" · ")
+    return ForecastBadge("Morgen", "≈ ${Format.energy(tomorrow.energyKwh(peak, settings.pvCalibration) * 1000)}", detail.ifBlank { "PV-Prognose" })
+}
+
 @Composable
-fun PvDetailCard(live: LiveState, today: DayStatistics?, yesterday: DayStatistics?, settings: Settings, onClose: () -> Unit) {
+fun PvDetailCard(live: LiveState, today: DayStatistics?, yesterday: DayStatistics?, settings: Settings, todayDate: LocalDate, onClose: () -> Unit) {
     val s = live.sample
     EnergieCard(title = "Photovoltaik im Detail", accent = EnergyColors.sun, border = EnergyColors.sun, onClose = onClose) {
+        settings.pvForecast?.let { forecast ->
+            val peak = pvPeakKw(settings, live.pvPeakEstimateKw)
+            Text("Prognose", style = MaterialTheme.typography.titleSmall)
+            if (peak == null) {
+                Text("Anlagenleistung fehlt: unter Einstellungen → PV-Prognose in kWp eintragen, dann rechnet die App den Ertrag.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+            } else {
+                forecast.days.sortedBy { it.date }.forEach { d ->
+                    val offset = d.date.toEpochDays() - todayDate.toEpochDays()
+                    if (offset < 0) return@forEach
+                    val name = when (offset) { 0 -> "Heute"; 1 -> "Morgen"; 2 -> "Übermorgen"; else -> Format.dateShort(d.date) }
+                    val detail = listOfNotNull(d.weatherLabel, d.sunshineHours?.let { "${String.format(Locale.GERMANY, "%.1f", it)} h Sonne" }, "${(d.irradianceWhPerM2 / 1000).let { String.format(Locale.GERMANY, "%.1f", it) }} kWh/m²")
+                        .joinToString(" · ")
+                    val actual = if (offset == 0) today?.totals?.productionWh else null
+                    ValueRow(name, "≈ ${Format.energy(d.energyKwh(peak, settings.pvCalibration) * 1000)}", detail + (actual?.takeIf { it > 100 }?.let { " · bisher ${Format.energy(it)}" } ?: ""), color = EnergyColors.sun)
+                }
+                Text(
+                    "Mit ${String.format(Locale.GERMANY, "%.1f", peak)} kWp" + (if (settings.pvPeakKw <= 0) " (geschätzt)" else "") +
+                        ", Faktor ${String.format(Locale.GERMANY, "%.2f", settings.pvCalibration)} aus den echten Erträgen. Quelle Open-Meteo.",
+                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(Modifier.height(4.dp))
+        }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             BigValue(Format.power(s?.productionW), "Jetzt", EnergyColors.sun, Modifier.weight(1f))
             BigValue(Format.energy(today?.totals?.productionWh), "Heute erzeugt", EnergyColors.sun, Modifier.weight(1f))

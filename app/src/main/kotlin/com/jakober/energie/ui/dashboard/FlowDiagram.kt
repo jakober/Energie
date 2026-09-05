@@ -75,8 +75,17 @@ private val HubRadius = 44.dp
 /** Die antippbaren Knoten des Diagramms. */
 enum class FlowNodeKind { PV, HOUSE, GRID, BATTERY, CAR }
 
+/** Kleine Anzeige links oben, etwa die PV-Prognose fuer morgen. */
+data class ForecastBadge(val label: String, val value: String, val detail: String)
+
 @Composable
-fun FlowDiagram(sample: EnergySample?, showCar: Boolean = false, onNodeClick: ((FlowNodeKind) -> Unit)? = null, modifier: Modifier = Modifier) {
+fun FlowDiagram(
+    sample: EnergySample?,
+    showCar: Boolean = false,
+    onNodeClick: ((FlowNodeKind) -> Unit)? = null,
+    forecast: ForecastBadge? = null,
+    modifier: Modifier = Modifier,
+) {
     fun click(kind: FlowNodeKind): (() -> Unit)? = onNodeClick?.let { cb -> { cb(kind) } }
     val production = sample?.productionW ?: 0.0
     val carPower = if (showCar) sample?.carChargePowerW ?: 0.0 else 0.0
@@ -188,6 +197,19 @@ fun FlowDiagram(sample: EnergySample?, showCar: Boolean = false, onNodeClick: ((
             drawArc(Color.White.copy(alpha = 0.10f), -90f, 360f, false, ringTopLeft, ringSize, style = Stroke(ringStroke, cap = StrokeCap.Round))
             if (autarky != null) {
                 drawArc(EnergyColors.battery, -90f, (360f * autarky).toFloat(), false, ringTopLeft, ringSize, style = Stroke(ringStroke, cap = StrokeCap.Round))
+            }
+        }
+
+        // PV-Prognose links oben, wo der Speicher Platz laesst.
+        if (forecast != null) {
+            Column(
+                Modifier.align(Alignment.TopStart).padding(start = 18.dp, top = 16.dp).width(SideNodeWidth + 10.dp)
+                    .let { m -> onNodeClick?.let { cb -> m.clip(RoundedCornerShape(12.dp)).clickable { cb(FlowNodeKind.PV) } } ?: m }
+                    .padding(4.dp),
+            ) {
+                Text(forecast.label, style = MaterialTheme.typography.labelSmall, color = EnergyColors.sun.copy(alpha = 0.9f))
+                Text(forecast.value, style = MaterialTheme.typography.titleMedium, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1)
+                Text(forecast.detail, style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.6f), maxLines = 3, overflow = TextOverflow.Ellipsis, lineHeight = 13.sp)
             }
         }
 

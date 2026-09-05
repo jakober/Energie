@@ -410,6 +410,10 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch { container.settings.savePlaces(places) }
     }
 
+    fun resetPvCalibration() {
+        viewModelScope.launch { container.settings.savePvCalibration(1.0) }
+    }
+
     fun resetLearnedPower() {
         viewModelScope.launch { container.settings.saveCarLearnedPower(0.0) }
     }

@@ -125,6 +125,7 @@ fun DashboardScreen(vm: EnergieViewModel, onOpenSettings: () -> Unit, contentPad
             FlowDiagram(
                 live.sample, showCar = carActive,
                 onNodeClick = { kind -> selectedNode = if (selectedNode == kind) null else kind },
+                forecast = pvForecastBadge(settings, live.pvPeakEstimateKw, vm.todayDate(), today?.totals?.productionWh),
             )
         }
 
@@ -140,7 +141,7 @@ fun DashboardScreen(vm: EnergieViewModel, onOpenSettings: () -> Unit, contentPad
                 )
             }
             FlowNodeKind.BATTERY -> item { BatteryDetailCard(live, today, onClose = { selectedNode = null }) }
-            FlowNodeKind.PV -> item { PvDetailCard(live, today, yesterday, settings, onClose = { selectedNode = null }) }
+            FlowNodeKind.PV -> item { PvDetailCard(live, today, yesterday, settings, vm.todayDate(), onClose = { selectedNode = null }) }
             FlowNodeKind.HOUSE -> item { HouseDetailCard(live, today, yesterday, settings, onClose = { selectedNode = null }) }
             FlowNodeKind.GRID -> item { GridDetailCard(live, today, yesterday, settings, onClose = { selectedNode = null }) }
             null -> {}

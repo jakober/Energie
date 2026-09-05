@@ -39,6 +39,11 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import com.jakober.energie.core.alerts.Alert
+import com.jakober.energie.core.forecast.OpenMeteoClient
+import com.jakober.energie.core.forecast.PvCalibration
+import com.jakober.energie.core.forecast.PvForecast
+import com.jakober.energie.core.forecast.PvForecastDay
+import kotlin.time.Duration.Companion.hours
 import com.jakober.energie.core.history.ChargePowerLearner
 import com.jakober.energie.core.alerts.AlertEngine
 import com.jakober.energie.core.alerts.AlertInput
@@ -61,6 +66,10 @@ data class LiveState(
     val senecRaw: String? = null,
     /** Letzte Entscheidung der Ladeautomatik in Worten. */
     val automationStatus: String? = null,
+    /** Aus dem Verlauf geschaetzte Anlagenleistung in kWp, wenn der Nutzer keine eingetragen hat. */
+    val pvPeakEstimateKw: Double? = null,
+    /** Letzter Fehler beim Abruf der PV-Prognose. */
+    val forecastError: String? = null,
 )
 
 /**
@@ -175,6 +184,8 @@ class EnergyRepository(
         if (senec != null) lastSenecOkAt = now
         if (fritzData != null) lastFritzOkAt = now
         _state.value = newState
+        runCatching { refreshForecast(s, now) }
+            .onFailure { e -> _state.update { it.copy(forecastError = e.message ?: e.toString()) } }
         val automationLine = runCatching { runAutomation(s, newState) }.getOrNull()
         runCatching { runAlerts(newState, automationLine) }
         if (gotSomething) onWidgetUpdate?.let { cb -> runCatching { cb(sample, newState.car) } }
@@ -186,6 +197,43 @@ class EnergyRepository(
 
     private var lastSenecOkAt: Instant? = null
     private var lastFritzOkAt: Instant? = null
+
+    /**
+     * PV-Prognose von Open-Meteo, hoechstens alle drei Stunden. Merkt sich die
+     * Einstrahlung je Tag und kalibriert mit dem echten Ertrag von gestern.
+     */
+    private suspend fun refreshForecast(s: Settings, now: Instant) {
+        if (s.homeLat == 0.0 && s.homeLon == 0.0) return
+        val today = today()
+        val estimate = estimatedPeakKw()
+        if (_state.value.pvPeakEstimateKw != estimate) _state.update { it.copy(pvPeakEstimateKw = estimate) }
+        val current = s.pvForecast
+        val fresh = current != null && now.epochSeconds - current.fetchedAtEpochSeconds < FORECAST_INTERVAL.inWholeSeconds && current.day(today) != null
+        if (fresh) return
+        val days = withContext(Dispatchers.IO) { OpenMeteoClient(http).forecast(s.homeLat, s.homeLon, s.pvTiltDeg, s.pvAzimuthDeg) }
+        settings.savePvForecast(PvForecast(now.epochSeconds, days))
+        _state.update { it.copy(forecastError = null) }
+
+        val cutoff = LocalDate.fromEpochDays(today.toEpochDays() - 7).toString()
+        val history = (s.pvForecastHistory + days.associate { it.date.toString() to it.irradianceWhPerM2 }).filterKeys { it >= cutoff }
+        settings.savePvForecastHistory(history)
+
+        // Kalibrierung: gestern prognostiziert gegen gestern erzeugt.
+        val peak = s.pvPeakKw.takeIf { it > 0 } ?: estimate ?: return
+        val yesterday = LocalDate.fromEpochDays(today.toEpochDays() - 1)
+        val irr = history[yesterday.toString()] ?: return
+        val raw = PvForecastDay(yesterday, irr).energyKwh(peak)
+        val actual = dayStatistics(yesterday).totals.productionWh / 1000.0
+        val updated = PvCalibration.update(s.pvCalibration, actual, raw)
+        if (updated != s.pvCalibration) settings.savePvCalibration(updated)
+    }
+
+    /** kWp aus der hoechsten je gemessenen PV-Leistung: Spitze / 0,85, auf 0,1 gerundet. */
+    fun estimatedPeakKw(): Double? {
+        val peakW = history.days().mapNotNull { dayStatistics(it).peakProduction?.value }.maxOrNull() ?: return null
+        if (peakW < 500) return null
+        return kotlin.math.round(peakW / 0.85 / 100.0) / 10.0
+    }
 
     /** Wer die Hinweise anzeigt (Benachrichtigungen); ohne Empfaenger passiert nichts. */
     var onAlerts: ((List<Alert>) -> Unit)? = null
@@ -483,6 +531,7 @@ class EnergyRepository(
     companion object {
         val MIN_STORE_INTERVAL = 55.seconds
         val CAR_INTERVAL = 5.minutes
+        val FORECAST_INTERVAL = 3.hours
     }
 }
 

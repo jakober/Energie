@@ -1,6 +1,7 @@
 package com.jakober.energie.ui.settings
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -82,7 +83,8 @@ fun SettingsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
     val dirty = draft.copy(chargeRules = saved.chargeRules, chargeLastCommandAt = saved.chargeLastCommandAt, chargeOverride = saved.chargeOverride, chargeLog = saved.chargeLog,
         fordTokensJson = saved.fordTokensJson, fordVin = saved.fordVin, fordLocationId = saved.fordLocationId, smartcarVehicleId = saved.smartcarVehicleId, smartcarUserId = saved.smartcarUserId,
         backupTreeUri = saved.backupTreeUri, backupPassword = saved.backupPassword, backupLastAt = saved.backupLastAt, backupLastResult = saved.backupLastResult,
-        alerts = saved.alerts, alertState = saved.alertState, carLearnedPowerW = saved.carLearnedPowerW, places = saved.places) != saved
+        alerts = saved.alerts, alertState = saved.alertState, carLearnedPowerW = saved.carLearnedPowerW, places = saved.places,
+        pvCalibration = saved.pvCalibration, pvForecast = saved.pvForecast, pvForecastHistory = saved.pvForecastHistory) != saved
 
     LaunchedEffect(Unit) { vm.clearTestResult() }
 
@@ -228,6 +230,35 @@ fun SettingsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
                     "PV, Speicher und Montage zusammen. Daraus rechnet die Statistik, wie viel davon schon verdient ist.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+        }
+
+        item {
+            EnergieCard(title = "PV-Prognose", accent = EnergyColors.sun) {
+                Text(
+                    "Wettervorhersage von Open-Meteo (kostenlos, ohne Schlüssel) für den Standort Zuhause, den FordPass geliefert hat. Aus der Einstrahlung auf die Modulfläche rechnet die App den Tagesertrag und lernt aus deinen echten Erträgen nach.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (saved.homeLat == 0.0 && saved.homeLon == 0.0) {
+                    Text("Standort Zuhause fehlt noch. Er kommt automatisch, sobald FordPass angemeldet ist und einen Ladeort „Zuhause“ kennt.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                }
+                NumberField("Anlagenleistung in kWp (0 = aus dem Verlauf schätzen)", draft.pvPeakKw) { draft = draft.copy(pvPeakKw = it) }
+                live.pvPeakEstimateKw?.let { est ->
+                    if (draft.pvPeakKw <= 0) Text("Aus der höchsten gemessenen PV-Leistung geschätzt: ${String.format(java.util.Locale.GERMANY, "%.1f", est)} kWp", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Box(Modifier.weight(1f)) { NumberField("Neigung in °", draft.pvTiltDeg.toDouble()) { draft = draft.copy(pvTiltDeg = it.toInt()) } }
+                    Box(Modifier.weight(1f)) { NumberField("Ausrichtung (0 = Süd, -90 = Ost, 90 = West)", draft.pvAzimuthDeg.toDouble()) { draft = draft.copy(pvAzimuthDeg = it.toInt()) } }
+                }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Gelernter Faktor: ${String.format(java.util.Locale.GERMANY, "%.2f", saved.pvCalibration)}" +
+                            (saved.pvForecast?.let { " · Prognose von ${Format.dateTime(kotlinx.datetime.Instant.fromEpochSeconds(it.fetchedAtEpochSeconds))}" } ?: " · noch keine Prognose geladen"),
+                        style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f),
+                    )
+                    if (saved.pvCalibration != 1.0) TextButton(onClick = vm::resetPvCalibration) { Text("Zurücksetzen") }
+                }
+                live.forecastError?.let { Text("Fehler: $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
             }
         }
 
@@ -383,6 +414,7 @@ private val SettingsSaver = androidx.compose.runtime.saveable.Saver<Settings, Li
             it.pricePerKwh.toString(), it.feedInPerKwh.toString(), it.keepDays.toString(),
             it.smartcarAppId, it.smartcarClientId, it.smartcarClientSecret, it.smartcarVehicleId, it.smartcarUserId, it.carFallbackPowerW.toString(),
             it.fordTokensJson, it.fordVin, it.fordLocationId, it.systemCostEur.toString(),
+            it.pvPeakKw.toString(), it.pvTiltDeg.toString(), it.pvAzimuthDeg.toString(),
         )
     },
     restore = {
@@ -393,6 +425,9 @@ private val SettingsSaver = androidx.compose.runtime.saveable.Saver<Settings, Li
             carFallbackPowerW = it[14].toInt(),
             fordTokensJson = it.getOrElse(15) { "" }, fordVin = it.getOrElse(16) { "" }, fordLocationId = it.getOrElse(17) { "" },
             systemCostEur = it.getOrElse(18) { "0.0" }.toDoubleOrNull() ?: 0.0,
+            pvPeakKw = it.getOrElse(19) { "0.0" }.toDoubleOrNull() ?: 0.0,
+            pvTiltDeg = it.getOrElse(20) { "30" }.toIntOrNull() ?: 30,
+            pvAzimuthDeg = it.getOrElse(21) { "0" }.toIntOrNull() ?: 0,
         )
     },
 )

@@ -7,6 +7,7 @@ import com.jakober.energie.core.fritz.FritzBoxClient
 import com.jakober.energie.core.history.ChargeSession
 import com.jakober.energie.core.history.ChargeSessions
 import com.jakober.energie.core.history.DayStatistics
+import com.jakober.energie.core.history.DriveDay
 import com.jakober.energie.core.history.EnergyTotals
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
@@ -128,6 +129,11 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
                 ChargeSessions.of(samples)
             }
         }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Fahrtage des Autos ueber den ganzen Verlauf; die Statistik filtert den Zeitraum selbst. */
+    val driving: StateFlow<List<DriveDay>> = updates
+        .mapLatest { withContext(Dispatchers.IO) { runCatching { repo.driving() }.getOrDefault(emptyList()) } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** Der laufende Monat, fuer die Hochrechnung. */

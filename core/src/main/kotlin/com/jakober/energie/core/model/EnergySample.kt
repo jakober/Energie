@@ -40,6 +40,10 @@ data class EnergySample(
     val carPluggedIn: Boolean? = null,
     /** Ladeleistung des Autos in W, gemessen oder angenommen, nur wenn es zu Hause laedt. */
     val carChargePowerW: Double? = null,
+    /** Kilometerstand laut Fahrzeug, fuer die Fahrtstatistik. */
+    val carOdometerKm: Double? = null,
+    /** Energie im Fahrakku in kWh laut Fahrzeug. */
+    val carEnergyKwh: Double? = null,
 ) {
     /** Netzleistung, bevorzugt vom geeichten Zaehler, sonst von SENEC. */
     val gridPowerW: Double? get() = meterGridPowerW ?: senecGridPowerW

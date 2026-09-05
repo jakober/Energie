@@ -37,6 +37,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import com.jakober.energie.core.history.ChargeSession
 import com.jakober.energie.core.history.DayStatistics
+import com.jakober.energie.core.history.DriveDay
 import com.jakober.energie.core.history.EnergyTotals
 import com.jakober.energie.core.history.MonthForecast
 import com.jakober.energie.core.history.Savings
@@ -69,6 +70,7 @@ fun StatisticsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
     val sessions by vm.chargeSessions.collectAsStateWithLifecycle()
     val currentMonth by vm.currentMonth.collectAsStateWithLifecycle()
     val storedDays by vm.storedDays.collectAsStateWithLifecycle()
+    val driving by vm.driving.collectAsStateWithLifecycle()
 
     LazyColumn(
         Modifier.fillMaxSize(),
@@ -134,6 +136,11 @@ fun StatisticsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
 
         if (settings.carConnected || settings.fordConnected || (lifetime?.carChargeWh ?: 0.0) > 0) {
             item { CarStatsCard(periodTotals, lifetime, settings, sessions.size) }
+        }
+
+        if (driving.isNotEmpty()) {
+            val (from, to) = EnergieViewModel.bounds(date, range)
+            item { DrivingCard(driving.filter { it.date in from..to }, driving, settings, range) }
         }
     }
 }

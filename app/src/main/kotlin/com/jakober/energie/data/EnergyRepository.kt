@@ -4,6 +4,9 @@ import com.jakober.energie.core.fritz.FritzBoxClient
 import com.jakober.energie.core.fritz.FritzDevice
 import com.jakober.energie.core.fritz.SmartMeterReading
 import com.jakober.energie.core.history.DayStatistics
+import com.jakober.energie.core.history.DriveDay
+import com.jakober.energie.core.history.Driving
+import com.jakober.energie.core.history.DrivingState
 import com.jakober.energie.core.history.EnergyTotals
 import com.jakober.energie.core.history.HistoryStore
 import com.jakober.energie.core.model.EnergySample
@@ -168,6 +171,8 @@ class EnergyRepository(
             carCharging = carForSample?.isCharging,
             carPluggedIn = carForSample?.isPluggedIn,
             carChargePowerW = carPowerW,
+            carOdometerKm = carForSample?.extra?.odometerKm,
+            carEnergyKwh = carForSample?.extra?.energyRemainingKwh,
         )
 
         // Ladestart erkannt: aus dem Sprung im Hausverbrauch die echte Ladeleistung lernen.
@@ -581,9 +586,39 @@ class EnergyRepository(
 
     fun today(zone: TimeZone = TimeZone.currentSystemDefault()): LocalDate = clock.now().toLocalDateTime(zone).date
 
+    /**
+     * Fahrtage aus dem ganzen Verlauf. Der Tank-Mix des Akkus haengt von allem
+     * Vorherigen ab, darum laufen vergangene Tage einmal durch und bleiben im
+     * Cache; nur der heutige Tag wird jedes Mal frisch gerechnet.
+     */
+    private class DrivingCache(val upTo: LocalDate, val days: List<DriveDay>, val state: DrivingState)
+    private var drivingCache: DrivingCache? = null
+
+    @Synchronized
+    fun driving(zone: TimeZone = TimeZone.currentSystemDefault()): List<DriveDay> {
+        val today = today(zone)
+        val yesterday = LocalDate.fromEpochDays(today.toEpochDays() - 1)
+        var cache = drivingCache?.takeIf { it.upTo <= yesterday }
+        var days = cache?.days ?: emptyList()
+        var state = cache?.state ?: DrivingState()
+        val missing = history.days().sorted().filter { it <= yesterday && (cache == null || it > cache.upTo) }
+        if (missing.isNotEmpty() || cache == null) {
+            for (d in missing) {
+                val (dd, st) = Driving.of(history.day(d), state, zone)
+                days = days + dd
+                state = st
+            }
+            cache = DrivingCache(yesterday, days, state)
+            drivingCache = cache
+        }
+        val (todayDays, _) = Driving.of(history.day(today), state, zone)
+        return days + todayDays
+    }
+
     /** Nach einer Wiederherstellung: Statistik neu rechnen und die Ansicht anstossen. */
     fun historyChanged() {
         dayCache.clear()
+        drivingCache = null
         val latest = history.latest()
         _state.update { it.copy(sample = latest ?: it.sample, lastUpdate = clock.now()) }
     }

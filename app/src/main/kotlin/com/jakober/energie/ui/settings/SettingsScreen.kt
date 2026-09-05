@@ -231,6 +231,11 @@ fun SettingsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
                     "PV, Speicher und Montage zusammen. Daraus rechnet die Statistik, wie viel davon schon verdient ist.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                NumberField("Strom unterwegs in € je kWh (Ladesäule)", draft.carPublicPricePerKwh) { draft = draft.copy(carPublicPricePerKwh = it) }
+                Text(
+                    "Damit bewertet die Fahrtstatistik den Strom, der nicht zu Hause geladen wurde.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
 
@@ -438,6 +443,7 @@ private val SettingsSaver = androidx.compose.runtime.saveable.Saver<Settings, Li
             it.fordTokensJson, it.fordVin, it.fordLocationId, it.systemCostEur.toString(),
             it.pvPeakKw.toString(), it.pvTiltDeg.toString(), it.pvAzimuthDeg.toString(),
             it.pvPeakKw2.toString(), it.pvTiltDeg2.toString(), it.pvAzimuthDeg2.toString(),
+            it.carPublicPricePerKwh.toString(),
         )
     },
     restore = {
@@ -454,6 +460,7 @@ private val SettingsSaver = androidx.compose.runtime.saveable.Saver<Settings, Li
             pvPeakKw2 = it.getOrElse(22) { "0.0" }.toDoubleOrNull() ?: 0.0,
             pvTiltDeg2 = it.getOrElse(23) { "30" }.toIntOrNull() ?: 30,
             pvAzimuthDeg2 = it.getOrElse(24) { "0" }.toIntOrNull() ?: 0,
+            carPublicPricePerKwh = it.getOrElse(25) { "0.59" }.toDoubleOrNull() ?: 0.59,
         )
     },
 )

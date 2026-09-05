@@ -54,6 +54,8 @@ data class Settings(
     val carLearnedPowerW: Double = 0.0,
     /** Anschaffungskosten der Anlage in Euro fuer die Amortisation, 0 = nicht angegeben. */
     val systemCostEur: Double = 0.0,
+    /** Preis fuer unterwegs geladenen Strom in Euro je kWh (Saeule), fuer die Fahrtkosten. */
+    val carPublicPricePerKwh: Double = 0.59,
     /** FordPass (inoffiziell): Tokens als JSON, Fahrzeug und bevorzugter Ladeort. */
     val fordTokensJson: String = "",
     val fordVin: String = "",
@@ -132,6 +134,7 @@ class AppSettings(private val context: Context) {
             carFallbackPowerW = p[CAR_FALLBACK_POWER] ?: 2200,
             carLearnedPowerW = p[CAR_LEARNED_POWER] ?: 0.0,
             systemCostEur = p[SYSTEM_COST] ?: 0.0,
+            carPublicPricePerKwh = p[CAR_PUBLIC_PRICE] ?: 0.59,
             fordTokensJson = p[FORD_TOKENS] ?: "",
             fordVin = p[FORD_VIN] ?: "",
             fordLocationId = p[FORD_LOCATION] ?: "",
@@ -189,6 +192,7 @@ class AppSettings(private val context: Context) {
             // Fahrzeug-Zuordnung, Ford-Tokens, Automatik und Protokoll pflegt die App selbst - nicht ueberschreiben.
             p[CAR_FALLBACK_POWER] = s.carFallbackPowerW.coerceIn(0, 22_000)
             p[SYSTEM_COST] = s.systemCostEur.coerceAtLeast(0.0)
+            p[CAR_PUBLIC_PRICE] = s.carPublicPricePerKwh.coerceAtLeast(0.0)
             // Aendern sich Lage oder Groesse der Anlage, ist die alte Prognose hinfaellig.
             val pvChanged = p[PV_PEAK_KW] != s.pvPeakKw || p[PV_TILT] != s.pvTiltDeg || p[PV_AZIMUTH] != s.pvAzimuthDeg ||
                 p[PV_PEAK_KW2] != s.pvPeakKw2 || p[PV_TILT2] != s.pvTiltDeg2 || p[PV_AZIMUTH2] != s.pvAzimuthDeg2
@@ -213,6 +217,7 @@ class AppSettings(private val context: Context) {
         "keepDays" to s.keepDays.toString(), "smartcarAppId" to s.smartcarAppId, "smartcarClientId" to s.smartcarClientId,
         "smartcarVehicleId" to s.smartcarVehicleId, "smartcarUserId" to s.smartcarUserId, "carFallbackPowerW" to s.carFallbackPowerW.toString(),
         "carLearnedPowerW" to s.carLearnedPowerW.toString(), "systemCostEur" to s.systemCostEur.toString(),
+        "carPublicPricePerKwh" to s.carPublicPricePerKwh.toString(),
         "fordVin" to s.fordVin, "fordLocationId" to s.fordLocationId, "homeLat" to s.homeLat.toString(), "homeLon" to s.homeLon.toString(),
         "chargeRules" to rulesJson.encodeToString(ChargeRules.serializer(), s.chargeRules),
         "chargeLastCommandAt" to s.chargeLastCommandAt.toString(), "chargeLog" to s.chargeLog,
@@ -274,6 +279,7 @@ class AppSettings(private val context: Context) {
             str(SMARTCAR_APP_ID, "smartcarAppId", plain); str(SMARTCAR_CLIENT_ID, "smartcarClientId", plain)
             str(SMARTCAR_VEHICLE_ID, "smartcarVehicleId", plain); str(SMARTCAR_USER_ID, "smartcarUserId", plain)
             int(CAR_FALLBACK_POWER, "carFallbackPowerW"); dbl(CAR_LEARNED_POWER, "carLearnedPowerW"); dbl(SYSTEM_COST, "systemCostEur")
+            dbl(CAR_PUBLIC_PRICE, "carPublicPricePerKwh")
             str(FORD_VIN, "fordVin", plain); str(FORD_LOCATION, "fordLocationId", plain)
             dbl(HOME_LAT, "homeLat"); dbl(HOME_LON, "homeLon"); str(CHARGE_RULES, "chargeRules", plain)
             lng(CHARGE_LAST_CMD, "chargeLastCommandAt"); str(CHARGE_LOG, "chargeLog", plain); str(ALERTS, "alerts", plain); str(PLACES, "places", plain)
@@ -310,6 +316,7 @@ class AppSettings(private val context: Context) {
         val CAR_FALLBACK_POWER = intPreferencesKey("car_fallback_power")
         val CAR_LEARNED_POWER = doublePreferencesKey("car_learned_power")
         val SYSTEM_COST = doublePreferencesKey("system_cost_eur")
+        val CAR_PUBLIC_PRICE = doublePreferencesKey("car_public_price")
         val FORD_TOKENS = stringPreferencesKey("ford_tokens")
         val FORD_VIN = stringPreferencesKey("ford_vin")
         val FORD_LOCATION = stringPreferencesKey("ford_location")

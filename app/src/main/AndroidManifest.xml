@@ -38,6 +38,19 @@
             android:exported="false"
             android:label="Bei Ford anmelden" />
 
+        <!-- Homescreen-Widget (Glance). -->
+        <receiver
+            android:name=".widget.EnergieWidgetReceiver"
+            android:exported="true"
+            android:label="Energie">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/energie_widget_info" />
+        </receiver>
+
         <!-- Knopf "Jetzt laden" in der Benachrichtigung. -->
         <receiver
             android:name=".notify.ChargeActionReceiver"

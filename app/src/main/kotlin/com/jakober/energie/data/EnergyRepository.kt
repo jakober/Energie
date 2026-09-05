@@ -177,8 +177,12 @@ class EnergyRepository(
         _state.value = newState
         val automationLine = runCatching { runAutomation(s, newState) }.getOrNull()
         runCatching { runAlerts(newState, automationLine) }
+        if (gotSomething) onWidgetUpdate?.let { cb -> runCatching { cb(sample, newState.car) } }
         _state.value
     }
+
+    /** Wird nach jeder Messung gerufen, damit das Homescreen-Widget nachzieht. */
+    var onWidgetUpdate: (suspend (EnergySample, CarState?) -> Unit)? = null
 
     private var lastSenecOkAt: Instant? = null
     private var lastFritzOkAt: Instant? = null

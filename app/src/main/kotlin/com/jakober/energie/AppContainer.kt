@@ -6,6 +6,10 @@ import com.jakober.energie.data.AppSettings
 import com.jakober.energie.data.BackupManager
 import com.jakober.energie.data.EnergyRepository
 import com.jakober.energie.notify.Notifier
+import com.jakober.energie.ui.Format
+import com.jakober.energie.widget.EnergieWidget
+import com.jakober.energie.widget.WidgetState
+import androidx.glance.appwidget.updateAll
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
@@ -30,6 +34,10 @@ class AppContainer(context: Context) {
 
     val repository = EnergyRepository(settings, http, history).also { repo ->
         repo.onAlerts = { alerts -> notifier.showAll(alerts) }
+        repo.onWidgetUpdate = { sample, car ->
+            WidgetState.save(context, WidgetState.of(sample, car) { Format.power(it) })
+            EnergieWidget().updateAll(context)
+        }
     }
 
     val backup = BackupManager(context, settings, history, repository)

@@ -14,6 +14,7 @@ androidx-datastore = "1.1.7"
 androidx-security = "1.1.0-alpha07"
 androidx-work = "2.10.2"
 androidx-documentfile = "1.0.1"
+androidx-glance = "1.1.1"
 
 coroutines = "1.10.2"
 datetime = "0.6.2"
@@ -53,6 +54,7 @@ androidx-datastore-preferences = { module = "androidx.datastore:datastore-prefer
 androidx-security-crypto = { module = "androidx.security:security-crypto", version.ref = "androidx-security" }
 androidx-work-runtime = { module = "androidx.work:work-runtime-ktx", version.ref = "androidx-work" }
 androidx-documentfile = { module = "androidx.documentfile:documentfile", version.ref = "androidx-documentfile" }
+androidx-glance-appwidget = { module = "androidx.glance:glance-appwidget", version.ref = "androidx-glance" }
 
 vico-compose-m3 = { module = "com.patrykandpatrick.vico:compose-m3", version.ref = "vico" }
 

@@ -68,7 +68,10 @@ data class EnergyTotals(
                 mean(a.batteryPowerW, b.batteryPowerW)?.let {
                     if (it >= 0) chg += it * h else dis += -it * h
                 }
-                mean(a.carChargePowerW, b.carChargePowerW)?.let { carW ->
+                // Beim Auto heisst "kein Wert" nicht "unbekannt", sondern "laedt nicht":
+                // die Rampe auf null zaehlt halb, nicht mit voller Leistung weiter.
+                if (a.carChargePowerW != null || b.carChargePowerW != null) {
+                    val carW = ((a.carChargePowerW ?: 0.0) + (b.carChargePowerW ?: 0.0)) / 2
                     car += carW * h
                     val consW = mean(a.consumptionW, b.consumptionW)
                     val gridW = mean(a.gridPowerW, b.gridPowerW)?.coerceAtLeast(0.0)

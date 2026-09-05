@@ -4,8 +4,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.jakober.energie.AppContainer
 import com.jakober.energie.core.fritz.FritzBoxClient
+import com.jakober.energie.core.history.ChargeSession
+import com.jakober.energie.core.history.ChargeSessions
 import com.jakober.energie.core.history.DayStatistics
 import com.jakober.energie.core.history.EnergyTotals
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
 import com.jakober.energie.core.senec.SenecConnectClient
 import com.jakober.energie.core.smartcar.SmartcarClient
 import com.jakober.energie.data.CarCommand
@@ -108,6 +112,31 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
         .mapLatest { withContext(Dispatchers.IO) { repo.lifetimeTotals() } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    /** Ladevorgaenge des gewaehlten Tags bzw. Zeitraums. */
+    val chargeSessions: StateFlow<List<ChargeSession>> = combine(_selectedDate, _range, updates) { d, r, _ -> d to r }
+        .mapLatest { (d, r) ->
+            val (from, to) = bounds(d, r)
+            withContext(Dispatchers.IO) {
+                val zone = TimeZone.currentSystemDefault()
+                val samples = repo.history.range(from.atStartOfDayIn(zone), to.plus(1, DateTimeUnit.DAY).atStartOfDayIn(zone))
+                ChargeSessions.of(samples)
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Der laufende Monat, fuer die Hochrechnung. */
+    val currentMonth: StateFlow<RangeStatistics?> = updates
+        .mapLatest {
+            val (from, to) = bounds(repo.today(), Range.MONTH)
+            withContext(Dispatchers.IO) {
+                val list = ArrayList<DayStatistics>()
+                var day = from
+                while (day <= to) { list += repo.dayStatistics(day); day = day.plus(1, DateTimeUnit.DAY) }
+                RangeStatistics(from, to, list)
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
     val storedDays: StateFlow<Int> = updates
         .mapLatest { withContext(Dispatchers.IO) { container.history.days().size } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
@@ -154,6 +183,8 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
     fun goToday() { _selectedDate.value = repo.today() }
 
     val isToday: Boolean get() = _selectedDate.value == repo.today()
+
+    fun todayDate(): LocalDate = repo.today()
 
     // --- Einstellungen ---
 
@@ -356,6 +387,10 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
             container.settings.saveRules(fixed)
             runCatching { repo.refresh() }
         }
+    }
+
+    fun resetLearnedPower() {
+        viewModelScope.launch { container.settings.saveCarLearnedPower(0.0) }
     }
 
     fun saveAlerts(a: AlertSettings) {

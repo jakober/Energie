@@ -82,7 +82,7 @@ fun SettingsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
     val dirty = draft.copy(chargeRules = saved.chargeRules, chargeLastCommandAt = saved.chargeLastCommandAt, chargeOverride = saved.chargeOverride, chargeLog = saved.chargeLog,
         fordTokensJson = saved.fordTokensJson, fordVin = saved.fordVin, fordLocationId = saved.fordLocationId, smartcarVehicleId = saved.smartcarVehicleId, smartcarUserId = saved.smartcarUserId,
         backupTreeUri = saved.backupTreeUri, backupPassword = saved.backupPassword, backupLastAt = saved.backupLastAt, backupLastResult = saved.backupLastResult,
-        alerts = saved.alerts, alertState = saved.alertState) != saved
+        alerts = saved.alerts, alertState = saved.alertState, carLearnedPowerW = saved.carLearnedPowerW) != saved
 
     LaunchedEffect(Unit) { vm.clearTestResult() }
 
@@ -223,6 +223,11 @@ fun SettingsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
             EnergieCard(title = "Preise") {
                 NumberField("Strompreis in € je kWh", draft.pricePerKwh) { draft = draft.copy(pricePerKwh = it) }
                 NumberField("Einspeisevergütung in € je kWh", draft.feedInPerKwh) { draft = draft.copy(feedInPerKwh = it) }
+                NumberField("Anlagenkosten in € (optional, für die Amortisation)", draft.systemCostEur) { draft = draft.copy(systemCostEur = it) }
+                Text(
+                    "PV, Speicher und Montage zusammen. Daraus rechnet die Statistik, wie viel davon schon verdient ist.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
 
@@ -290,6 +295,14 @@ fun SettingsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
                     label = { Text("Angenommene Ladeleistung in W, falls das Auto keine meldet") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 )
+                if (saved.carLearnedPowerW > 0) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        Text("Gelernt aus dem Zähler: ${Format.power(saved.carLearnedPowerW)} - hat Vorrang.", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                        TextButton(onClick = vm::resetLearnedPower) { Text("Zurücksetzen") }
+                    }
+                } else {
+                    Text("Beim nächsten Ladestart zu Hause lernt die App die echte Ladeleistung aus dem Sprung am Zähler.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
                 if (dirty) {
                     Text("Erst speichern, dann verbinden und testen.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
                 }
@@ -369,7 +382,7 @@ private val SettingsSaver = androidx.compose.runtime.saveable.Saver<Settings, Li
             it.fritzHost, it.fritzUser, it.fritzPassword, it.senecKey, it.senecBaseUrl, it.pollSeconds.toString(),
             it.pricePerKwh.toString(), it.feedInPerKwh.toString(), it.keepDays.toString(),
             it.smartcarAppId, it.smartcarClientId, it.smartcarClientSecret, it.smartcarVehicleId, it.smartcarUserId, it.carFallbackPowerW.toString(),
-            it.fordTokensJson, it.fordVin, it.fordLocationId,
+            it.fordTokensJson, it.fordVin, it.fordLocationId, it.systemCostEur.toString(),
         )
     },
     restore = {
@@ -379,6 +392,7 @@ private val SettingsSaver = androidx.compose.runtime.saveable.Saver<Settings, Li
             smartcarAppId = it[9], smartcarClientId = it[10], smartcarClientSecret = it[11], smartcarVehicleId = it[12], smartcarUserId = it[13],
             carFallbackPowerW = it[14].toInt(),
             fordTokensJson = it.getOrElse(15) { "" }, fordVin = it.getOrElse(16) { "" }, fordLocationId = it.getOrElse(17) { "" },
+            systemCostEur = it.getOrElse(18) { "0.0" }.toDoubleOrNull() ?: 0.0,
         )
     },
 )

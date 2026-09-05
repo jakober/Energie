@@ -32,8 +32,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import com.jakober.energie.core.history.ChargeSession
 import com.jakober.energie.core.history.DayStatistics
 import com.jakober.energie.core.history.EnergyTotals
+import com.jakober.energie.core.history.MonthForecast
+import com.jakober.energie.core.history.Savings
 import com.jakober.energie.data.Settings
 import com.jakober.energie.ui.BigValue
 import com.jakober.energie.ui.EnergieCard
@@ -60,6 +66,9 @@ fun StatisticsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
     val rangeStats by vm.rangeStats.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
     val lifetime by vm.lifetime.collectAsStateWithLifecycle()
+    val sessions by vm.chargeSessions.collectAsStateWithLifecycle()
+    val currentMonth by vm.currentMonth.collectAsStateWithLifecycle()
+    val storedDays by vm.storedDays.collectAsStateWithLifecycle()
 
     LazyColumn(
         Modifier.fillMaxSize(),
@@ -106,9 +115,119 @@ fun StatisticsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
         }
 
         val periodTotals = if (range == Range.DAY) day?.totals else rangeStats?.totals
-        if (settings.carConnected || (lifetime?.carChargeWh ?: 0.0) > 0) {
-            item { CarStatsCard(periodTotals, lifetime, settings) }
+        val hasData = if (range == Range.DAY) (day?.sampleCount ?: 0) > 0 else rangeStats?.daysWithData?.isNotEmpty() == true
+
+        // Hochrechnung: heute oder im laufenden Monat.
+        val today = vm.isToday || (range == Range.MONTH && EnergieViewModel.bounds(date, Range.MONTH) == EnergieViewModel.bounds(vm.todayDate(), Range.MONTH))
+        val month = currentMonth
+        if (today && month != null && month.daysWithData.isNotEmpty()) {
+            item { MonthForecastCard(month, settings) }
         }
+
+        if (hasData && periodTotals != null) {
+            item { SavingsCard(periodTotals, lifetime, storedDays, settings) }
+        }
+
+        if (sessions.isNotEmpty()) {
+            item { ChargeSessionsCard(sessions, settings) }
+        }
+
+        if (settings.carConnected || settings.fordConnected || (lifetime?.carChargeWh ?: 0.0) > 0) {
+            item { CarStatsCard(periodTotals, lifetime, settings, sessions.size) }
+        }
+    }
+}
+
+@Composable
+private fun MonthForecastCard(m: RangeStatistics, settings: Settings) {
+    val f = MonthForecast.of(m.totals, m.daysWithData.size, m.days.size, settings.pricePerKwh, settings.feedInPerKwh) ?: return
+    EnergieCard(title = "Hochrechnung ${Format.month(m.from)}", accent = EnergyColors.grid) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            BigValue(Format.euro(f.gridCostEur), "Stromkosten", EnergyColors.grid, Modifier.weight(1f))
+            BigValue(Format.euro(f.feedInRevenueEur), "Einspeisevergütung", EnergyColors.export, Modifier.weight(1f))
+            BigValue(Format.euro(f.billEur), if (f.billEur >= 0) "Saldo zu zahlen" else "Saldo Gutschrift", Modifier.weight(1f))
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            BigValue(Format.energy(f.consumptionWh), "Verbrauch", EnergyColors.house, Modifier.weight(1f))
+            BigValue(Format.energy(f.productionWh), "Erzeugung", EnergyColors.sun, Modifier.weight(1f))
+            BigValue(Format.energy(f.gridImportWh), "Netzbezug", EnergyColors.grid, Modifier.weight(1f))
+        }
+        Text(
+            "Aus ${f.daysWithData} von ${f.daysInMonth} Tagen linear auf den Monat hochgerechnet. Wetter und Ladevorgänge verschieben das noch.",
+            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun SavingsCard(period: EnergyTotals, lifetime: EnergyTotals?, storedDays: Int, settings: Settings) {
+    val p = Savings.of(period, settings.pricePerKwh, settings.feedInPerKwh)
+    val l = lifetime?.let { Savings.of(it, settings.pricePerKwh, settings.feedInPerKwh) }
+    val cost = settings.systemCostEur.takeIf { it > 0 }
+    EnergieCard(title = "Ersparnis", accent = EnergyColors.sun) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            BigValue(Format.euro(p.selfConsumptionSavedEur), "Nicht gekauft", EnergyColors.sun, Modifier.weight(1f))
+            BigValue(Format.euro(p.feedInRevenueEur), "Vergütung", EnergyColors.export, Modifier.weight(1f))
+            BigValue(Format.euro(p.benefitEur), "Nutzen im Zeitraum", EnergyColors.battery, Modifier.weight(1f))
+        }
+        if (l != null) {
+            ValueRow("Nutzen seit Beginn", Format.euro(l.benefitEur), "$storedDays Tage aufgezeichnet", color = EnergyColors.battery)
+            if (storedDays > 0) ValueRow("Je Tag im Mittel", Format.euro(l.benefitEur / storedDays), "≈ ${Format.euro(l.benefitEur / storedDays * 365.25)} im Jahr")
+            if (cost != null) {
+                val share = Savings.amortisationShare(l.benefitEur, cost)
+                Spacer(Modifier.height(4.dp))
+                ShareBar("Amortisation von ${Format.euro(cost)}", share, EnergyColors.sun)
+                Savings.yearsToAmortise(l.benefitEur, storedDays, cost)?.let {
+                    ValueRow("Bei gleichem Tempo amortisiert nach", Format.years(it), "gerechnet ab dem ersten Messpunkt, nicht ab Inbetriebnahme")
+                }
+            } else {
+                Text("Anlagenkosten unter Einstellungen → Preise eintragen, dann rechnet die App die Amortisation.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChargeSessionsCard(sessions: List<ChargeSession>, settings: Settings) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    val shown = if (expanded) sessions.asReversed() else sessions.asReversed().take(5)
+    val total = sessions.sumOf { it.energyWh }
+    EnergieCard(title = "Ladevorgänge", accent = EnergyColors.car) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            BigValue(sessions.size.toString(), if (sessions.size == 1) "Vorgang" else "Vorgänge", EnergyColors.car, Modifier.weight(1f))
+            BigValue(Format.energy(total), "Geladen", EnergyColors.car, Modifier.weight(1f))
+            BigValue(Format.euro(sessions.sumOf { it.costPaid(settings.pricePerKwh) }), "Netzanteil bezahlt", EnergyColors.grid, Modifier.weight(1f))
+        }
+        shown.forEach { c -> ChargeSessionRow(c, settings) }
+        if (sessions.size > 5) {
+            TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "Weniger anzeigen" else "Alle ${sessions.size} anzeigen") }
+        }
+    }
+}
+
+@Composable
+private fun ChargeSessionRow(c: ChargeSession, settings: Settings) {
+    val zone = TimeZone.currentSystemDefault()
+    val day = c.start.toLocalDateTime(zone).date
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "${Format.dateShort(day)} ${Format.time(c.start)}–${if (c.ongoing) "läuft" else Format.time(c.end)}",
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                val soc = if (c.socStart != null && c.socEnd != null) " · Auto ${Format.percentValue(c.socStart)} → ${Format.percentValue(c.socEnd)}" else ""
+                Text(
+                    "${Format.duration(c.durationMinutes)}" + (c.avgPowerW?.let { " · ${Format.power(it)}" } ?: "") + soc,
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Text(Format.energy(c.energyWh), style = MaterialTheme.typography.titleMedium, color = EnergyColors.car)
+                Text("${Format.euro(c.costPaid(settings.pricePerKwh))} Netz", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        ShareBar("Sonne & Speicher", c.solarShare, EnergyColors.sun)
     }
 }
 
@@ -237,10 +356,10 @@ private fun androidx.compose.foundation.lazy.LazyListScope.rangeItems(r: RangeSt
 }
 
 @Composable
-private fun CarStatsCard(period: EnergyTotals?, lifetime: EnergyTotals?, settings: Settings) {
+private fun CarStatsCard(period: EnergyTotals?, lifetime: EnergyTotals?, settings: Settings, sessionCount: Int) {
     EnergieCard(title = "Auto laden", accent = EnergyColors.car) {
         if (period != null && period.carChargeWh > 50) {
-            Text("Dieser Zeitraum", style = MaterialTheme.typography.titleSmall)
+            Text(if (sessionCount > 0) "Dieser Zeitraum, $sessionCount Ladevorgänge" else "Dieser Zeitraum", style = MaterialTheme.typography.titleSmall)
             CarStatsBlock(period, settings)
             Spacer(Modifier.height(8.dp))
         } else {

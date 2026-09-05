@@ -79,4 +79,10 @@ object Format {
     }
 
     fun hourLabel(h: Int): String = String.format(de, "%02d", h)
+
+    /** "45 min", "2 h 10 min" */
+    fun duration(minutes: Long): String = if (minutes < 60) "$minutes min" else "${minutes / 60} h ${minutes % 60} min"
+
+    /** "2,3 Jahre" */
+    fun years(y: Double?): String = if (y == null) "–" else String.format(de, "%.1f Jahre", y)
 }

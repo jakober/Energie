@@ -39,6 +39,7 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import com.jakober.energie.core.alerts.Alert
+import com.jakober.energie.core.history.ChargePowerLearner
 import com.jakober.energie.core.alerts.AlertEngine
 import com.jakober.energie.core.alerts.AlertInput
 import kotlin.time.Duration.Companion.minutes
@@ -119,7 +120,7 @@ class EnergyRepository(
         } else senec?.system?.meter?.consumption
 
         val consumptionNow = consumption
-        val carPowerW = carChargePower(carForSample, consumptionNow, s.carFallbackPowerW.toDouble())
+        val carPowerW = carChargePower(carForSample, consumptionNow, s.carAssumedPowerW)
 
         val sample = EnergySample(
             at = now,
@@ -139,6 +140,18 @@ class EnergyRepository(
             carPluggedIn = carForSample?.isPluggedIn,
             carChargePowerW = carPowerW,
         )
+
+        // Ladestart erkannt: aus dem Sprung im Hausverbrauch die echte Ladeleistung lernen.
+        val wasCharging = (_state.value.sample?.carChargePowerW ?: 0.0) > 0
+        if (carPowerW != null && !wasCharging && sample.hasMeter) {
+            runCatching {
+                val before = history.range(now - 35.minutes, now)
+                ChargePowerLearner.estimate(before, sample)?.let { learned ->
+                    val blended = ChargePowerLearner.blend(s.carLearnedPowerW.takeIf { it > 0 }, learned)
+                    settings.saveCarLearnedPower(blended)
+                }
+            }
+        }
 
         val gotSomething = sample.hasSenec || sample.hasMeter
         if (gotSomething && shouldStore(now)) {
@@ -219,7 +232,7 @@ class EnergyRepository(
             carSocPercent = car.socPercent,
             carPluggedIn = car.isPluggedIn,
             carCharging = car.isCharging,
-            carChargePowerW = sample?.carChargePowerW ?: car.chargePowerW ?: s.carFallbackPowerW.toDouble(),
+            carChargePowerW = sample?.carChargePowerW ?: car.chargePowerW ?: s.carAssumedPowerW,
             lastCommandAt = s.chargeLastCommandAt.takeIf { it > 0 }?.let { Instant.fromEpochSeconds(it) },
             overrideFullCharge = s.chargeOverride && car.isPluggedIn != false,
         )

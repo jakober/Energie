@@ -14,7 +14,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AcUnit
 import androidx.compose.material.icons.rounded.Cloud
-import androidx.compose.material.icons.rounded.Foggy
 import androidx.compose.material.icons.rounded.Grain
 import androidx.compose.material.icons.rounded.Thunderstorm
 import androidx.compose.material.icons.rounded.WaterDrop
@@ -117,7 +116,7 @@ private fun weatherIcon(cls: WeatherClass?): Pair<ImageVector, Color> = when (cl
     WeatherClass.SUN -> Icons.Rounded.WbSunny to EnergyColors.sun
     WeatherClass.PARTLY -> Icons.Rounded.WbCloudy to EnergyColors.sun.copy(alpha = 0.85f)
     WeatherClass.CLOUDS -> Icons.Rounded.Cloud to EnergyColors.neutral
-    WeatherClass.FOG -> Icons.Rounded.Foggy to EnergyColors.neutral
+    WeatherClass.FOG -> Icons.Rounded.Cloud to EnergyColors.neutral.copy(alpha = 0.6f)
     WeatherClass.DRIZZLE -> Icons.Rounded.Grain to EnergyColors.grid
     WeatherClass.RAIN -> Icons.Rounded.WaterDrop to EnergyColors.grid
     WeatherClass.SNOW -> Icons.Rounded.AcUnit to EnergyColors.export

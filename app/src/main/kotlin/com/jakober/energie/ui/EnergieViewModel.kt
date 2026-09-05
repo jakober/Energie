@@ -379,11 +379,14 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
             runCatching { repo.fordCommand(s, command) }
                 .onSuccess { r ->
                     _fordRaw.value = r.body
-                    _fordResult.value = if (r.accepted) "${command.label}: Ford hat den Befehl angenommen (HTTP ${r.status}). In 1–2 Minuten in der FordPass-App prüfen."
-                    else "${command.label}: abgelehnt mit HTTP ${r.status}. Rohantwort unten."
+                    _fordResult.value = when {
+                        r.accepted && command == FordCommand.STATUS_REFRESH -> "Auto geweckt, neuer Zustand kommt in etwa 15 Sekunden."
+                        r.accepted -> "${command.label}: Ford hat den Befehl angenommen (HTTP ${r.status}). In 1–2 Minuten in der FordPass-App prüfen."
+                        else -> "${command.label}: abgelehnt mit HTTP ${r.status}. Rohantwort unten."
+                    }
                     if (r.accepted) {
                         // Neuen Zustand bald nachlesen, damit Verriegelung oder Ladestatus in der Karte nachziehen.
-                        delay(12.seconds)
+                        delay(if (command == FordCommand.STATUS_REFRESH) 15.seconds else 12.seconds)
                         repo.forceCarOnNextRefresh()
                         runCatching { repo.refresh() }
                     }

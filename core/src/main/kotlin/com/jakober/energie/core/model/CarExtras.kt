@@ -28,6 +28,10 @@ data class CarExtras(
     val speedKmh: Double? = null,
     /** Alle skalaren Messwerte flach, Schluessel -> Text, fuer die Vollansicht. */
     val allMetrics: Map<String, String> = emptyMap(),
+    /** Zeitstempel je Messwert, wie Ford ihn liefert (updateTime), ISO-Text. */
+    val metricTimes: Map<String, String> = emptyMap(),
+    /** Wann Ford die Verriegelung zuletzt gemeldet hat. */
+    val lockUpdatedAt: kotlinx.datetime.Instant? = null,
 ) {
     val openDoors: List<String> get() = doors.filterValues { it.uppercase() != "CLOSED" && it.uppercase() != "UNKNOWN" }.keys.toList()
     val openWindows: List<String> get() = windows.filterValues { v -> v.uppercase().let { it != "CLOSED" && it != "FULLY_CLOSED" && it != "UNKNOWN" && it != "FALSE" && it != "0" } }.keys.toList()

@@ -18,6 +18,7 @@ import io.ktor.http.parameters
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.Clock
+import kotlinx.datetime.Instant
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -253,13 +254,21 @@ class FordPassClient(
             return out
         }
         val all = LinkedHashMap<String, String>()
+        val times = LinkedHashMap<String, String>()
         for ((key, el) in metrics) {
             when (el) {
-                is JsonObject -> scalarOf(el["value"])?.let { all[key] = it }
-                is JsonArray -> perPart(key).forEach { (part, v) -> all["$key[$part]"] = v }
+                is JsonObject -> {
+                    scalarOf(el["value"])?.let { all[key] = it }
+                    (el["updateTime"] as? JsonPrimitive)?.contentOrNull?.let { times[key] = it }
+                }
+                is JsonArray -> {
+                    perPart(key).forEach { (part, v) -> all["$key[$part]"] = v }
+                    el.filterIsInstance<JsonObject>().mapNotNull { (it["updateTime"] as? JsonPrimitive)?.contentOrNull }.maxOrNull()?.let { times[key] = it }
+                }
                 else -> {}
             }
         }
+        val lockUpdatedAt = times["doorLockStatus"]?.let { runCatching { Instant.parse(it) }.getOrNull() }
         return CarExtras(
             odometerKm = metricNumber("odometer"),
             battery12V = metricNumber("batteryVoltage"),
@@ -277,6 +286,8 @@ class FordPassClient(
             oilLifePercent = metricNumber("oilLifeRemaining"),
             speedKmh = metricNumber("speed"),
             allMetrics = all,
+            metricTimes = times,
+            lockUpdatedAt = lockUpdatedAt,
         )
     }
 
@@ -327,6 +338,8 @@ class FordPassClient(
      */
     suspend fun lock(vin: String) = doorCommand(vin, "lock")
     suspend fun unlock(vin: String) = doorCommand(vin, "unlock")
+    /** Weckt das Auto und laesst es seinen Zustand neu melden (wie das Ziehen in der FordPass-App). */
+    suspend fun statusRefresh(vin: String) = doorCommand(vin, "statusRefresh")
 
     private suspend fun doorCommand(vin: String, type: String): FordCommandResult {
         val first = command(vin, type, version = null)

@@ -3,6 +3,7 @@ package com.jakober.energie
 import android.content.Context
 import com.jakober.energie.core.history.HistoryStore
 import com.jakober.energie.data.AppSettings
+import com.jakober.energie.data.BackupManager
 import com.jakober.energie.data.EnergyRepository
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
@@ -25,4 +26,6 @@ class AppContainer(context: Context) {
     val history = HistoryStore(File(context.filesDir, "verlauf"))
 
     val repository = EnergyRepository(settings, http, history)
+
+    val backup = BackupManager(context, settings, history, repository)
 }

@@ -54,6 +54,13 @@ object Format {
         return String.format(de, "%02d:%02d", t.hour, t.minute)
     }
 
+    /** "Fr, 4. Sep 23:12" */
+    fun dateTime(at: Instant?): String {
+        if (at == null) return "–"
+        val l = at.toLocalDateTime(zone)
+        return "${dayShort.format(l.date.toJavaLocalDate())} ${time(at)}"
+    }
+
     fun dateLong(d: LocalDate): String = dayLong.format(d.toJavaLocalDate())
     fun dateShort(d: LocalDate): String = dayShort.format(d.toJavaLocalDate())
     fun dateNum(d: LocalDate): String = dayNum.format(d.toJavaLocalDate())

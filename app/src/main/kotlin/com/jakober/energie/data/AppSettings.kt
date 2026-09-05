@@ -58,7 +58,13 @@ data class Settings(
     val chargeOverride: Boolean = false,
     /** Letzte Entscheidungen der Automatik, neueste zuerst, eine je Zeile. */
     val chargeLog: String = "",
+    /** Sicherung: Zielordner (SAF-Baum-URI), Passwort fuer die Zugangsdaten, letztes Ergebnis. */
+    val backupTreeUri: String = "",
+    val backupPassword: String = "",
+    val backupLastAt: Long = 0,
+    val backupLastResult: String = "",
 ) {
+    val backupConfigured: Boolean get() = backupTreeUri.isNotBlank() && backupPassword.length >= 8
     val fordConnected: Boolean get() = fordTokensJson.isNotBlank() && fordVin.isNotBlank()
     val fritzConfigured: Boolean get() = fritzHost.isNotBlank() && fritzPassword.isNotBlank()
     val senecConfigured: Boolean get() = senecKey.isNotBlank()
@@ -100,6 +106,10 @@ class AppSettings(private val context: Context) {
             chargeLastCommandAt = p[CHARGE_LAST_CMD] ?: 0,
             chargeOverride = p[CHARGE_OVERRIDE] ?: false,
             chargeLog = p[CHARGE_LOG] ?: "",
+            backupTreeUri = p[BACKUP_TREE] ?: "",
+            backupPassword = p[BACKUP_PASSWORD] ?: "",
+            backupLastAt = p[BACKUP_LAST_AT] ?: 0,
+            backupLastResult = p[BACKUP_LAST_RESULT] ?: "",
         )
     }
 
@@ -126,6 +136,23 @@ class AppSettings(private val context: Context) {
 
     suspend fun saveRules(rules: ChargeRules) { context.dataStore.edit { it[CHARGE_RULES] = rulesJson.encodeToString(ChargeRules.serializer(), rules) } }
 
+    /** Einstellungen ohne Geheimnisse als flache Textwerte, fuer die Sicherung. */
+    fun plainForBackup(s: Settings): Map<String, String> = linkedMapOf(
+        "fritzHost" to s.fritzHost, "fritzUser" to s.fritzUser, "senecBaseUrl" to s.senecBaseUrl,
+        "pollSeconds" to s.pollSeconds.toString(), "pricePerKwh" to s.pricePerKwh.toString(), "feedInPerKwh" to s.feedInPerKwh.toString(),
+        "keepDays" to s.keepDays.toString(), "smartcarAppId" to s.smartcarAppId, "smartcarClientId" to s.smartcarClientId,
+        "smartcarVehicleId" to s.smartcarVehicleId, "smartcarUserId" to s.smartcarUserId, "carFallbackPowerW" to s.carFallbackPowerW.toString(),
+        "fordVin" to s.fordVin, "fordLocationId" to s.fordLocationId, "homeLat" to s.homeLat.toString(), "homeLon" to s.homeLon.toString(),
+        "chargeRules" to rulesJson.encodeToString(ChargeRules.serializer(), s.chargeRules),
+        "chargeLastCommandAt" to s.chargeLastCommandAt.toString(), "chargeLog" to s.chargeLog,
+    )
+
+    /** Die Geheimnisse, die nur verschluesselt in die Sicherung duerfen. */
+    fun secretsForBackup(s: Settings): Map<String, String> = linkedMapOf(
+        "senecKey" to s.senecKey, "fritzPassword" to s.fritzPassword,
+        "smartcarClientSecret" to s.smartcarClientSecret, "fordTokensJson" to s.fordTokensJson,
+    )
+
     suspend fun saveChargeOverride(on: Boolean) { context.dataStore.edit { it[CHARGE_OVERRIDE] = on } }
 
     suspend fun noteChargeCommand(atEpochSeconds: Long) { context.dataStore.edit { it[CHARGE_LAST_CMD] = atEpochSeconds } }
@@ -147,6 +174,37 @@ class AppSettings(private val context: Context) {
     suspend fun saveHome(lat: Double, lon: Double) { context.dataStore.edit { it[HOME_LAT] = lat; it[HOME_LON] = lon } }
 
     suspend fun clearFord() { context.dataStore.edit { it.remove(FORD_TOKENS); it.remove(FORD_VIN); it.remove(FORD_LOCATION) } }
+
+    suspend fun saveBackupTarget(treeUri: String, password: String) {
+        context.dataStore.edit { p -> p[BACKUP_TREE] = treeUri; p[BACKUP_PASSWORD] = password }
+    }
+
+    suspend fun noteBackup(atEpochSeconds: Long, result: String) {
+        context.dataStore.edit { p -> p[BACKUP_LAST_AT] = atEpochSeconds; p[BACKUP_LAST_RESULT] = result }
+    }
+
+    /**
+     * Uebernimmt Werte aus einer Sicherung. `plain` sind die unverschluesselt
+     * gesicherten Einstellungen, `secrets` die entschluesselten Zugangsdaten
+     * (null, wenn der Nutzer sie nicht wiederherstellen will).
+     */
+    suspend fun restore(plain: Map<String, String>, secrets: Map<String, String>?) {
+        context.dataStore.edit { p ->
+            fun str(key: Preferences.Key<String>, name: String, from: Map<String, String>?) { from?.get(name)?.let { p[key] = it } }
+            fun int(key: Preferences.Key<Int>, name: String) { plain[name]?.toIntOrNull()?.let { p[key] = it } }
+            fun dbl(key: Preferences.Key<Double>, name: String) { plain[name]?.toDoubleOrNull()?.let { p[key] = it } }
+            fun lng(key: Preferences.Key<Long>, name: String) { plain[name]?.toLongOrNull()?.let { p[key] = it } }
+            str(FRITZ_HOST, "fritzHost", plain); str(FRITZ_USER, "fritzUser", plain); str(SENEC_BASE_URL, "senecBaseUrl", plain)
+            int(POLL_SECONDS, "pollSeconds"); dbl(PRICE_PER_KWH, "pricePerKwh"); dbl(FEED_IN_PER_KWH, "feedInPerKwh"); int(KEEP_DAYS, "keepDays")
+            str(SMARTCAR_APP_ID, "smartcarAppId", plain); str(SMARTCAR_CLIENT_ID, "smartcarClientId", plain)
+            str(SMARTCAR_VEHICLE_ID, "smartcarVehicleId", plain); str(SMARTCAR_USER_ID, "smartcarUserId", plain)
+            int(CAR_FALLBACK_POWER, "carFallbackPowerW"); str(FORD_VIN, "fordVin", plain); str(FORD_LOCATION, "fordLocationId", plain)
+            dbl(HOME_LAT, "homeLat"); dbl(HOME_LON, "homeLon"); str(CHARGE_RULES, "chargeRules", plain)
+            lng(CHARGE_LAST_CMD, "chargeLastCommandAt"); str(CHARGE_LOG, "chargeLog", plain)
+            str(SENEC_KEY, "senecKey", secrets); str(FRITZ_PASSWORD, "fritzPassword", secrets)
+            str(SMARTCAR_CLIENT_SECRET, "smartcarClientSecret", secrets); str(FORD_TOKENS, "fordTokensJson", secrets)
+        }
+    }
 
     /** Merkt sich das verbundene Fahrzeug. */
     suspend fun saveCar(vehicleId: String, userId: String?) {
@@ -181,6 +239,10 @@ class AppSettings(private val context: Context) {
         val CHARGE_LAST_CMD = longPreferencesKey("charge_last_cmd")
         val CHARGE_OVERRIDE = booleanPreferencesKey("charge_override")
         val CHARGE_LOG = stringPreferencesKey("charge_log")
+        val BACKUP_TREE = stringPreferencesKey("backup_tree")
+        val BACKUP_PASSWORD = stringPreferencesKey("backup_password")
+        val BACKUP_LAST_AT = longPreferencesKey("backup_last_at")
+        val BACKUP_LAST_RESULT = stringPreferencesKey("backup_last_result")
         private val rulesJson = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     }
 }

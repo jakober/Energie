@@ -364,6 +364,54 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    // --- Sicherung ---
+
+    private val _backupStatus = MutableStateFlow<String?>(null)
+    val backupStatus: StateFlow<String?> = _backupStatus
+    private val _backupBusy = MutableStateFlow(false)
+    val backupBusy: StateFlow<Boolean> = _backupBusy
+
+    fun setBackupTarget(treeUri: String, password: String) {
+        viewModelScope.launch {
+            container.settings.saveBackupTarget(treeUri, password)
+            _backupStatus.value = when {
+                treeUri.isBlank() -> "Passwort gespeichert. Jetzt noch einen Ordner wählen."
+                password.length < 8 -> "Ordner gespeichert. Jetzt noch ein Passwort mit mindestens 8 Zeichen setzen."
+                else -> "Sicherung eingerichtet, läuft täglich nachts im WLAN."
+            }
+        }
+    }
+
+    fun backupNow() {
+        viewModelScope.launch {
+            _backupBusy.value = true
+            _backupStatus.value = "Sichere …"
+            runCatching { container.backup.backupNow() }
+                .onSuccess { _backupStatus.value = "Gesichert: ${it.fileName} (${it.days} Tage, ${it.bytes / 1024} kB)." }
+                .onFailure { _backupStatus.value = "Fehler: ${it.message ?: it}" }
+            _backupBusy.value = false
+        }
+    }
+
+    fun restoreBackup(file: android.net.Uri, password: String?) {
+        viewModelScope.launch {
+            _backupBusy.value = true
+            _backupStatus.value = "Stelle wieder her …"
+            runCatching { container.backup.restore(file, password) }
+                .onSuccess { r ->
+                    _backupStatus.value = buildString {
+                        append("Wiederhergestellt: ${r.days} Tage Verlauf")
+                        if (r.settingsRestored) append(", Einstellungen")
+                        if (r.secretsRestored) append(", Zugangsdaten")
+                        append(".")
+                    }
+                    runCatching { repo.refresh() }
+                }
+                .onFailure { _backupStatus.value = "Fehler: ${it.message ?: it}" }
+            _backupBusy.value = false
+        }
+    }
+
     fun fordLogout() {
         viewModelScope.launch {
             container.settings.clearFord()

@@ -2,6 +2,7 @@ package com.jakober.energie
 
 import android.app.Application
 import androidx.work.Configuration
+import com.jakober.energie.work.BackupWorker
 import com.jakober.energie.work.PollWorker
 
 class EnergieApp : Application(), Configuration.Provider {
@@ -13,6 +14,7 @@ class EnergieApp : Application(), Configuration.Provider {
         super.onCreate()
         container = AppContainer(this)
         PollWorker.schedule(this)
+        BackupWorker.schedule(this) // prueft selbst, ob eine Sicherung eingerichtet ist
     }
 
     override val workManagerConfiguration: Configuration

@@ -67,6 +67,8 @@ fun SettingsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
     val carRaw by vm.carRaw.collectAsStateWithLifecycle()
     val fordResult by vm.fordResult.collectAsStateWithLifecycle()
     val fordRaw by vm.fordRaw.collectAsStateWithLifecycle()
+    val backupStatus by vm.backupStatus.collectAsStateWithLifecycle()
+    val backupBusy by vm.backupBusy.collectAsStateWithLifecycle()
     var showFordRaw by rememberSaveable { mutableStateOf(false) }
     var fordPaste by rememberSaveable { mutableStateOf("") }
     val fordLogin = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -78,7 +80,8 @@ fun SettingsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
     // Nur die hier editierbaren Felder vergleichen; Automatik, Ford-Tokens und Protokoll
     // aendern sich im Hintergrund und gehoeren nicht zum Entwurf.
     val dirty = draft.copy(chargeRules = saved.chargeRules, chargeLastCommandAt = saved.chargeLastCommandAt, chargeOverride = saved.chargeOverride, chargeLog = saved.chargeLog,
-        fordTokensJson = saved.fordTokensJson, fordVin = saved.fordVin, fordLocationId = saved.fordLocationId, smartcarVehicleId = saved.smartcarVehicleId, smartcarUserId = saved.smartcarUserId) != saved
+        fordTokensJson = saved.fordTokensJson, fordVin = saved.fordVin, fordLocationId = saved.fordLocationId, smartcarVehicleId = saved.smartcarVehicleId, smartcarUserId = saved.smartcarUserId,
+        backupTreeUri = saved.backupTreeUri, backupPassword = saved.backupPassword, backupLastAt = saved.backupLastAt, backupLastResult = saved.backupLastResult) != saved
 
     LaunchedEffect(Unit) { vm.clearTestResult() }
 
@@ -233,6 +236,17 @@ fun SettingsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+        }
+
+        item {
+            BackupCard(
+                saved = saved,
+                status = backupStatus,
+                busy = backupBusy,
+                onTarget = vm::setBackupTarget,
+                onBackupNow = vm::backupNow,
+                onRestore = vm::restoreBackup,
+            )
         }
 
         item {

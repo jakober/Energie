@@ -410,6 +410,13 @@ class EnergyRepository(
 
     fun today(zone: TimeZone = TimeZone.currentSystemDefault()): LocalDate = clock.now().toLocalDateTime(zone).date
 
+    /** Nach einer Wiederherstellung: Statistik neu rechnen und die Ansicht anstossen. */
+    fun historyChanged() {
+        dayCache.clear()
+        val latest = history.latest()
+        _state.update { it.copy(sample = latest ?: it.sample, lastUpdate = clock.now()) }
+    }
+
     suspend fun prune() {
         val s = settings.current()
         withContext(Dispatchers.IO) { history.prune(today(), s.keepDays) }

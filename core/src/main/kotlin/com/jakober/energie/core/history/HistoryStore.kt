@@ -62,6 +62,15 @@ class HistoryStore(
             ?.mapNotNull { runCatching { LocalDate.parse(it.name.removeSuffix(".jsonl")) }.getOrNull() }
             ?.sortedDescending() ?: emptyList()
 
+    /** Alle Tagesdateien, aelteste zuerst - fuer die Sicherung. */
+    fun files(): List<File> = days().sorted().map { File(dir, "$it.jsonl") }
+
+    /** Legt eine Tagesdatei aus einer Sicherung ab; eine vorhandene wird ersetzt. */
+    fun importDay(date: LocalDate, content: ByteArray) {
+        dir.mkdirs()
+        File(dir, "$date.jsonl").writeBytes(content)
+    }
+
     /** Loescht Dateien, die aelter sind als `keepDays` Tage. */
     fun prune(today: LocalDate, keepDays: Int) {
         val cutoff = LocalDate.fromEpochDays(today.toEpochDays() - keepDays)

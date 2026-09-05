@@ -48,7 +48,9 @@ class PvForecastTest {
         assertEquals(1800.0, today.irradianceWhPerM2)
         assertEquals(900.0, today.irradiance2WhPerM2)
         // Ost 4,86 kWp, West 4,05 kWp: (1,8*4,86 + 0,9*4,05) * 0,8 = 9,9144
-        assertEquals(9.9144, today.energyKwh(4.86, 4.05, calibration = 1.0), 1e-6)
+        assertEquals(9.9144, today.energyKwhTwoSides(4.86, 4.05, calibration = 1.0), 1e-6)
+        // Ohne zweite Seite muss dieselbe Zahl herauskommen wie bei der einfachen Rechnung.
+        assertEquals(today.energyKwh(4.86), today.energyKwhTwoSides(4.86, 0.0, calibration = 1.0), 1e-9)
     }
 
     @Test

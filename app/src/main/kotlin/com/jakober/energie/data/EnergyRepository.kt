@@ -182,6 +182,10 @@ class EnergyRepository(
             lastUpdate = if (gotSomething) now else _state.value.lastUpdate,
             refreshing = false,
             senecRaw = senec?.raw ?: _state.value.senecRaw,
+            automationStatus = _state.value.automationStatus,
+            pvPeakEstimateKw = _state.value.pvPeakEstimateKw,
+            forecastError = _state.value.forecastError,
+            forecastRaw = _state.value.forecastRaw,
         )
         if (senec != null) lastSenecOkAt = now
         if (fritzData != null) lastFritzOkAt = now
@@ -236,7 +240,7 @@ class EnergyRepository(
         val peak2 = if (s.pvPeakKw > 0) s.pvPeakKw2 else 0.0
         val yesterday = LocalDate.fromEpochDays(today.toEpochDays() - 1)
         val irr = history[yesterday.toString()] ?: return
-        val raw = PvForecastDay(yesterday, irr, irradiance2WhPerM2 = history["$yesterday#2"]).energyKwh(peak, peak2, calibration = 1.0)
+        val raw = PvForecastDay(yesterday, irr, irradiance2WhPerM2 = history["$yesterday#2"]).energyKwhTwoSides(peak, peak2, calibration = 1.0)
         val actual = dayStatistics(yesterday).totals.productionWh / 1000.0
         val updated = PvCalibration.update(s.pvCalibration, actual, raw)
         if (updated != s.pvCalibration) settings.savePvCalibration(updated)

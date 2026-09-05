@@ -138,7 +138,7 @@ fun pvPeakKw(settings: Settings, estimate: Double?): Double? = settings.pvPeakKw
 fun pvPeakKw2(settings: Settings): Double = if (settings.pvPeakKw > 0) settings.pvPeakKw2 else 0.0
 
 fun com.jakober.energie.core.forecast.PvForecastDay.energyFor(settings: Settings, peak: Double): Double =
-    energyKwh(peak, pvPeakKw2(settings), settings.pvCalibration)
+    energyKwhTwoSides(peak, pvPeakKw2(settings), calibration = settings.pvCalibration)
 
 /** Text fuer die kleine Prognose-Anzeige im Flussdiagramm, null wenn nichts zu zeigen ist. */
 fun pvForecastBadge(settings: Settings, estimate: Double?, today: LocalDate, producedTodayWh: Double?): ForecastBadge? {

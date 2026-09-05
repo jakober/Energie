@@ -24,8 +24,11 @@ data class PvForecastDay(
     fun energyKwh(peakKw: Double, calibration: Double = 1.0, performanceRatio: Double = PERFORMANCE_RATIO): Double =
         irradianceWhPerM2 / 1000.0 * peakKw * performanceRatio * calibration
 
-    /** Ertrag beider Dachseiten: jede mit ihrer Einstrahlung und Leistung. */
-    fun energyKwh(peakKw1: Double, peakKw2: Double, calibration: Double, performanceRatio: Double = PERFORMANCE_RATIO): Double {
+    /**
+     * Ertrag beider Dachseiten: jede mit ihrer Einstrahlung und Leistung.
+     * Eigener Name, damit kein Aufruf versehentlich in `energyKwh(peak, calibration, ratio)` faellt.
+     */
+    fun energyKwhTwoSides(peakKw1: Double, peakKw2: Double, calibration: Double, performanceRatio: Double = PERFORMANCE_RATIO): Double {
         val first = irradianceWhPerM2 / 1000.0 * peakKw1
         val second = (irradiance2WhPerM2 ?: irradianceWhPerM2) / 1000.0 * peakKw2
         return (first + second) * performanceRatio * calibration

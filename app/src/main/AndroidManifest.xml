@@ -4,6 +4,7 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name=".EnergieApp"
@@ -36,6 +37,11 @@
             android:name=".ui.settings.FordLoginActivity"
             android:exported="false"
             android:label="Bei Ford anmelden" />
+
+        <!-- Knopf "Jetzt laden" in der Benachrichtigung. -->
+        <receiver
+            android:name=".notify.ChargeActionReceiver"
+            android:exported="false" />
 
         <!-- WorkManager initialisieren wir selbst (siehe EnergieApp), damit der
              Worker an den Repository-Container kommt. -->

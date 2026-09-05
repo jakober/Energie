@@ -1,7 +1,14 @@
 package com.jakober.energie
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -73,6 +80,14 @@ private fun EnergieRoot(container: AppContainer, connectReturns: Int) {
     // Zurueck aus Smartcar Connect: gleich nachsehen, ob das Auto jetzt verbunden ist.
     LaunchedEffect(connectReturns) {
         if (connectReturns > 0) vm.carCheck()
+    }
+    // Android 13+: Benachrichtigungen brauchen eine Erlaubnis; einmal beim Start fragen.
+    val context = LocalContext.current
+    val askNotifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
     val nav = rememberNavController()
     val backStack by nav.currentBackStackEntryAsState()

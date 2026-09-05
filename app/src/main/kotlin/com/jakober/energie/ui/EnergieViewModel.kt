@@ -11,6 +11,7 @@ import com.jakober.energie.core.smartcar.SmartcarClient
 import com.jakober.energie.data.CarCommand
 import com.jakober.energie.data.FordCommand
 import com.jakober.energie.core.rules.ChargeRules
+import com.jakober.energie.core.alerts.AlertSettings
 import com.jakober.energie.data.LiveState
 import com.jakober.energie.data.Settings
 import kotlinx.coroutines.Dispatchers
@@ -355,6 +356,10 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
             container.settings.saveRules(fixed)
             runCatching { repo.refresh() }
         }
+    }
+
+    fun saveAlerts(a: AlertSettings) {
+        viewModelScope.launch { container.settings.saveAlerts(a) }
     }
 
     fun setChargeOverride(on: Boolean) {

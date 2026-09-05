@@ -9,6 +9,8 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.jakober.energie.EnergieApp
+import com.jakober.energie.core.alerts.Alert
+import com.jakober.energie.core.alerts.AlertKind
 import java.time.Duration
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -30,7 +32,12 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 onSuccess = { Result.success() },
                 onFailure = { e ->
                     app.container.settings.noteBackup(System.currentTimeMillis() / 1000, "Fehler: ${e.message ?: e}")
-                    if (runAttemptCount < 2) Result.retry() else Result.failure()
+                    if (runAttemptCount < 2) Result.retry() else {
+                        if (settings.alerts.backupFailed) {
+                            app.container.notifier.show(Alert(AlertKind.BACKUP_FAILED, "Sicherung fehlgeschlagen", e.message ?: e.toString()))
+                        }
+                        Result.failure()
+                    }
                 },
             )
     }

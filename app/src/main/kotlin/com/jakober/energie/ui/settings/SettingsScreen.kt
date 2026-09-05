@@ -81,7 +81,8 @@ fun SettingsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
     // aendern sich im Hintergrund und gehoeren nicht zum Entwurf.
     val dirty = draft.copy(chargeRules = saved.chargeRules, chargeLastCommandAt = saved.chargeLastCommandAt, chargeOverride = saved.chargeOverride, chargeLog = saved.chargeLog,
         fordTokensJson = saved.fordTokensJson, fordVin = saved.fordVin, fordLocationId = saved.fordLocationId, smartcarVehicleId = saved.smartcarVehicleId, smartcarUserId = saved.smartcarUserId,
-        backupTreeUri = saved.backupTreeUri, backupPassword = saved.backupPassword, backupLastAt = saved.backupLastAt, backupLastResult = saved.backupLastResult) != saved
+        backupTreeUri = saved.backupTreeUri, backupPassword = saved.backupPassword, backupLastAt = saved.backupLastAt, backupLastResult = saved.backupLastResult,
+        alerts = saved.alerts, alertState = saved.alertState) != saved
 
     LaunchedEffect(Unit) { vm.clearTestResult() }
 
@@ -200,6 +201,8 @@ fun SettingsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
                 onSave = vm::saveRules,
             )
         }
+
+        item { NotificationsCard(saved = saved.alerts, onSave = vm::saveAlerts) }
 
         item {
             EnergieCard(title = "Abfrage") {

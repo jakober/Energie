@@ -38,6 +38,9 @@ import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import com.jakober.energie.core.alerts.Alert
+import com.jakober.energie.core.alerts.AlertEngine
+import com.jakober.energie.core.alerts.AlertInput
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
@@ -156,19 +159,52 @@ class EnergyRepository(
             refreshing = false,
             senecRaw = senec?.raw ?: _state.value.senecRaw,
         )
+        if (senec != null) lastSenecOkAt = now
+        if (fritzData != null) lastFritzOkAt = now
         _state.value = newState
-        runCatching { runAutomation(s, newState) }
+        val automationLine = runCatching { runAutomation(s, newState) }.getOrNull()
+        runCatching { runAlerts(newState, automationLine) }
         _state.value
+    }
+
+    private var lastSenecOkAt: Instant? = null
+    private var lastFritzOkAt: Instant? = null
+
+    /** Wer die Hinweise anzeigt (Benachrichtigungen); ohne Empfaenger passiert nichts. */
+    var onAlerts: ((List<Alert>) -> Unit)? = null
+
+    private suspend fun runAlerts(live: LiveState, automationLine: String?) {
+        val sink = onAlerts ?: return
+        val s = settings.current()
+        val car = live.car
+        val input = AlertInput(
+            now = clock.now(),
+            batterySocPercent = live.sample?.batterySocPercent,
+            gridPowerW = live.sample?.gridPowerW,
+            carPluggedIn = car?.isPluggedIn,
+            carCharging = car?.isCharging,
+            carLockState = car?.lockState,
+            carDistanceHomeM = car?.distanceHomeM,
+            chargeOverride = s.chargeOverride,
+            senecConfigured = s.senecConfigured,
+            fritzConfigured = s.fritzConfigured,
+            lastSenecOkAt = lastSenecOkAt,
+            lastFritzOkAt = lastFritzOkAt,
+            automationLine = automationLine,
+        )
+        val result = AlertEngine.evaluate(input, s.alertState, s.alerts)
+        if (result.state != s.alertState) settings.saveAlertState(result.state)
+        if (result.alerts.isNotEmpty()) sink(result.alerts)
     }
 
     /**
      * Ladeautomatik: entscheidet aus Speicher, Netz und Autozustand, ob das Auto
      * pausieren oder weiterladen soll, und schickt den Befehl ueber FordPass.
      */
-    private suspend fun runAutomation(s0: Settings, live: LiveState) {
+    private suspend fun runAutomation(s0: Settings, live: LiveState): String? {
         val s = settings.current() // Regeln koennten sich seit Beginn des Refresh geaendert haben
-        if (!s.fordConnected || !s.chargeRules.enabled) return
-        val car = live.car ?: return
+        if (!s.fordConnected || !s.chargeRules.enabled) return null
+        val car = live.car ?: return null
         val sample = live.sample
         val now = clock.now()
 
@@ -191,8 +227,8 @@ class EnergyRepository(
         val time = now.toLocalDateTime(TimeZone.currentSystemDefault()).time
         val stamp = "%02d:%02d".format(time.hour, time.minute)
 
-        when (decision.action) {
-            ChargeAction.NONE -> _state.update { it.copy(automationStatus = decision.reason) }
+        return when (decision.action) {
+            ChargeAction.NONE -> { _state.update { it.copy(automationStatus = decision.reason) }; null }
             ChargeAction.PAUSE, ChargeAction.RESUME -> {
                 val result = withContext(Dispatchers.IO) {
                     if (decision.action == ChargeAction.PAUSE) fordpass(s).pauseCharge(s.fordVin) else fordpass(s).startCharge(s.fordVin)
@@ -204,6 +240,7 @@ class EnergyRepository(
                 _state.update { it.copy(automationStatus = line) }
                 // Den neuen Zustand bald nachlesen, nicht erst in 5 Minuten.
                 lastCarFetch = now - CAR_INTERVAL + 90.seconds
+                line
             }
         }
     }

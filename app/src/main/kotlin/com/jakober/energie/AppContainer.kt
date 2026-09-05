@@ -5,6 +5,7 @@ import com.jakober.energie.core.history.HistoryStore
 import com.jakober.energie.data.AppSettings
 import com.jakober.energie.data.BackupManager
 import com.jakober.energie.data.EnergyRepository
+import com.jakober.energie.notify.Notifier
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
@@ -25,7 +26,11 @@ class AppContainer(context: Context) {
 
     val history = HistoryStore(File(context.filesDir, "verlauf"))
 
-    val repository = EnergyRepository(settings, http, history)
+    val notifier = Notifier(context)
+
+    val repository = EnergyRepository(settings, http, history).also { repo ->
+        repo.onAlerts = { alerts -> notifier.showAll(alerts) }
+    }
 
     val backup = BackupManager(context, settings, history, repository)
 }

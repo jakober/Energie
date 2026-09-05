@@ -5,6 +5,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.jakober.energie.data.FordCommand
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -70,6 +75,9 @@ fun DashboardScreen(vm: EnergieViewModel, onOpenSettings: () -> Unit, contentPad
     val settings by vm.settings.collectAsStateWithLifecycle()
     val today by vm.todayStats.collectAsStateWithLifecycle()
 
+    val fordResult by vm.fordResult.collectAsStateWithLifecycle()
+    var showCarCard by rememberSaveable { mutableStateOf(false) }
+
     // "vor 12 s" soll mitlaufen, ohne dass sich sonst etwas aendert.
     var now by remember { mutableStateOf(Clock.System.now()) }
     LaunchedEffect(Unit) { while (true) { delay(1000); now = Clock.System.now() } }
@@ -106,10 +114,19 @@ fun DashboardScreen(vm: EnergieViewModel, onOpenSettings: () -> Unit, contentPad
         live.fritzError?.let { item { ErrorCard("FRITZ!Box", it) } }
 
         val carActive = settings.carConnected || settings.fordConnected || live.car != null
-        item { FlowDiagram(live.sample, showCar = carActive) }
+        // Die Auto-Karte erscheint erst nach Tippen auf das Auto im Diagramm, nochmal Tippen schliesst sie.
+        item { FlowDiagram(live.sample, showCar = carActive, onCarClick = if (carActive) ({ showCarCard = !showCarCard }) else null) }
 
-        if (carActive) {
-            item { CarCard(live, settings, onOverride = vm::setChargeOverride) }
+        if (carActive && showCarCard) {
+            item {
+                CarCard(
+                    live, settings,
+                    onOverride = vm::setChargeOverride,
+                    onCommand = vm::fordCommand,
+                    commandResult = fordResult,
+                    onClose = { showCarCard = false },
+                )
+            }
         }
 
         item { BatteryAndGridRow(live) }
@@ -267,12 +284,20 @@ private fun TodayCard(stats: DayStatistics?, settings: Settings) {
 }
 
 @Composable
-private fun CarCard(live: LiveState, settings: Settings, onOverride: (Boolean) -> Unit = {}) {
+private fun CarCard(
+    live: LiveState,
+    settings: Settings,
+    onOverride: (Boolean) -> Unit = {},
+    onCommand: (FordCommand) -> Unit = {},
+    commandResult: String? = null,
+    onClose: () -> Unit = {},
+) {
     val car = live.car
+    var confirmUnlock by rememberSaveable { mutableStateOf(false) }
     EnergieCard(title = "Auto", accent = EnergyColors.car) {
         if (car == null) {
             Text(
-                live.carError ?: "Noch keine Daten vom Auto. Unter Einstellungen → Smartcar „Status lesen“.",
+                live.carError ?: "Noch keine Daten vom Auto. Unter Einstellungen → FordPass „Status lesen“.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             return@EnergieCard
@@ -313,6 +338,33 @@ private fun CarCard(live: LiveState, settings: Settings, onOverride: (Boolean) -
                 icon = if (locked) Icons.Rounded.Lock else Icons.Rounded.LockOpen,
                 iconTint = if (locked) EnergyColors.battery else MaterialTheme.colorScheme.error,
             )
+            if (settings.fordConnected) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (!locked) {
+                        Button(onClick = { onCommand(FordCommand.LOCK) }, modifier = Modifier.weight(1f)) {
+                            Icon(Icons.Rounded.Lock, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Abschließen")
+                        }
+                    } else {
+                        OutlinedButton(onClick = { confirmUnlock = true }, modifier = Modifier.weight(1f)) {
+                            Icon(Icons.Rounded.LockOpen, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Aufschließen")
+                        }
+                    }
+                }
+            }
+        }
+        commandResult?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        if (confirmUnlock) {
+            AlertDialog(
+                onDismissRequest = { confirmUnlock = false },
+                title = { Text("Auto aufschließen?") },
+                text = { Text("Das Auto wird über FordPass entriegelt, auch wenn niemand daneben steht.") },
+                confirmButton = { TextButton(onClick = { confirmUnlock = false; onCommand(FordCommand.UNLOCK) }) { Text("Aufschließen") } },
+                dismissButton = { TextButton(onClick = { confirmUnlock = false }) { Text("Abbrechen") } },
+            )
         }
         val carLat = car.latitude
         val carLon = car.longitude
@@ -333,6 +385,7 @@ private fun CarCard(live: LiveState, settings: Settings, onOverride: (Boolean) -
                 style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+        TextButton(onClick = onClose, modifier = Modifier.align(Alignment.End)) { Text("Schließen") }
     }
 }
 

@@ -359,6 +359,8 @@ class EnergyRepository(
             FordCommand.PAUSE -> client.pauseCharge(s.fordVin)
             FordCommand.RESUME -> client.startCharge(s.fordVin)
             FordCommand.CANCEL -> client.cancelCharge(s.fordVin)
+            FordCommand.LOCK -> client.lock(s.fordVin)
+            FordCommand.UNLOCK -> client.unlock(s.fordVin)
             FordCommand.TARGET_50, FordCommand.TARGET_100 -> {
                 val locations = client.chargeLocations(s.fordVin)
                 val loc = locations.firstOrNull { it.id == s.fordLocationId }
@@ -488,6 +490,8 @@ enum class FordCommand(val label: String) {
     CANCEL("Laden abbrechen"),
     TARGET_50("Ladeziel 50 %"),
     TARGET_100("Ladeziel 100 %"),
+    LOCK("Abschließen"),
+    UNLOCK("Aufschließen"),
 }
 
 enum class CarCommand(val label: String) {

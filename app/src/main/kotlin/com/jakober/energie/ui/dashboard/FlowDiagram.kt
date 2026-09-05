@@ -17,6 +17,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -67,7 +71,7 @@ private val HubRadius = 44.dp
  * Speicher-Symbol laeuft der Ladezustand als Ring.
  */
 @Composable
-fun FlowDiagram(sample: EnergySample?, showCar: Boolean = false, modifier: Modifier = Modifier) {
+fun FlowDiagram(sample: EnergySample?, showCar: Boolean = false, onCarClick: (() -> Unit)? = null, modifier: Modifier = Modifier) {
     val production = sample?.productionW ?: 0.0
     val carPower = if (showCar) sample?.carChargePowerW ?: 0.0 else 0.0
     // Mit Auto-Knoten zeigt das Haus nur den Rest ohne Ladeleistung.
@@ -196,23 +200,29 @@ fun FlowDiagram(sample: EnergySample?, showCar: Boolean = false, modifier: Modif
             // Text ueber dem Haus, unter dem Auto - so bleibt zwischen beiden Platz.
             FlowNode(
                 Icons.Rounded.Home, EnergyColors.house, Format.power(consumption), "Haus",
-                Modifier.align(Alignment.CenterEnd).padding(end = EdgeInset).offset(y = (-86).dp), textBelow = false,
+                Modifier.align(Alignment.CenterEnd).offset(y = (-86).dp), textBelow = false,
             )
+            // Auto: laedt es, steht die Leistung gross; sonst der Ladestand. Kurze
+            // Beschriftung, damit nichts in die Nachbarn laeuft.
+            val charging = carPower > 15 || sample?.carCharging == true
+            val socLabel = sample?.carSocPercent?.let { Format.percentValue(it) }
             FlowNode(
-                Icons.Rounded.ElectricCar, EnergyColors.car, Format.power(carPower),
-                when {
-                    carPower > 15 || sample?.carCharging == true -> "Auto lädt"
+                Icons.Rounded.ElectricCar, EnergyColors.car,
+                value = if (charging) Format.power(carPower) else socLabel ?: "–",
+                label = when {
+                    charging -> "Auto lädt" + (socLabel?.let { " · $it" } ?: "")
                     sample?.carPluggedIn == true -> "Auto steckt, pausiert"
                     sample?.carPluggedIn == false -> "Auto nicht angeschlossen"
                     else -> "Auto"
                 },
-                Modifier.align(Alignment.CenterEnd).padding(end = EdgeInset).offset(y = 86.dp), textBelow = true,
-                ring = sample?.carSocPercent?.let { (it / 100.0).toFloat() }, ringLabel = sample?.carSocPercent?.let { Format.percentValue(it) },
+                Modifier.align(Alignment.CenterEnd).offset(y = 86.dp), textBelow = true,
+                ring = sample?.carSocPercent?.let { (it / 100.0).toFloat() },
+                onClick = onCarClick,
             )
         } else {
             FlowNode(
                 Icons.Rounded.Home, EnergyColors.house, Format.power(consumption), "Haus",
-                Modifier.align(Alignment.CenterEnd).padding(end = EdgeInset).offset(y = 26.dp), textBelow = true,
+                Modifier.align(Alignment.CenterEnd).offset(y = 26.dp), textBelow = true,
             )
         }
         FlowNode(
@@ -227,11 +237,14 @@ fun FlowDiagram(sample: EnergySample?, showCar: Boolean = false, modifier: Modif
                 battery < -15 -> "Speicher gibt ab"
                 else -> "Speicher"
             },
-            Modifier.align(Alignment.CenterStart).padding(start = EdgeInset).offset(y = 26.dp), textBelow = true,
+            Modifier.align(Alignment.CenterStart).offset(y = 26.dp), textBelow = true,
             ring = soc?.let { (it / 100.0).toFloat() }, ringLabel = soc?.let { Format.percentValue(it) },
         )
     }
 }
+
+/** Breite eines Seitenknotens: Symbol mittig ueber der Kreismitte des Canvas, Text darf umbrechen. */
+private val SideNodeWidth = (EdgeInset + NodeRadius) * 2
 
 /**
  * Ein Knoten des Diagramms: leuchtender Kreis mit Symbol, darunter (oder
@@ -248,10 +261,17 @@ private fun FlowNode(
     textBelow: Boolean,
     ring: Float? = null,
     ringLabel: String? = null,
+    onClick: (() -> Unit)? = null,
 ) {
-    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+    // Seitliche Knoten bekommen eine feste Breite, deren Mitte genau auf der
+    // Kreismitte des Canvas liegt - lange Beschriftungen brechen um, statt das
+    // Symbol zur Seite zu schieben.
+    Column(modifier.width(SideNodeWidth), horizontalAlignment = Alignment.CenterHorizontally) {
         if (!textBelow) NodeText(value, label)
-        Box(Modifier.size(NodeRadius * 2), contentAlignment = Alignment.Center) {
+        Box(
+            Modifier.size(NodeRadius * 2).let { m -> if (onClick != null) m.clip(CircleShape).clickable(onClick = onClick) else m },
+            contentAlignment = Alignment.Center,
+        ) {
             // Schein
             Box(
                 Modifier.fillMaxSize().background(
@@ -285,10 +305,11 @@ private fun FlowNode(
 private fun NodeText(value: String, label: String, extra: String? = null) {
     Text(
         value, style = MaterialTheme.typography.titleLarge, color = Color.White,
-        fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
+        fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 1,
     )
     Text(
         if (extra != null) "$label · $extra" else label,
         style = MaterialTheme.typography.labelMedium, color = Color.White.copy(alpha = 0.65f), textAlign = TextAlign.Center,
+        maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 14.sp,
     )
 }

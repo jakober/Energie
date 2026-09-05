@@ -375,10 +375,18 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
                     _fordRaw.value = r.body
                     _fordResult.value = if (r.accepted) "${command.label}: Ford hat den Befehl angenommen (HTTP ${r.status}). In 1–2 Minuten in der FordPass-App prüfen."
                     else "${command.label}: abgelehnt mit HTTP ${r.status}. Rohantwort unten."
+                    if (r.accepted) {
+                        // Neuen Zustand bald nachlesen, damit Verriegelung oder Ladestatus in der Karte nachziehen.
+                        delay(12.seconds)
+                        repo.forceCarOnNextRefresh()
+                        runCatching { repo.refresh() }
+                    }
                 }
                 .onFailure { _fordResult.value = "Fehler: ${it.message ?: it}" }
         }
     }
+
+    fun clearFordResult() { _fordResult.value = null }
 
     fun saveRules(rules: ChargeRules) {
         viewModelScope.launch {

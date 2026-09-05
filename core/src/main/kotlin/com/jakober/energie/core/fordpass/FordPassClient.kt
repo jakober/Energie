@@ -260,6 +260,9 @@ class FordPassClient(
     suspend fun pauseCharge(vin: String) = command(vin, "pauseGlobalChargeCommand")
     suspend fun startCharge(vin: String) = command(vin, "startGlobalChargeCommand")
     suspend fun cancelCharge(vin: String) = command(vin, "cancelGlobalChargeCommand")
+    /** Tueren verriegeln bzw. entriegeln - dieselbe Befehlsschnittstelle wie das Laden. */
+    suspend fun lock(vin: String) = command(vin, "lock")
+    suspend fun unlock(vin: String) = command(vin, "unlock")
 
     private suspend fun command(vin: String, type: String): FordCommandResult {
         val token = autoToken()

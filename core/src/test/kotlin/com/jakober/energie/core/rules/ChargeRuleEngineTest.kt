@@ -14,8 +14,19 @@ class ChargeRuleEngineTest {
     private fun input(
         time: LocalTime = LocalTime(12, 0), soc: Double? = 80.0, grid: Double? = 0.0, carSoc: Double? = 60.0,
         plugged: Boolean? = true, charging: Boolean? = true, carPower: Double? = 2200.0,
-        last: Instant? = null, override: Boolean = false,
-    ) = ChargeInput(t0, time, soc, grid, carSoc, plugged, charging, carPower, last, override)
+        last: Instant? = null, override: Boolean = false, battery: Double? = null,
+    ) = ChargeInput(t0, time, soc, grid, carSoc, plugged, charging, carPower, last, override, battery)
+
+    @Test
+    fun speicherLeerUndSpeicherLiefertDasLadenPausiert() {
+        // Abend: PV 0 W, Speicher 13 % gibt 2930 W ab, Netz 2 W, Auto laedt mit 2170 W und steht bei 69 %.
+        // Die Ladeleistung ist kein PV-Ueberschuss, sie kommt aus dem Speicher -> pausieren.
+        val r = rules.copy(batteryOnPercent = 30, batteryOffPercent = 25, surplusOnW = 1250, carReservePercent = 60)
+        val d = ChargeRuleEngine.decide(r, input(soc = 13.0, grid = 2.0, carSoc = 69.0, charging = true, carPower = 2170.0, battery = -2930.0))
+        assertEquals(ChargeAction.PAUSE, d.action)
+        // Ohne Speicherabgabe (echter Ueberschuss, etwa mittags) bleibt das Laden erlaubt.
+        assertEquals(ChargeAction.NONE, ChargeRuleEngine.decide(r, input(soc = 13.0, grid = -50.0, carSoc = 69.0, charging = true, carPower = 2170.0, battery = 0.0)).action)
+    }
 
     @Test
     fun ausOderNichtAngeschlossen() {

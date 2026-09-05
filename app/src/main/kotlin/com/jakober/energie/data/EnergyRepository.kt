@@ -357,6 +357,7 @@ class EnergyRepository(
             carChargePowerW = sample?.carChargePowerW ?: car.chargePowerW ?: s.carAssumedPowerW,
             lastCommandAt = s.chargeLastCommandAt.takeIf { it > 0 }?.let { Instant.fromEpochSeconds(it) },
             overrideFullCharge = s.chargeOverride && car.isPluggedIn != false,
+            houseBatteryPowerW = sample?.batteryPowerW,
         )
         val decision = ChargeRuleEngine.decide(s.chargeRules, input)
         val time = now.toLocalDateTime(TimeZone.currentSystemDefault()).time

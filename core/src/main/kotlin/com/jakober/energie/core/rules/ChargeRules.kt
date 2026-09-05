@@ -49,6 +49,8 @@ data class ChargeInput(
     val lastCommandAt: Instant?,
     /** Handschalter "jetzt voll laden": Automatik setzt aus, bis das Auto abgesteckt wird. */
     val overrideFullCharge: Boolean,
+    /** Leistung des Hausspeichers in W: positiv laedt, negativ gibt ab. */
+    val houseBatteryPowerW: Double? = null,
 )
 
 enum class ChargeAction { NONE, PAUSE, RESUME }
@@ -86,10 +88,13 @@ object ChargeRuleEngine {
 
         val soc = input.houseBatteryPercent ?: return ChargeDecision(ChargeAction.NONE, "Speicherstand unbekannt")
         // Verfuegbarer Ueberschuss = was ohne das Auto ins Netz ginge: Einspeisung plus
-        // die Ladeleistung, die das Auto gerade schluckt, minus Netzbezug. Sonst
-        // pausiert die Automatik ihr eigenes Laden.
+        // die Ladeleistung, die das Auto gerade schluckt, minus Netzbezug und minus
+        // das, was der Hausspeicher gerade abgibt. Ohne den Speicherabzug haelt die
+        // Automatik ihr eigenes Laden aus dem Speicher fuer PV-Ueberschuss und
+        // pausiert nachts nie.
         val carDraw = if (charging) (input.carChargePowerW ?: 0.0) else 0.0
-        val available = (carDraw - (input.gridPowerW ?: 0.0)).coerceAtLeast(0.0)
+        val discharge = (-(input.houseBatteryPowerW ?: 0.0)).coerceAtLeast(0.0)
+        val available = (carDraw - (input.gridPowerW ?: 0.0) - discharge).coerceAtLeast(0.0)
 
         val wantCharge = soc >= rules.batteryOnPercent || available >= rules.surplusOnW
         val wantPause = soc < rules.batteryOffPercent && available < rules.surplusOnW * 0.7
@@ -98,7 +103,7 @@ object ChargeRuleEngine {
             wantCharge && !charging -> gated(rules, input, ChargeAction.RESUME,
                 if (soc >= rules.batteryOnPercent) "Speicher ${soc.toInt()} % >= ${rules.batteryOnPercent} %" else "Ueberschuss ${available.toInt()} W >= ${rules.surplusOnW} W")
             wantPause && charging -> gated(rules, input, ChargeAction.PAUSE,
-                "Speicher ${soc.toInt()} % < ${rules.batteryOffPercent} %, Ueberschuss ${available.toInt()} W")
+                "Speicher ${soc.toInt()} % < ${rules.batteryOffPercent} %, Ueberschuss ${available.toInt()} W" + (if (discharge > 0) ", Speicher gibt ${discharge.toInt()} W ab" else ""))
             charging -> ChargeDecision(ChargeAction.NONE, "Auto laedt, Speicher ${soc.toInt()} %")
             else -> ChargeDecision(ChargeAction.NONE, "Auto pausiert, Speicher ${soc.toInt()} %")
         }

@@ -10,7 +10,8 @@ Tages-, Wochen- und Monatsstatistiken rechnet.
 | Quelle | Weg | Liefert |
 | --- | --- | --- |
 | SENEC.Home 4 | Offizielle **SENEC.Connect**-API (developer.senec.com), Abonnementschlüssel im Header `Ocp-Apim-Subscription-Key` | Ladezustand und Leistung des Speichers, PV-Erzeugung, Hausverbrauch, Netzleistung, Wallbox |
-| Stromzähler | **FRITZ!Smart Energy 250** am Zähler, ausgelesen über die AHA-HTTP-Schnittstelle der FRITZ!Box (nur im Heimnetz) | Momentanleistung am Netzanschluss, Zählerstände Bezug (1.8.0) und Einspeisung (2.8.0) |
+| Stromzähler | **FRITZ!Smart Energy 250** am Zähler, ausgelesen über die AHA-HTTP-Schnittstelle der FRITZ!Box (im Heimnetz oder von unterwegs über MyFRITZ!) | Momentanleistung am Netzanschluss, Zählerstände Bezug (1.8.0) und Einspeisung (2.8.0) |
+| Auto | **FordPass** (inoffizielle App-Schnittstelle, Zweitkonto empfohlen) | Ladestand, Reichweite, Stecker- und Ladestatus, Ladeleistung, Standort, Verriegelung; Laden pausieren und fortsetzen |
 
 SENEC.Connect liefert nur Momentaufnahmen, keine Historie. Deshalb fragt die
 App regelmäßig ab (im Vordergrund einstellbar, im Hintergrund alle 15 Minuten
@@ -27,16 +28,33 @@ pro Tag unter `files/verlauf/`. Alles Weitere rechnet sie daraus.
   mit Uhrzeit (Verbrauch, Erzeugung, Bezug, Einspeisung, Laden, Entladen),
   Ladezustandsverlauf, Zählerstände zu Beginn und Ende, bester PV-Tag,
   verbrauchsstärkster Tag, Stromkosten und Einspeisevergütung.
+  Dazu Ladevorgänge des Autos (Dauer, kWh, Sonnenanteil, Netzkosten),
+  Ersparnis und Amortisation gegen die Anlagenkosten, Hochrechnung des
+  laufenden Monats.
+- **Ladeautomatik:** Das Auto lädt nur, wenn der Hausspeicher voll genug ist
+  oder PV-Überschuss da ist (Schwellen mit Hysterese, Reserve, optionale
+  Nachtsperre, Handschalter "jetzt voll laden"). Befehle gehen über FordPass.
+- **Benachrichtigungen:** Auto steht zu Hause und ist nicht abgeschlossen;
+  Speicher voll und Einspeisung hoch, aber das Auto lädt nicht (mit Knopf
+  "Jetzt laden"); Rückmeldung der Automatik; Quelle ausgefallen; Sicherung
+  fehlgeschlagen.
+- **Homescreen-Widget:** Speicher, PV, Haus, Netz und Auto in 2x2 oder 4x2.
+- **Sicherung:** Täglich nachts im WLAN eine ZIP-Datei mit Verlauf und
+  Einstellungen in einen frei gewählten Ordner (auch Google Drive);
+  Zugangsdaten darin mit Passwort verschlüsselt (AES-256-GCM, PBKDF2).
+  Wiederherstellen aus der App.
 - **Einstellungen:** Zugangsdaten mit Verbindungstest, Abfrageabstand,
-  Strompreise, Aufbewahrung des Verlaufs, Rohdaten-Ansicht.
+  Strompreise und Anlagenkosten, Aufbewahrung des Verlaufs, Rohdaten-Ansicht.
 
 ## Aufbau
 
 ```
 core/   reiner Kotlin/JVM-Code, ohne Android: FRITZ!Box-Client (Login mit PBKDF2,
-        Geräteliste, Statistik), SENEC.Connect-Client, Verlaufsspeicher,
-        Tages-/Zeitraumstatistik - und die Tests dazu
-app/    Android-App: Jetpack Compose, Material 3, WorkManager, DataStore
+        Geräteliste, Statistik), SENEC.Connect-Client, FordPass-Client,
+        Verlaufsspeicher, Tages-/Zeitraumstatistik, Ladevorgänge, Ersparnis,
+        Laderegeln, Hinweis-Engine, Backup-Verschlüsselung - und die Tests dazu
+app/    Android-App: Jetpack Compose, Material 3, Glance-Widget, WorkManager,
+        DataStore, Benachrichtigungen
 ```
 
 Der Kern lässt sich ohne Android-SDK bauen und testen:
@@ -65,11 +83,9 @@ nirgendwo hochgeladen.
 
 ## Ausblick
 
-- **Ford:** Das Auto soll nur laden, wenn der Speicher voll genug ist. Ford
-  hat den Zugang zur FordPass-Schnittstelle für Einzelentwickler im Sommer
-  2026 eingeschränkt; offen ist, ob FordConnect (developer.ford.com) oder ein
-  Vermittler wie Smartcar der Weg wird. Die Wallbox-Werte aus SENEC.Connect
-  sind schon im Modell, Steuerung liefert die API bisher nicht.
+- **Prognosebasiertes Laden:** PV-Vorhersage (Open-Meteo) als Eingang für die
+  Laderegel, Abfahrtszeit und Ziel-Ladestand.
+- **FRITZ!DECT-Steckdosen** als Überschuss-Verbraucher schalten.
 - **Verlauf der FRITZ!Box:** Die Box speichert selbst Tages- und
   Monatswerte je Zähler (`getbasicdevicestats`). Der Client kann sie schon
   lesen; sie könnten Tage füllen, an denen die App nicht lief.

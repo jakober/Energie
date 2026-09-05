@@ -70,6 +70,8 @@ data class LiveState(
     val pvPeakEstimateKw: Double? = null,
     /** Letzter Fehler beim Abruf der PV-Prognose. */
     val forecastError: String? = null,
+    /** Rohantwort von Open-Meteo, fuer die Fehlersuche. */
+    val forecastRaw: String? = null,
 )
 
 /**
@@ -210,10 +212,14 @@ class EnergyRepository(
         val current = s.pvForecast
         val fresh = current != null && now.epochSeconds - current.fetchedAtEpochSeconds < FORECAST_INTERVAL.inWholeSeconds && current.day(today) != null
         if (fresh) return
-        val days = withContext(Dispatchers.IO) {
-            val client = OpenMeteoClient(http)
-            if (s.pvPeakKw2 > 0) client.forecastTwoSides(s.homeLat, s.homeLon, s.pvTiltDeg, s.pvAzimuthDeg, s.pvTiltDeg2, s.pvAzimuthDeg2)
-            else client.forecast(s.homeLat, s.homeLon, s.pvTiltDeg, s.pvAzimuthDeg)
+        val client = OpenMeteoClient(http)
+        val days = try {
+            withContext(Dispatchers.IO) {
+                if (s.pvPeakKw2 > 0) client.forecastTwoSides(s.homeLat, s.homeLon, s.pvTiltDeg, s.pvAzimuthDeg, s.pvTiltDeg2, s.pvAzimuthDeg2)
+                else client.forecast(s.homeLat, s.homeLon, s.pvTiltDeg, s.pvAzimuthDeg)
+            }
+        } finally {
+            _state.update { it.copy(forecastRaw = client.lastResponse) }
         }
         settings.savePvForecast(PvForecast(now.epochSeconds, days))
         _state.update { it.copy(forecastError = null) }

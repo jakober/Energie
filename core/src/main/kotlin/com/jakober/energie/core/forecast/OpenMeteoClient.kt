@@ -25,11 +25,16 @@ class OpenMeteoClient(
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
+    /** Letzte Antwort im Rohtext, fuer die Fehlersuche in den Einstellungen. */
+    var lastResponse: String? = null
+        private set
+
     suspend fun forecast(lat: Double, lon: Double, tiltDeg: Int, azimuthDeg: Int, days: Int = 3): List<PvForecastDay> {
         val response = http.get("$baseUrl/v1/forecast") {
             parameter("latitude", lat)
             parameter("longitude", lon)
-            parameter("hourly", "global_tilted_irradiance")
+            // Geneigte Flaeche plus horizontale Einstrahlung als Rueckfallebene.
+            parameter("hourly", "global_tilted_irradiance,shortwave_radiation")
             parameter("daily", "weather_code,sunshine_duration")
             parameter("tilt", tiltDeg)
             parameter("azimuth", azimuthDeg)
@@ -37,6 +42,7 @@ class OpenMeteoClient(
             parameter("forecast_days", days)
         }
         val text = response.bodyAsText()
+        lastResponse = "GET tilt=$tiltDeg azimuth=$azimuthDeg lat=$lat lon=$lon -> HTTP ${response.status.value}\n" + text.take(4000)
         if (response.status.value != 200) throw IllegalStateException("Open-Meteo antwortet mit ${response.status.value}: ${text.take(200)}")
         return parse(text)
     }
@@ -60,11 +66,19 @@ class OpenMeteoClient(
         val root = json.parseToJsonElement(text) as? JsonObject ?: return emptyList()
         val hourly = root["hourly"] as? JsonObject
         val times = (hourly?.get("time") as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull } ?: emptyList()
-        val gti = (hourly?.get("global_tilted_irradiance") as? JsonArray)?.map { (it as? JsonPrimitive)?.doubleOrNull ?: 0.0 } ?: emptyList()
+        fun series(key: String) = (hourly?.get(key) as? JsonArray)?.map { (it as? JsonPrimitive)?.doubleOrNull ?: 0.0 } ?: emptyList()
+        val gti = series("global_tilted_irradiance")
+        val ghi = series("shortwave_radiation")
         val perDay = LinkedHashMap<LocalDate, Double>()
+        val perDayHorizontal = LinkedHashMap<LocalDate, Double>()
         for (i in times.indices) {
             val date = runCatching { LocalDate.parse(times[i].substringBefore('T')) }.getOrNull() ?: continue
             perDay[date] = (perDay[date] ?: 0.0) + (gti.getOrNull(i) ?: 0.0)
+            perDayHorizontal[date] = (perDayHorizontal[date] ?: 0.0) + (ghi.getOrNull(i) ?: 0.0)
+        }
+        // Liefert Open-Meteo die geneigte Einstrahlung nicht (alles 0), hilft die horizontale weiter.
+        if (perDay.values.all { it <= 0.0 } && perDayHorizontal.values.any { it > 0.0 }) {
+            perDay.clear(); perDay.putAll(perDayHorizontal)
         }
         val daily = root["daily"] as? JsonObject
         val dailyDates = (daily?.get("time") as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.let { d -> runCatching { LocalDate.parse(d) }.getOrNull() } } ?: emptyList()

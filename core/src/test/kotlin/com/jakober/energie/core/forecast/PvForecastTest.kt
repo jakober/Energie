@@ -21,7 +21,7 @@ class PvForecastTest {
     fun `stundenwerte werden je Tag summiert und mit Wetter verknuepft`() = runTest {
         val engine = MockEngine { req ->
             assertEquals("/v1/forecast", req.url.encodedPath)
-            assertEquals("global_tilted_irradiance", req.url.parameters["hourly"])
+            assertEquals("global_tilted_irradiance,shortwave_radiation", req.url.parameters["hourly"])
             assertEquals("30", req.url.parameters["tilt"])
             assertEquals("-10", req.url.parameters["azimuth"])
             respond(body)
@@ -49,6 +49,13 @@ class PvForecastTest {
         assertEquals(900.0, today.irradiance2WhPerM2)
         // Ost 4,86 kWp, West 4,05 kWp: (1,8*4,86 + 0,9*4,05) * 0,8 = 9,9144
         assertEquals(9.9144, today.energyKwh(4.86, 4.05, calibration = 1.0), 1e-6)
+    }
+
+    @Test
+    fun `ohne geneigte Werte zaehlt die horizontale Einstrahlung`() {
+        val text = """{"hourly":{"time":["2026-09-05T10:00","2026-09-05T11:00"],"global_tilted_irradiance":[null,null],"shortwave_radiation":[300.0,500.0]},"daily":{"time":["2026-09-05"],"weather_code":[0],"sunshine_duration":[3600.0]}}"""
+        val days = OpenMeteoClient(HttpClient(MockEngine { respond("") })).parse(text)
+        assertEquals(800.0, days.single().irradianceWhPerM2)
     }
 
     @Test

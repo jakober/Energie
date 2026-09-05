@@ -71,6 +71,7 @@ fun SettingsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
     val backupStatus by vm.backupStatus.collectAsStateWithLifecycle()
     val backupBusy by vm.backupBusy.collectAsStateWithLifecycle()
     var showFordRaw by rememberSaveable { mutableStateOf(false) }
+    var showForecastRaw by rememberSaveable { mutableStateOf(false) }
     var fordPaste by rememberSaveable { mutableStateOf("") }
     val fordLogin = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
@@ -267,6 +268,19 @@ fun SettingsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
                     if (saved.pvCalibration != 1.0) TextButton(onClick = vm::resetPvCalibration) { Text("Zurücksetzen") }
                 }
                 live.forecastError?.let { Text("Fehler: $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
+                saved.pvForecast?.days?.takeIf { it.isNotEmpty() }?.let { days ->
+                    Text(
+                        days.joinToString("\n") { d -> "${d.date}: ${String.format(java.util.Locale.GERMANY, "%.0f", d.irradianceWhPerM2)} Wh/m²" + (d.irradiance2WhPerM2?.let { " · 2. Seite ${String.format(java.util.Locale.GERMANY, "%.0f", it)} Wh/m²" } ?: "") + (d.weatherLabel?.let { " · $it" } ?: "") },
+                        style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace), color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { vm.refreshForecast() }, modifier = Modifier.weight(1f)) { Text("Prognose neu laden") }
+                    TextButton(onClick = { showForecastRaw = !showForecastRaw }, modifier = Modifier.weight(1f)) { Text(if (showForecastRaw) "Rohantwort ausblenden" else "Rohantwort anzeigen") }
+                }
+                if (showForecastRaw) {
+                    Text(live.forecastRaw ?: "Noch keine Antwort in dieser Sitzung. „Prognose neu laden“ drücken.", style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace))
+                }
             }
         }
 

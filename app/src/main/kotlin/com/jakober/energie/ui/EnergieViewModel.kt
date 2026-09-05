@@ -410,6 +410,14 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch { container.settings.savePlaces(places) }
     }
 
+    /** Verwirft die gespeicherte Prognose und holt sofort eine neue. */
+    fun refreshForecast() {
+        viewModelScope.launch {
+            container.settings.savePvForecast(null)
+            runCatching { repo.refresh() }
+        }
+    }
+
     fun resetPvCalibration() {
         viewModelScope.launch { container.settings.savePvCalibration(1.0) }
     }

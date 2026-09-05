@@ -128,6 +128,7 @@ fun DashboardScreen(vm: EnergieViewModel, onOpenSettings: () -> Unit, contentPad
                 forecast = pvForecastBadge(settings, live.pvPeakEstimateKw, vm.todayDate(), today?.totals?.productionWh),
             )
         }
+        item { WeatherStrip(live, settings, vm.todayDate(), onClick = { selectedNode = if (selectedNode == FlowNodeKind.PV) null else FlowNodeKind.PV }) }
 
         when (selectedNode) {
             FlowNodeKind.CAR -> if (carActive) item {

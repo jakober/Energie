@@ -15,6 +15,9 @@ data class PvForecastDay(
     val weatherCode: Int? = null,
     /** Einstrahlung auf eine zweite Dachseite (Ost-West-Dach), wenn eingerichtet. */
     val irradiance2WhPerM2: Double? = null,
+    /** Hoechst- und Tiefsttemperatur des Tages in °C, wenn geliefert. */
+    val tempMaxC: Double? = null,
+    val tempMinC: Double? = null,
 ) {
     /**
      * Ertrag in kWh: 1000 W/m² Einstrahlung bringen je kWp rund 1 kW, davon
@@ -39,6 +42,19 @@ data class PvForecastDay(
     companion object {
         const val PERFORMANCE_RATIO = 0.80
 
+        /** Grobe Wetterklasse fuer Symbole; die Feinheiten stehen in [weatherLabel]. */
+        fun weatherClass(code: Int): WeatherClass = when (code) {
+            0 -> WeatherClass.SUN
+            1, 2 -> WeatherClass.PARTLY
+            3 -> WeatherClass.CLOUDS
+            45, 48 -> WeatherClass.FOG
+            51, 53, 55, 56, 57 -> WeatherClass.DRIZZLE
+            61, 63, 65, 66, 67, 80, 81, 82 -> WeatherClass.RAIN
+            71, 73, 75, 77, 85, 86 -> WeatherClass.SNOW
+            95, 96, 99 -> WeatherClass.THUNDER
+            else -> WeatherClass.PARTLY
+        }
+
         fun weatherLabel(code: Int): String = when (code) {
             0 -> "sonnig"
             1 -> "meist sonnig"
@@ -55,6 +71,8 @@ data class PvForecastDay(
         }
     }
 }
+
+enum class WeatherClass { SUN, PARTLY, CLOUDS, FOG, DRIZZLE, RAIN, SNOW, THUNDER }
 
 /** Gespeicherte Prognose samt Abrufzeit, damit nicht jede Messung den Wetterdienst fragt. */
 @Serializable

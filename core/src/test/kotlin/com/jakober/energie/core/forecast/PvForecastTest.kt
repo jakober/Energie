@@ -14,7 +14,7 @@ class PvForecastTest {
         {"latitude":48.4,"longitude":10.1,
          "hourly":{"time":["2026-09-05T10:00","2026-09-05T11:00","2026-09-05T12:00","2026-09-06T11:00","2026-09-06T12:00"],
                    "global_tilted_irradiance":[400.0,600.0,800.0,200.0,null]},
-         "daily":{"time":["2026-09-05","2026-09-06"],"weather_code":[1,61],"sunshine_duration":[36000.0,7200.0]}}
+         "daily":{"time":["2026-09-05","2026-09-06"],"weather_code":[1,61],"sunshine_duration":[36000.0,7200.0],"temperature_2m_max":[24.5,18.0],"temperature_2m_min":[12.0,9.5]}}
     """.trimIndent()
 
     @Test
@@ -24,6 +24,7 @@ class PvForecastTest {
             assertEquals("global_tilted_irradiance,shortwave_radiation", req.url.parameters["hourly"])
             assertEquals("30", req.url.parameters["tilt"])
             assertEquals("-10", req.url.parameters["azimuth"])
+            assertEquals("7", req.url.parameters["forecast_days"])
             respond(body)
         }
         val days = OpenMeteoClient(HttpClient(engine)).forecast(48.4, 10.1, tiltDeg = 30, azimuthDeg = -10)
@@ -33,6 +34,10 @@ class PvForecastTest {
         assertEquals(1800.0, today.irradianceWhPerM2)
         assertEquals(10.0, today.sunshineHours)
         assertEquals("meist sonnig", today.weatherLabel)
+        assertEquals(24.5, today.tempMaxC)
+        assertEquals(12.0, today.tempMinC)
+        assertEquals(WeatherClass.PARTLY, PvForecastDay.weatherClass(1))
+        assertEquals(WeatherClass.RAIN, PvForecastDay.weatherClass(61))
         assertEquals(200.0, days[1].irradianceWhPerM2)
         assertEquals("Regen", days[1].weatherLabel)
     }

@@ -254,7 +254,9 @@ class EnergyRepository(
         val estimate = estimatedPeakKw()
         if (_state.value.pvPeakEstimateKw != estimate) _state.update { it.copy(pvPeakEstimateKw = estimate) }
         val current = s.pvForecast
-        val fresh = current != null && now.epochSeconds - current.fetchedAtEpochSeconds < FORECAST_INTERVAL.inWholeSeconds && current.day(today) != null
+        // Frisch heisst: juenger als drei Stunden und mit mindestens fuenf Tagen ab heute (aeltere Staende hatten nur drei).
+        val fresh = current != null && now.epochSeconds - current.fetchedAtEpochSeconds < FORECAST_INTERVAL.inWholeSeconds &&
+            current.day(today) != null && current.days.count { it.date >= today } >= 5
         if (fresh) return
         val client = OpenMeteoClient(http)
         val days = try {

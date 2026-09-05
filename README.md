@@ -38,6 +38,10 @@ pro Tag unter `files/verlauf/`. Alles Weitere rechnet sie daraus.
   Speicher voll und Einspeisung hoch, aber das Auto lädt nicht (mit Knopf
   "Jetzt laden"); Rückmeldung der Automatik; Quelle ausgefallen; Sicherung
   fehlgeschlagen.
+- **PV-Prognose:** Wetter von Open-Meteo (ohne Schlüssel) für den Standort
+  Zuhause, Einstrahlung auf beide Dachseiten, daraus der Tagesertrag für
+  sieben Tage als Wochenstreifen unter dem Flussdiagramm (Symbol,
+  Höchsttemperatur, kWh). Die App lernt aus den echten Erträgen nach.
 - **Homescreen-Widget:** Speicher, PV, Haus, Netz und Auto in 2x2 oder 4x2.
 - **Sicherung:** Täglich nachts im WLAN eine ZIP-Datei mit Verlauf und
   Einstellungen in einen frei gewählten Ordner (auch Google Drive);

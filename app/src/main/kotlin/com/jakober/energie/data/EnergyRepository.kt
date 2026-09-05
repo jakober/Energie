@@ -95,14 +95,27 @@ class EnergyRepository(
     private var smartcarKey: String? = null
     private var lastCarFetch: Instant? = null
     private var lastStored: Instant? = history.latest()?.at
+    /** SENEC zaehlt Aufrufe: hoechstens alle 30 s, nach einer 429 fuenf Minuten Pause. */
+    private var lastSenecCall: Instant? = null
+    private var senecBackoffUntil: Instant? = null
 
     /** Fragt beide Quellen ab. Fehler einer Quelle blockieren die andere nicht. */
     suspend fun refresh(): LiveState = lock.withLock {
         val s = settings.current()
         _state.update { it.copy(refreshing = true) }
+        val startedAt = clock.now()
+        val senecPaused = senecBackoffUntil?.let { startedAt < it } == true
+        val senecTooSoon = lastSenecCall?.let { startedAt - it < SENEC_MIN_INTERVAL } == true
         val result = withContext(Dispatchers.IO) {
             coroutineScope {
-                val senecJob = async { if (s.senecConfigured) runCatching { fetchSenec(s) } else null }
+                val senecJob = async {
+                    if (s.senecConfigured && !senecPaused && !senecTooSoon) {
+                        lastSenecCall = startedAt
+                        runCatching { fetchSenec(s) }.onFailure { e ->
+                            if (e.message?.contains("429") == true) senecBackoffUntil = startedAt + SENEC_BACKOFF
+                        }
+                    } else null
+                }
                 val fritzJob = async { if (s.fritzConfigured) runCatching { fetchFritz(s) } else null }
                 // Das Auto seltener: Smartcar zaehlt Aufrufe, und der Ladezustand aendert sich langsam.
                 val carJob = async {
@@ -124,6 +137,11 @@ class EnergyRepository(
         // Verbrauch = PV + Netz (Bezug positiv) - Speicherleistung (Laden positiv).
         // SENECs Verbrauchsfeld und Netzfeld stammen aus verschiedenen Momenten
         // und passen nicht immer zusammen.
+        // SENEC ausgefallen oder pausiert: die letzte gute Momentaufnahme fuer die Anzeige weiter
+        // benutzen (bis 15 Minuten alt), nicht aber im Verlauf ablegen - dort bleiben die Felder leer.
+        val senecFailed = senec == null && (senecResult != null || senecPaused || senecTooSoon)
+        val staleSenecOk = senecFailed && lastSenecOkAt?.let { now - it < SENEC_STALE_MAX } == true
+        val senecForDisplay: SenecSystem? = senec?.system ?: if (staleSenecOk) _state.value.senec else null
         val production = senec?.system?.meter?.production
         val batteryPower = senec?.system?.battery?.power
         val consumption = if (meter != null && production != null && batteryPower != null) {
@@ -170,12 +188,34 @@ class EnergyRepository(
             lastStored = now
         }
 
+        // Anzeige-Messpunkt: bei kurzem SENEC-Ausfall die alten SENEC-Felder uebernehmen.
+        val displaySample = if (senec == null && senecForDisplay != null) {
+            val prod = senecForDisplay.meter?.production
+            val bat = senecForDisplay.battery?.power
+            val cons = if (meter != null && prod != null && bat != null) (prod + meter.gridPowerWatt - bat).coerceAtLeast(0.0) else senecForDisplay.meter?.consumption
+            sample.copy(
+                batterySocPercent = senecForDisplay.battery?.stateOfCharge,
+                batteryPowerW = bat,
+                batteryState = senecForDisplay.battery?.state,
+                productionW = prod,
+                consumptionW = cons,
+                senecGridPowerW = senecForDisplay.meter?.gridPower,
+            )
+        } else sample
+
+        val senecErrorText = when {
+            senec != null -> null
+            senecPaused -> "SENEC-Abfragelimit erreicht (429). Pause bis ${senecBackoffUntil?.let { clockLabel(it) } ?: "gleich"}, Anzeige zeigt die letzten Werte."
+            senecTooSoon -> _state.value.senecError
+            else -> senecResult?.exceptionOrNull()?.let { it.message ?: it.toString() }
+        }
+
         val newState = LiveState(
-            sample = if (gotSomething) sample else _state.value.sample,
-            senec = senec?.system ?: if (senecResult == null) null else _state.value.senec,
+            sample = if (gotSomething || senecForDisplay != null) displaySample else _state.value.sample,
+            senec = senec?.system ?: if (senecResult == null && !senecPaused && !senecTooSoon) null else _state.value.senec,
             meter = meter ?: if (fritzResult == null) null else _state.value.meter,
             fritzDevices = fritzData?.first ?: _state.value.fritzDevices,
-            senecError = senecResult?.exceptionOrNull()?.let { it.message ?: it.toString() },
+            senecError = senecErrorText,
             fritzError = fritzResult?.exceptionOrNull()?.let { it.message ?: it.toString() },
             car = car ?: _state.value.car,
             carError = carResult?.exceptionOrNull()?.let { it.message ?: it.toString() } ?: if (carResult == null) _state.value.carError else null,
@@ -194,7 +234,7 @@ class EnergyRepository(
             .onFailure { e -> _state.update { it.copy(forecastError = e.message ?: e.toString()) } }
         val automationLine = runCatching { runAutomation(s, newState) }.getOrNull()
         runCatching { runAlerts(newState, automationLine) }
-        if (gotSomething) onWidgetUpdate?.let { cb -> runCatching { cb(sample, newState.car) } }
+        if (gotSomething || senecForDisplay != null) onWidgetUpdate?.let { cb -> runCatching { cb(displaySample, newState.car) } }
         _state.value
     }
 
@@ -244,6 +284,11 @@ class EnergyRepository(
         val actual = dayStatistics(yesterday).totals.productionWh / 1000.0
         val updated = PvCalibration.update(s.pvCalibration, actual, raw)
         if (updated != s.pvCalibration) settings.savePvCalibration(updated)
+    }
+
+    private fun clockLabel(at: Instant): String {
+        val t = at.toLocalDateTime(TimeZone.currentSystemDefault()).time
+        return "%02d:%02d".format(t.hour, t.minute)
     }
 
     /** kWp aus der hoechsten je gemessenen PV-Leistung: Spitze / 0,85, auf 0,1 gerundet. */
@@ -550,6 +595,9 @@ class EnergyRepository(
         val MIN_STORE_INTERVAL = 55.seconds
         val CAR_INTERVAL = 5.minutes
         val FORECAST_INTERVAL = 3.hours
+        val SENEC_MIN_INTERVAL = 30.seconds
+        val SENEC_BACKOFF = 5.minutes
+        val SENEC_STALE_MAX = 15.minutes
     }
 }
 

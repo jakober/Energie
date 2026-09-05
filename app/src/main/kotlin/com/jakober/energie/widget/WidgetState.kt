@@ -30,11 +30,12 @@ data class WidgetState(
         private val json = Json { ignoreUnknownKeys = true }
         private fun file(context: Context) = File(context.filesDir, "widget.json")
 
-        fun of(sample: EnergySample, car: CarState?, carPowerLabel: (Double) -> String): WidgetState {
+        fun of(sample: EnergySample, car: CarState?, placeName: String?, carPowerLabel: (Double) -> String): WidgetState {
             val carLabel = when {
                 car == null -> null
                 car.isCharging == true -> "lädt" + (sample.carChargePowerW?.let { " ${carPowerLabel(it)}" } ?: "")
                 car.isPluggedIn == true -> "steckt, pausiert"
+                placeName != null && (car.distanceHomeM ?: 0.0) > 300 -> "bei $placeName"
                 (car.distanceHomeM ?: 0.0) > 300 -> "unterwegs"
                 car.isPluggedIn == false -> "nicht angeschlossen"
                 else -> null

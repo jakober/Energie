@@ -10,6 +10,8 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.jakober.energie.core.alerts.AlertSettings
 import com.jakober.energie.core.alerts.AlertState
+import com.jakober.energie.core.places.NamedPlace
+import kotlinx.serialization.builtins.ListSerializer
 import com.jakober.energie.core.rules.ChargeRules
 import com.jakober.energie.core.senec.SenecConnectClient
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -72,6 +74,8 @@ data class Settings(
     /** Benachrichtigungen und der Merkzustand der Hinweis-Engine. */
     val alerts: AlertSettings = AlertSettings(),
     val alertState: AlertState = AlertState(),
+    /** Vom Nutzer benannte Orte (Arbeit, Oma, ...), an denen das Auto erkannt wird. */
+    val places: List<NamedPlace> = emptyList(),
 ) {
     val backupConfigured: Boolean get() = backupTreeUri.isNotBlank() && backupPassword.length >= 8
     val fordConnected: Boolean get() = fordTokensJson.isNotBlank() && fordVin.isNotBlank()
@@ -126,8 +130,11 @@ class AppSettings(private val context: Context) {
             backupLastResult = p[BACKUP_LAST_RESULT] ?: "",
             alerts = p[ALERTS]?.let { runCatching { rulesJson.decodeFromString(AlertSettings.serializer(), it) }.getOrNull() } ?: AlertSettings(),
             alertState = p[ALERT_STATE]?.let { runCatching { rulesJson.decodeFromString(AlertState.serializer(), it) }.getOrNull() } ?: AlertState(),
+            places = p[PLACES]?.let { runCatching { rulesJson.decodeFromString(placesSerializer, it) }.getOrNull() } ?: emptyList(),
         )
     }
+
+    suspend fun savePlaces(places: List<NamedPlace>) { context.dataStore.edit { it[PLACES] = rulesJson.encodeToString(placesSerializer, places) } }
 
     suspend fun saveAlerts(a: AlertSettings) { context.dataStore.edit { it[ALERTS] = rulesJson.encodeToString(AlertSettings.serializer(), a) } }
 
@@ -170,6 +177,7 @@ class AppSettings(private val context: Context) {
         "chargeRules" to rulesJson.encodeToString(ChargeRules.serializer(), s.chargeRules),
         "chargeLastCommandAt" to s.chargeLastCommandAt.toString(), "chargeLog" to s.chargeLog,
         "alerts" to rulesJson.encodeToString(AlertSettings.serializer(), s.alerts),
+        "places" to rulesJson.encodeToString(placesSerializer, s.places),
     )
 
     /** Die Geheimnisse, die nur verschluesselt in die Sicherung duerfen. */
@@ -226,7 +234,7 @@ class AppSettings(private val context: Context) {
             int(CAR_FALLBACK_POWER, "carFallbackPowerW"); dbl(CAR_LEARNED_POWER, "carLearnedPowerW"); dbl(SYSTEM_COST, "systemCostEur")
             str(FORD_VIN, "fordVin", plain); str(FORD_LOCATION, "fordLocationId", plain)
             dbl(HOME_LAT, "homeLat"); dbl(HOME_LON, "homeLon"); str(CHARGE_RULES, "chargeRules", plain)
-            lng(CHARGE_LAST_CMD, "chargeLastCommandAt"); str(CHARGE_LOG, "chargeLog", plain); str(ALERTS, "alerts", plain)
+            lng(CHARGE_LAST_CMD, "chargeLastCommandAt"); str(CHARGE_LOG, "chargeLog", plain); str(ALERTS, "alerts", plain); str(PLACES, "places", plain)
             str(SENEC_KEY, "senecKey", secrets); str(FRITZ_PASSWORD, "fritzPassword", secrets)
             str(SMARTCAR_CLIENT_SECRET, "smartcarClientSecret", secrets); str(FORD_TOKENS, "fordTokensJson", secrets)
         }
@@ -273,6 +281,8 @@ class AppSettings(private val context: Context) {
         val BACKUP_LAST_RESULT = stringPreferencesKey("backup_last_result")
         val ALERTS = stringPreferencesKey("alerts")
         val ALERT_STATE = stringPreferencesKey("alert_state")
+        val PLACES = stringPreferencesKey("places")
+        private val placesSerializer = ListSerializer(NamedPlace.serializer())
         private val rulesJson = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     }
 }

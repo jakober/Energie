@@ -16,6 +16,7 @@ import com.jakober.energie.data.CarCommand
 import com.jakober.energie.data.FordCommand
 import com.jakober.energie.core.rules.ChargeRules
 import com.jakober.energie.core.alerts.AlertSettings
+import com.jakober.energie.core.places.NamedPlace
 import com.jakober.energie.data.LiveState
 import com.jakober.energie.data.Settings
 import kotlinx.coroutines.Dispatchers
@@ -395,6 +396,10 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
             container.settings.saveRules(fixed)
             runCatching { repo.refresh() }
         }
+    }
+
+    fun savePlaces(places: List<NamedPlace>) {
+        viewModelScope.launch { container.settings.savePlaces(places) }
     }
 
     fun resetLearnedPower() {

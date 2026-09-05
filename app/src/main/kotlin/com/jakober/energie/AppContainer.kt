@@ -6,6 +6,7 @@ import com.jakober.energie.data.AppSettings
 import com.jakober.energie.data.BackupManager
 import com.jakober.energie.data.EnergyRepository
 import com.jakober.energie.notify.Notifier
+import com.jakober.energie.core.places.Places
 import com.jakober.energie.ui.Format
 import com.jakober.energie.widget.EnergieWidget
 import com.jakober.energie.widget.WidgetState
@@ -35,7 +36,10 @@ class AppContainer(context: Context) {
     val repository = EnergyRepository(settings, http, history).also { repo ->
         repo.onAlerts = { alerts -> notifier.showAll(alerts) }
         repo.onWidgetUpdate = { sample, car ->
-            WidgetState.save(context, WidgetState.of(sample, car) { Format.power(it) })
+            val lat = car?.latitude
+            val lon = car?.longitude
+            val place = if (lat != null && lon != null) Places.match(settings.current().places, lat, lon)?.name else null
+            WidgetState.save(context, WidgetState.of(sample, car, place) { Format.power(it) })
             EnergieWidget().updateAll(context)
         }
     }

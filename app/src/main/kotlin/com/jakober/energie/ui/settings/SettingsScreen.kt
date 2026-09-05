@@ -82,7 +82,7 @@ fun SettingsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
     val dirty = draft.copy(chargeRules = saved.chargeRules, chargeLastCommandAt = saved.chargeLastCommandAt, chargeOverride = saved.chargeOverride, chargeLog = saved.chargeLog,
         fordTokensJson = saved.fordTokensJson, fordVin = saved.fordVin, fordLocationId = saved.fordLocationId, smartcarVehicleId = saved.smartcarVehicleId, smartcarUserId = saved.smartcarUserId,
         backupTreeUri = saved.backupTreeUri, backupPassword = saved.backupPassword, backupLastAt = saved.backupLastAt, backupLastResult = saved.backupLastResult,
-        alerts = saved.alerts, alertState = saved.alertState, carLearnedPowerW = saved.carLearnedPowerW) != saved
+        alerts = saved.alerts, alertState = saved.alertState, carLearnedPowerW = saved.carLearnedPowerW, places = saved.places) != saved
 
     LaunchedEffect(Unit) { vm.clearTestResult() }
 

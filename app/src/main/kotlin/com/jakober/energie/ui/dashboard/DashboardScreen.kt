@@ -10,6 +10,11 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.saveable.rememberSaveable
 import com.jakober.energie.data.FordCommand
+import com.jakober.energie.core.places.NamedPlace
+import com.jakober.energie.core.places.Places
+import androidx.compose.material.icons.rounded.AddLocationAlt
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -125,6 +130,7 @@ fun DashboardScreen(vm: EnergieViewModel, onOpenSettings: () -> Unit, contentPad
                     onCommand = vm::fordCommand,
                     commandResult = fordResult,
                     onClose = { showCarCard = false },
+                    onSavePlaces = vm::savePlaces,
                 )
             }
         }
@@ -291,6 +297,7 @@ private fun CarCard(
     onCommand: (FordCommand) -> Unit = {},
     commandResult: String? = null,
     onClose: () -> Unit = {},
+    onSavePlaces: (List<NamedPlace>) -> Unit = {},
 ) {
     val car = live.car
     var confirmUnlock by rememberSaveable { mutableStateOf(false) }
@@ -369,7 +376,7 @@ private fun CarCard(
         val carLat = car.latitude
         val carLon = car.longitude
         if (carLat != null && carLon != null) {
-            CarLocation(carLat, carLon, car.distanceHomeM)
+            CarLocation(carLat, carLon, car.distanceHomeM, settings.places, onSavePlaces)
         }
         live.carError?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
         if (settings.fordConnected) {
@@ -389,10 +396,15 @@ private fun CarCard(
     }
 }
 
-/** Standort des Autos: zu Hause oder Adresse, plus Sprung in die Karten-App. */
+/**
+ * Standort des Autos: zu Hause, ein gemerkter Ort (Plus-Knopf zum Anlegen,
+ * Stift zum Umbenennen oder Loeschen) oder Adresse, plus Sprung in die Karten-App.
+ */
 @Composable
-private fun CarLocation(lat: Double, lon: Double, distanceHomeM: Double?) {
+private fun CarLocation(lat: Double, lon: Double, distanceHomeM: Double?, places: List<NamedPlace>, onSavePlaces: (List<NamedPlace>) -> Unit) {
     val context = LocalContext.current
+    val matched = remember(places, lat, lon) { Places.match(places, lat, lon) }
+    var editing by rememberSaveable { mutableStateOf(false) }
     // Adresse per Geocoder nachschlagen; schlaegt das fehl, bleiben die Koordinaten.
     val address by produceState<String?>(initialValue = null, lat, lon) {
         value = withContext(Dispatchers.IO) {
@@ -404,21 +416,65 @@ private fun CarLocation(lat: Double, lon: Double, distanceHomeM: Double?) {
             }.getOrNull()
         }
     }
+    val atHome = distanceHomeM != null && distanceHomeM < 300
     val where = when {
-        distanceHomeM != null && distanceHomeM < 300 -> "zu Hause"
+        atHome -> "zu Hause"
+        matched != null -> "bei ${matched.name}"
         distanceHomeM != null && distanceHomeM < 10_000 -> "unterwegs, ${(distanceHomeM / 100).toInt() / 10.0} km von zu Hause"
         distanceHomeM != null -> "unterwegs, ${(distanceHomeM / 1000).toInt()} km von zu Hause"
         else -> "Standort"
     }
+    val coords = String.format(java.util.Locale.GERMANY, "%.5f, %.5f", lat, lon)
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(where, style = MaterialTheme.typography.titleSmall)
-            Text(address ?: String.format(java.util.Locale.GERMANY, "%.5f, %.5f", lat, lon), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(address ?: coords, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (!atHome) {
+            IconButton(onClick = { editing = true }) {
+                Icon(if (matched != null) Icons.Rounded.Edit else Icons.Rounded.AddLocationAlt, if (matched != null) "Ort bearbeiten" else "Ort merken")
+            }
         }
         TextButton(onClick = {
             val uri = Uri.parse("geo:$lat,$lon?q=$lat,$lon(Auto)")
             runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
         }) { Text("Karte") }
+    }
+    if (editing) {
+        var name by rememberSaveable { mutableStateOf(matched?.name ?: address?.substringBefore(",") ?: "") }
+        AlertDialog(
+            onDismissRequest = { editing = false },
+            title = { Text(if (matched != null) "Ort bearbeiten" else "Ort merken") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Steht das Auto künftig im Umkreis von 200 m um diese Stelle, zeigt die App den Namen statt der Adresse.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Name, z. B. Arbeit") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Text(address ?: coords, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = name.isNotBlank(),
+                    onClick = {
+                        // Beim Umbenennen bleibt die gemerkte Position, sonst die aktuelle.
+                        val base = matched?.let { Places.remove(places, it) } ?: places
+                        onSavePlaces(Places.upsert(base, NamedPlace(name.trim(), matched?.latitude ?: lat, matched?.longitude ?: lon)))
+                        editing = false
+                    },
+                ) { Text("Speichern") }
+            },
+            dismissButton = {
+                Row {
+                    if (matched != null) {
+                        TextButton(onClick = { onSavePlaces(Places.remove(places, matched)); editing = false }) { Text("Löschen", color = MaterialTheme.colorScheme.error) }
+                    }
+                    TextButton(onClick = { editing = false }) { Text("Abbrechen") }
+                }
+            },
+        )
     }
 }
 

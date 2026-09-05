@@ -1,8 +1,13 @@
 package com.jakober.energie.ui.settings
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.DocumentsContract
+import androidx.compose.runtime.produceState
+import androidx.documentfile.provider.DocumentFile
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -36,7 +41,6 @@ import androidx.compose.ui.unit.dp
 import com.jakober.energie.data.Settings
 import com.jakober.energie.ui.EnergieCard
 import com.jakober.energie.ui.Format
-import com.jakober.energie.ui.ValueRow
 import com.jakober.energie.ui.theme.EnergyColors
 import kotlinx.datetime.Instant
 
@@ -76,8 +80,18 @@ fun BackupCard(
             "Täglich nachts im WLAN eine ZIP-Datei mit Verlauf und Einstellungen in einen Ordner deiner Wahl, etwa in Google Drive. Zugangsdaten sind darin mit dem Passwort verschlüsselt; die letzten 14 Sicherungen bleiben erhalten.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        val folderName = saved.backupTreeUri.takeIf { it.isNotBlank() }?.let { folderLabel(it) }
-        ValueRow("Zielordner", folderName ?: "nicht gewählt")
+        val folderName by produceState<String?>(initialValue = null, saved.backupTreeUri) {
+            val uri = saved.backupTreeUri.takeIf { it.isNotBlank() }
+            value = if (uri == null) null else withContext(Dispatchers.IO) { folderLabel(context, uri) }
+        }
+        Column {
+            Text("Zielordner", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                folderName ?: if (saved.backupTreeUri.isBlank()) "nicht gewählt" else "wird gelesen …",
+                style = MaterialTheme.typography.titleMedium,
+                color = if (saved.backupTreeUri.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+            )
+        }
         OutlinedTextField(
             value = password, onValueChange = { password = it },
             label = { Text("Backup-Passwort (mind. 8 Zeichen)") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
@@ -105,7 +119,14 @@ fun BackupCard(
             OutlinedButton(onClick = { pickFile.launch(arrayOf("application/zip", "application/octet-stream")) }, enabled = !busy, modifier = Modifier.weight(1f)) { Text("Wiederherstellen…") }
         }
         if (saved.backupLastAt > 0) {
-            ValueRow("Letzte Sicherung", Format.dateTime(Instant.fromEpochSeconds(saved.backupLastAt)), saved.backupLastResult.takeIf { it.isNotBlank() })
+            Column {
+                Text("Letzte Sicherung", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(Format.dateTime(Instant.fromEpochSeconds(saved.backupLastAt)), style = MaterialTheme.typography.titleMedium)
+                if (saved.backupLastResult.isNotBlank()) {
+                    val failed = saved.backupLastResult.startsWith("Fehler")
+                    Text(saved.backupLastResult, style = MaterialTheme.typography.bodySmall, color = if (failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
         } else if (saved.backupLastResult.isNotBlank()) {
             Text(saved.backupLastResult, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
         }
@@ -135,16 +156,23 @@ fun BackupCard(
     }
 }
 
-/** Lesbarer Name des gewaehlten Ordners aus der SAF-Adresse, etwa "Drive · Energie". */
-private fun folderLabel(treeUri: String): String {
+/**
+ * Lesbarer Name des gewaehlten Ordners, etwa "Google Drive · Energie". Der
+ * Anzeigename kommt vom Anbieter (DocumentFile), weil die Dokument-ID bei
+ * Google Drive nur ein verschluesselter Schluessel ist.
+ */
+private fun folderLabel(context: Context, treeUri: String): String {
     val uri = Uri.parse(treeUri)
-    val docId = runCatching { DocumentsContract.getTreeDocumentId(uri) }.getOrNull() ?: return treeUri
     val provider = when {
         uri.authority?.contains("google", ignoreCase = true) == true -> "Google Drive"
         uri.authority?.contains("externalstorage", ignoreCase = true) == true -> "Gerät"
         uri.authority?.contains("onedrive", ignoreCase = true) == true || uri.authority?.contains("skydrive", ignoreCase = true) == true -> "OneDrive"
-        else -> uri.authority ?: ""
+        uri.authority?.contains("nextcloud", ignoreCase = true) == true -> "Nextcloud"
+        else -> ""
     }
-    val path = docId.substringAfter(':', docId).substringAfterLast('/').ifBlank { docId }
-    return if (provider.isBlank()) path else "$provider · $path"
+    val displayName = runCatching { DocumentFile.fromTreeUri(context, uri)?.name }.getOrNull()
+    val name = displayName?.takeIf { it.isNotBlank() } ?: runCatching { DocumentsContract.getTreeDocumentId(uri) }.getOrNull()
+        ?.let { id -> if (id.contains("encoded=")) "gewählter Ordner" else id.substringAfter(':', id).substringAfterLast('/').ifBlank { id } }
+        ?: "gewählter Ordner"
+    return if (provider.isBlank()) name else "$provider · $name"
 }

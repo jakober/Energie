@@ -16,6 +16,8 @@ data class AlertSettings(
     val batteryFullPercent: Int = 95,
     /** Rueckmeldung, wenn die Ladeautomatik pausiert oder fortsetzt. */
     val automation: Boolean = true,
+    /** Das Auto hat zu laden begonnen oder aufgehoert (laut Fahrzeug). */
+    val chargeStartStop: Boolean = true,
     /** SENEC oder FRITZ!Box antworten seit laengerem nicht. */
     val sourceDown: Boolean = true,
     val sourceDownMinutes: Int = 60,
@@ -23,7 +25,7 @@ data class AlertSettings(
     val backupFailed: Boolean = true,
 )
 
-enum class AlertKind { CAR_UNLOCKED_HOME, SURPLUS_UNUSED, AUTOMATION_ACTED, SOURCE_DOWN, SOURCE_BACK, BACKUP_FAILED }
+enum class AlertKind { CAR_UNLOCKED_HOME, SURPLUS_UNUSED, AUTOMATION_ACTED, SOURCE_DOWN, SOURCE_BACK, BACKUP_FAILED, CHARGE_STARTED, CHARGE_STOPPED }
 
 /** Ein Hinweis, wie er als Benachrichtigung erscheint. */
 data class Alert(
@@ -44,6 +46,10 @@ data class AlertState(
     val lastSurplusAt: Long = 0,
     val senecDownReported: Boolean = false,
     val fritzDownReported: Boolean = false,
+    /** Ladestatus beim letzten Durchlauf, null = noch nie gesehen. */
+    val lastCharging: Boolean? = null,
+    /** Autoladung beim Ladestart, fuer die Meldung am Ende. */
+    val chargeStartSoc: Double? = null,
 )
 
 /** Momentaufnahme fuer die Engine. `null` = unbekannt. */
@@ -65,6 +71,9 @@ data class AlertInput(
     val lastFritzOkAt: Instant?,
     /** Zeile, die die Ladeautomatik in diesem Durchlauf ins Protokoll geschrieben hat. */
     val automationLine: String?,
+    val carSocPercent: Double? = null,
+    /** Ob das Auto zu Hause laedt (Ladeleistung im Messpunkt), fuer den Text. */
+    val carChargingAtHome: Boolean = false,
 )
 
 data class AlertResult(val alerts: List<Alert>, val state: AlertState)
@@ -119,6 +128,36 @@ object AlertEngine {
                 offerCharge = true,
             )
             s = s.copy(lastSurplusAt = nowSec)
+        }
+
+        // --- Ladestart / Ladeende laut Fahrzeug ---
+        val charging = input.carCharging
+        if (charging != null) {
+            val before = s.lastCharging
+            if (before != null && before != charging && settings.chargeStartStop) {
+                val soc = input.carSocPercent
+                if (charging) {
+                    alerts += Alert(
+                        AlertKind.CHARGE_STARTED, "Auto lädt",
+                        buildString {
+                            append(if (input.carChargingAtHome) "Das Auto lädt jetzt zu Hause" else "Das Auto lädt jetzt")
+                            if (soc != null) append(", Akku ${soc.toInt()} %")
+                            append(".")
+                        },
+                    )
+                } else {
+                    val from = s.chargeStartSoc
+                    alerts += Alert(
+                        AlertKind.CHARGE_STOPPED, "Laden beendet",
+                        buildString {
+                            append("Das Auto lädt nicht mehr")
+                            if (soc != null) append(if (from != null && from < soc) ", Akku ${from.toInt()} % → ${soc.toInt()} %" else ", Akku ${soc.toInt()} %")
+                            append(if (input.carPluggedIn == true) ". Es steckt noch." else ".")
+                        },
+                    )
+                }
+            }
+            if (before != charging) s = s.copy(lastCharging = charging, chargeStartSoc = if (charging) input.carSocPercent else s.chargeStartSoc)
         }
 
         // --- Rueckmeldung der Ladeautomatik ---

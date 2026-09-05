@@ -36,8 +36,11 @@ pro Tag unter `files/verlauf/`. Alles Weitere rechnet sie daraus.
   Nachtsperre, Handschalter "jetzt voll laden"). Befehle gehen über FordPass.
 - **Benachrichtigungen:** Auto steht zu Hause und ist nicht abgeschlossen;
   Speicher voll und Einspeisung hoch, aber das Auto lädt nicht (mit Knopf
-  "Jetzt laden"); Rückmeldung der Automatik; Quelle ausgefallen; Sicherung
-  fehlgeschlagen.
+  "Jetzt laden"); Ladestart und Ladeende des Autos mit Akkustand; Rückmeldung
+  der Automatik; Quelle ausgefallen; Sicherung fehlgeschlagen.
+- **Fahrten:** Kilometer je Tag aus dem Kilometerstand, Verbrauch aus dem
+  Akkuinhalt, Herkunft des Fahrstroms (Sonne, Netz, unterwegs) über ein
+  Tank-Modell des Akkus, Kosten je 100 km.
 - **PV-Prognose:** Wetter von Open-Meteo (ohne Schlüssel) für den Standort
   Zuhause, Einstrahlung auf beide Dachseiten, daraus der Tagesertrag für
   sieben Tage als Wochenstreifen unter dem Flussdiagramm (Symbol,

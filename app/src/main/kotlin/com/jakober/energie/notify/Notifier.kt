@@ -37,7 +37,7 @@ class Notifier(private val context: Context) {
     fun show(alert: Alert) {
         if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return
         val channel = when (alert.kind) {
-            AlertKind.CAR_UNLOCKED_HOME, AlertKind.SURPLUS_UNUSED -> CHANNEL_CAR
+            AlertKind.CAR_UNLOCKED_HOME, AlertKind.SURPLUS_UNUSED, AlertKind.CHARGE_STARTED, AlertKind.CHARGE_STOPPED -> CHANNEL_CAR
             else -> CHANNEL_INFO
         }
         val open = PendingIntent.getActivity(
@@ -71,6 +71,8 @@ class Notifier(private val context: Context) {
     /** Ein Hinweis je Art; ein neuer derselben Art ersetzt den alten. SOURCE_BACK raeumt SOURCE_DOWN ab. */
     private fun idFor(kind: AlertKind): Int = when (kind) {
         AlertKind.SOURCE_BACK -> AlertKind.SOURCE_DOWN.ordinal + 100
+        // Start und Ende teilen sich eine Kachel: das Ende ersetzt den Start.
+        AlertKind.CHARGE_STOPPED -> AlertKind.CHARGE_STARTED.ordinal + 100
         else -> kind.ordinal + 100
     }
 

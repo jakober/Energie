@@ -57,6 +57,7 @@ fun NotificationsCard(saved: AlertSettings, onSave: (AlertSettings) -> Unit) {
             SliderRow("Speicher ab", "${draft.batteryFullPercent} %", draft.batteryFullPercent.toFloat(), 70f..100f, 5) { draft = draft.copy(batteryFullPercent = it.roundToInt().let { v -> v - v % 5 }) }
         }
         ToggleRow("Ladeautomatik", "Wenn die Automatik das Laden pausiert oder fortsetzt.", draft.automation) { draft = draft.copy(automation = it) }
+        ToggleRow("Ladestart und Ladeende", "Wenn das Auto laut Ford zu laden beginnt oder aufhört, mit Akkustand.", draft.chargeStartStop) { draft = draft.copy(chargeStartStop = it) }
         ToggleRow("Quelle ausgefallen", "SENEC oder FRITZ!Box antworten seit ${draft.sourceDownMinutes} min nicht, und wenn sie wieder da sind.", draft.sourceDown) { draft = draft.copy(sourceDown = it) }
         ToggleRow("Sicherung fehlgeschlagen", "Wenn die nächtliche Sicherung nicht geschrieben werden konnte.", draft.backupFailed) { draft = draft.copy(backupFailed = it) }
 

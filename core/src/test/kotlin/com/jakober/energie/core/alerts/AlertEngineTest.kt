@@ -18,12 +18,37 @@ class AlertEngineTest {
         lock: String? = "LOCKED", distance: Double? = 20.0,
         override: Boolean = false,
         senecOk: Instant? = now, fritzOk: Instant? = now,
-        line: String? = null,
+        line: String? = null, carSoc: Double? = null,
     ) = AlertInput(
         now = now, batterySocPercent = soc, gridPowerW = grid, carPluggedIn = plugged, carCharging = charging,
         carLockState = lock, carDistanceHomeM = distance, chargeOverride = override,
         senecConfigured = true, fritzConfigured = true, lastSenecOkAt = senecOk, lastFritzOkAt = fritzOk, automationLine = line,
+        carSocPercent = carSoc,
     )
+
+    @Test
+    fun `ladestart und ladeende melden nur den Wechsel`() {
+        // Erster Durchlauf: Zustand lernen, keine Meldung.
+        var r = AlertEngine.evaluate(input(charging = false, carSoc = 60.0), AlertState(), settings)
+        assertTrue(r.alerts.isEmpty())
+        assertEquals(false, r.state.lastCharging)
+        // Laedt jetzt: eine Meldung mit Akkustand.
+        r = AlertEngine.evaluate(input(plugged = true, charging = true, carSoc = 61.0), r.state, settings)
+        assertEquals(listOf(AlertKind.CHARGE_STARTED), r.alerts.map { it.kind })
+        assertTrue(r.alerts[0].text.contains("61 %"))
+        // Laedt weiter: nichts.
+        r = AlertEngine.evaluate(input(plugged = true, charging = true, carSoc = 70.0), r.state, settings)
+        assertTrue(r.alerts.isEmpty())
+        // Ende: Meldung mit von-bis, Auto steckt noch.
+        r = AlertEngine.evaluate(input(plugged = true, charging = false, carSoc = 80.0), r.state, settings)
+        assertEquals(listOf(AlertKind.CHARGE_STOPPED), r.alerts.map { it.kind })
+        assertTrue(r.alerts[0].text.contains("61 % → 80 %"), r.alerts[0].text)
+        assertTrue(r.alerts[0].text.contains("steckt noch"))
+        // Abgeschaltet: keine Meldung, Zustand bleibt gemerkt.
+        r = AlertEngine.evaluate(input(plugged = true, charging = true, carSoc = 80.0), r.state, settings.copy(chargeStartStop = false))
+        assertTrue(r.alerts.isEmpty())
+        assertEquals(true, r.state.lastCharging)
+    }
 
     @Test
     fun `nichts zu melden im Normalfall`() {
@@ -61,7 +86,7 @@ class AlertEngineTest {
 
     @Test
     fun `unbekannter Schliesszustand aendert nichts`() {
-        val state = AlertState(unlockedSince = t0.epochSeconds, unlockedReported = true)
+        val state = AlertState(unlockedSince = t0.epochSeconds, unlockedReported = true, lastCharging = false)
         val r = AlertEngine.evaluate(input(now = t0 + 60.minutes, lock = null), state, settings)
         assertEquals(state, r.state)
         assertTrue(r.alerts.isEmpty())

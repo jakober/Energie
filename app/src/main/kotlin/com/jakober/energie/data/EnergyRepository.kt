@@ -326,6 +326,8 @@ class EnergyRepository(
             lastSenecOkAt = lastSenecOkAt,
             lastFritzOkAt = lastFritzOkAt,
             automationLine = automationLine,
+            carSocPercent = car?.socPercent,
+            carChargingAtHome = (live.sample?.carChargePowerW ?: 0.0) > 0,
         )
         val result = AlertEngine.evaluate(input, s.alertState, s.alerts)
         if (result.state != s.alertState) settings.saveAlertState(result.state)

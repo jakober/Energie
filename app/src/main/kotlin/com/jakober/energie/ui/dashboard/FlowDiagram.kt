@@ -24,7 +24,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.BatteryChargingFull
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.ElectricCar
 import androidx.compose.material.icons.rounded.Home
@@ -37,8 +36,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -125,11 +127,11 @@ fun FlowDiagram(sample: EnergySample?, showCar: Boolean = false, onNodeClick: ((
                 radius = size.width * 0.45f, center = bottom,
             )
 
-            fun link(node: Offset, watts: Double, color: Color, towardsHub: Boolean) {
+            fun link(node: Offset, watts: Double, color: Color, towardsHub: Boolean, startInset: Float = nodeR) {
                 val dir = c - node
                 val len = dir.getDistance()
                 val unit = dir / len
-                val start = node + unit * nodeR
+                val start = node + unit * startInset
                 val end = c - unit * hubR
                 val mid = (start + end) / 2f
                 val normal = Offset(-unit.y, unit.x)
@@ -170,9 +172,11 @@ fun FlowDiagram(sample: EnergySample?, showCar: Boolean = false, onNodeClick: ((
             // Netz: Bezug zur Mitte, Einspeisung von der Mitte weg.
             if (grid >= 0) link(bottom, grid, EnergyColors.grid, towardsHub = true)
             else link(bottom, grid, EnergyColors.export, towardsHub = false)
-            // Speicher: laden von der Mitte weg, entladen zur Mitte hin.
-            if (battery >= 0) link(left, battery, EnergyColors.battery, towardsHub = false)
-            else link(left, battery, EnergyColors.battery, towardsHub = true)
+            // Speicher: laden von der Mitte weg, entladen zur Mitte hin. Der Pfad
+            // beginnt an der rechten Kante des Speicher-Rechtecks.
+            val batteryEdge = BatteryWidth.toPx() / 2 + 2.dp.toPx()
+            if (battery >= 0) link(left, battery, EnergyColors.battery, towardsHub = false, startInset = batteryEdge)
+            else link(left, battery, EnergyColors.battery, towardsHub = true, startInset = batteryEdge)
 
             // Die Mitte: Glasscheibe mit Autarkie-Ring.
             drawCircle(Color.White.copy(alpha = 0.06f), hubR, c)
@@ -234,15 +238,15 @@ fun FlowDiagram(sample: EnergySample?, showCar: Boolean = false, onNodeClick: ((
             Format.power(abs(grid)), if (grid < -15) "Einspeisung" else if (grid > 15) "Netzbezug" else "Netz",
             Modifier.align(Alignment.BottomCenter).padding(bottom = EdgeInset), textBelow = false, onClick = click(FlowNodeKind.GRID),
         )
-        FlowNode(
-            Icons.Rounded.BatteryChargingFull, EnergyColors.battery, Format.power(abs(battery)),
-            when {
+        BatteryNode(
+            soc = soc, charging = battery > 15,
+            value = Format.power(abs(battery)),
+            label = when {
                 battery > 15 -> "Speicher lädt"
                 battery < -15 -> "Speicher gibt ab"
                 else -> "Speicher"
             },
-            Modifier.align(Alignment.CenterStart).offset(y = 26.dp), textBelow = true,
-            ring = soc?.let { (it / 100.0).toFloat() }, ringLabel = soc?.let { Format.percentValue(it) },
+            modifier = Modifier.align(Alignment.CenterStart).offset(y = 26.dp),
             onClick = click(FlowNodeKind.BATTERY),
         )
     }
@@ -250,6 +254,77 @@ fun FlowDiagram(sample: EnergySample?, showCar: Boolean = false, onNodeClick: ((
 
 /** Breite eines Seitenknotens: Symbol mittig ueber der Kreismitte des Canvas, Text darf umbrechen. */
 private val SideNodeWidth = (EdgeInset + NodeRadius) * 2
+
+private val BatteryWidth = 46.dp
+private val BatteryHeight = 88.dp
+
+/**
+ * Der Speicher als stehende Zelle: Pol oben, der Koerper fuellt sich von unten
+ * mit dem Ladezustand, die Prozentzahl steht darin. Nutzt den Platz links
+ * oben, den der Kreis frei liess.
+ */
+@Composable
+private fun BatteryNode(
+    soc: Double?,
+    charging: Boolean,
+    value: String,
+    label: String,
+    modifier: Modifier,
+    onClick: (() -> Unit)?,
+) {
+    val color = EnergyColors.battery
+    val fraction = ((soc ?: 0.0) / 100.0).toFloat().coerceIn(0f, 1f)
+    Column(modifier.width(SideNodeWidth), horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            Modifier
+                .size(BatteryWidth + 16.dp, BatteryHeight + 8.dp)
+                .let { m -> if (onClick != null) m.clip(RoundedCornerShape(14.dp)).clickable(onClick = onClick) else m },
+            contentAlignment = Alignment.Center,
+        ) {
+            Canvas(Modifier.size(BatteryWidth, BatteryHeight)) {
+                val w = size.width
+                val h = size.height
+                val capW = w * 0.42f
+                val capH = 6.dp.toPx()
+                val bodyTop = capH + 2.dp.toPx()
+                val r = CornerRadius(9.dp.toPx())
+                val bodySize = Size(w, h - bodyTop)
+                // Schein
+                drawRoundRect(
+                    Brush.radialGradient(listOf(color.copy(alpha = 0.35f), Color.Transparent), center = Offset(w / 2, (bodyTop + h) / 2), radius = h * 0.75f),
+                    topLeft = Offset(-10.dp.toPx(), bodyTop - 10.dp.toPx()), size = Size(w + 20.dp.toPx(), bodySize.height + 20.dp.toPx()),
+                    cornerRadius = CornerRadius(16.dp.toPx()),
+                )
+                // Koerper
+                drawRoundRect(color.copy(alpha = 0.16f), Offset(0f, bodyTop), bodySize, r)
+                // Fuellung von unten, im Koerper beschnitten
+                val clipPath = Path().apply { addRoundRect(RoundRect(0f, bodyTop, w, h, r)) }
+                clipPath(clipPath) {
+                    val fillH = bodySize.height * fraction
+                    if (fillH > 0f) {
+                        drawRect(
+                            Brush.verticalGradient(listOf(color, color.copy(alpha = 0.72f)), startY = h - fillH, endY = h),
+                            topLeft = Offset(0f, h - fillH), size = Size(w, fillH),
+                        )
+                        // Helle Kante am Fuellstand
+                        drawRect(Color.White.copy(alpha = 0.35f), topLeft = Offset(0f, h - fillH), size = Size(w, 1.5.dp.toPx()))
+                    }
+                }
+                // Rahmen und Pol
+                drawRoundRect(color.copy(alpha = 0.9f), Offset(0f, bodyTop), bodySize, r, style = Stroke(1.5.dp.toPx()))
+                drawRoundRect(color.copy(alpha = 0.9f), Offset((w - capW) / 2, 0f), Size(capW, capH), CornerRadius(2.dp.toPx()))
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    soc?.let { Format.percentValue(it) } ?: "–",
+                    style = MaterialTheme.typography.labelLarge, color = Color.White, fontWeight = FontWeight.Bold,
+                )
+                if (charging) Icon(Icons.Rounded.Bolt, null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(14.dp))
+            }
+        }
+        NodeText(value, label)
+    }
+}
 
 /**
  * Ein Knoten des Diagramms: leuchtender Kreis mit Symbol, darunter (oder

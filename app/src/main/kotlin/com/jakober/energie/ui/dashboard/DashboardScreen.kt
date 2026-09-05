@@ -128,7 +128,6 @@ fun DashboardScreen(vm: EnergieViewModel, onOpenSettings: () -> Unit, contentPad
                 forecast = pvForecastBadge(settings, live.pvPeakEstimateKw, vm.todayDate(), today?.totals?.productionWh),
             )
         }
-        item { WeatherStrip(live, settings, vm.todayDate(), onClick = { selectedNode = if (selectedNode == FlowNodeKind.PV) null else FlowNodeKind.PV }) }
 
         when (selectedNode) {
             FlowNodeKind.CAR -> if (carActive) item {
@@ -147,6 +146,9 @@ fun DashboardScreen(vm: EnergieViewModel, onOpenSettings: () -> Unit, contentPad
             FlowNodeKind.GRID -> item { GridDetailCard(live, today, yesterday, settings, onClose = { selectedNode = null }) }
             null -> {}
         }
+
+        // Erst die aufgeklappte Detailkarte, dann der Wochenstreifen, sonst sieht man nicht, dass etwas aufging.
+        item { WeatherStrip(live, settings, vm.todayDate(), onClick = { selectedNode = if (selectedNode == FlowNodeKind.PV) null else FlowNodeKind.PV }) }
 
         item { BatteryAndGridRow(live) }
 

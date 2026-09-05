@@ -260,16 +260,30 @@ class FordPassClient(
     suspend fun pauseCharge(vin: String) = command(vin, "pauseGlobalChargeCommand")
     suspend fun startCharge(vin: String) = command(vin, "startGlobalChargeCommand")
     suspend fun cancelCharge(vin: String) = command(vin, "cancelGlobalChargeCommand")
-    /** Tueren verriegeln bzw. entriegeln - dieselbe Befehlsschnittstelle wie das Laden. */
-    suspend fun lock(vin: String) = command(vin, "lock")
-    suspend fun unlock(vin: String) = command(vin, "unlock")
+    /**
+     * Tueren verriegeln bzw. entriegeln. Anders als die Ladebefehle kennt Autonomic
+     * `lock`/`unlock` nicht in Version 1.0.1 ("Command lock with version 1.0.1 not
+     * found"); die FordPass-App schickt sie ohne Versionsfeld. Antwortet der
+     * Dienst trotzdem mit 404 wegen der Version, folgt ein Versuch mit 1.0.0.
+     */
+    suspend fun lock(vin: String) = doorCommand(vin, "lock")
+    suspend fun unlock(vin: String) = doorCommand(vin, "unlock")
 
-    private suspend fun command(vin: String, type: String): FordCommandResult {
+    private suspend fun doorCommand(vin: String, type: String): FordCommandResult {
+        val first = command(vin, type, version = null)
+        if (first.status == 404 && first.body.contains("version", ignoreCase = true)) {
+            return command(vin, type, version = "1.0.0")
+        }
+        return first
+    }
+
+    private suspend fun command(vin: String, type: String, version: String? = "1.0.1"): FordCommandResult {
         val token = autoToken()
         val body = buildJsonObject {
+            if (version == null) put("properties", buildJsonObject {})
             put("tags", buildJsonObject {})
             put("type", type)
-            put("version", "1.0.1")
+            if (version != null) put("version", version)
             put("wakeUp", true)
         }.toString()
         val response = http.post("$AUTONOMIC_BETA/command/vehicles/$vin/commands") {

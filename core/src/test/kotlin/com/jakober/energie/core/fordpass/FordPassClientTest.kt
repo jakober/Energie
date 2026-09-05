@@ -112,6 +112,58 @@ class FordPassClientTest {
     }
 
     @Test
+    fun tuerbefehleOhneVersionMitFallback() = runTest {
+        val bodies = ArrayList<String>()
+        val engine = MockEngine { req ->
+            when {
+                req.url.host == "accounts.autonomic.ai" -> respond("""{"access_token":"auto-access","expires_in":3600}""")
+                req.url.encodedPath.endsWith("/command/vehicles/WF0XXXMACHE123456/commands") -> {
+                    val body = bodyOf(req)
+                    bodies += body
+                    if (body.contains("\"version\"")) {
+                        // Ford kennt lock nur ohne Version bzw. in 1.0.0 - so wie die echte Antwort vom 5.9.2026.
+                        respond("""{"code":404,"error":"not found","message":"Command lock with version 1.0.1 not found"}""", HttpStatusCode.NotFound)
+                    } else {
+                        respond("""{"id":"cmd-2","status":"QUEUED"}""", HttpStatusCode.Created)
+                    }
+                }
+                else -> respond("?", HttpStatusCode.NotFound)
+            }
+        }
+        val tokens = FordTokens("ford-access", "ford-refresh", expiresAt = 1_900_000_000)
+        val client = FordPassClient(HttpClient(engine), tokens, clock = FixedClock)
+
+        val result = client.lock("WF0XXXMACHE123456")
+        assertTrue(result.accepted, result.body)
+        assertEquals("""{"properties":{},"tags":{},"type":"lock","wakeUp":true}""", bodies.single())
+
+        bodies.clear()
+        assertTrue(client.unlock("WF0XXXMACHE123456").accepted)
+        assertEquals("""{"properties":{},"tags":{},"type":"unlock","wakeUp":true}""", bodies.single())
+    }
+
+    @Test
+    fun tuerbefehlFallbackAufVersion100() = runTest {
+        val bodies = ArrayList<String>()
+        val engine = MockEngine { req ->
+            when {
+                req.url.host == "accounts.autonomic.ai" -> respond("""{"access_token":"auto-access","expires_in":3600}""")
+                req.url.encodedPath.endsWith("/commands") -> {
+                    val body = bodyOf(req)
+                    bodies += body
+                    if (body.contains("\"version\":\"1.0.0\"")) respond("""{"id":"cmd-3","status":"QUEUED"}""", HttpStatusCode.Created)
+                    else respond("""{"code":404,"message":"Command lock with version null not found"}""", HttpStatusCode.NotFound)
+                }
+                else -> respond("?", HttpStatusCode.NotFound)
+            }
+        }
+        val client = FordPassClient(HttpClient(engine), FordTokens("a", "r", expiresAt = 1_900_000_000), clock = FixedClock)
+        assertTrue(client.lock("WF0XXXMACHE123456").accepted)
+        assertEquals(2, bodies.size)
+        assertTrue(bodies[1].contains("\"version\":\"1.0.0\""), bodies[1])
+    }
+
+    @Test
     fun abgelaufenesTokenWirdErneuert() = runTest {
         var refreshCalls = 0
         val engine = MockEngine { req ->

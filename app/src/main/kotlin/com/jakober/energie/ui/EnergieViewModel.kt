@@ -98,6 +98,11 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
         .mapLatest { d -> withContext(Dispatchers.IO) { repo.dayStatistics(d) } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    /** Alle Messpunkte des gewaehlten Tags, fuer die Liste in der Statistik. */
+    val daySamples: StateFlow<List<com.jakober.energie.core.model.EnergySample>> = combine(_selectedDate, updates) { d, _ -> d }
+        .mapLatest { d -> withContext(Dispatchers.IO) { repo.history.day(d).sortedBy { it.at } } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     val rangeStats: StateFlow<RangeStatistics?> = combine(_selectedDate, _range, updates) { d, r, _ -> d to r }
         .mapLatest { (d, r) ->
             if (r == Range.DAY) return@mapLatest null

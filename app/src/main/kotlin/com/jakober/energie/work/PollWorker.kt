@@ -21,7 +21,7 @@ class PollWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
 
     override suspend fun doWork(): Result {
         val app = applicationContext as EnergieApp
-        val state = app.container.repository.refresh()
+        val state = app.container.repository.refresh(background = true)
         if (runAttemptCount == 0) app.container.repository.prune()
         // Beide Quellen gescheitert: Android soll es spaeter noch einmal versuchen.
         val nothing = state.sample == null || (state.senecError != null && state.fritzError != null)

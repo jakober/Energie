@@ -103,7 +103,8 @@ class EnergyRepository(
     private var senecBackoffUntil: Instant? = null
 
     /** Fragt beide Quellen ab. Fehler einer Quelle blockieren die andere nicht. */
-    suspend fun refresh(): LiveState = lock.withLock {
+    /** `background` markiert Messpunkte des Hintergrund-Workers, fuer die Messpunkt-Liste. */
+    suspend fun refresh(background: Boolean = false): LiveState = lock.withLock {
         val s = settings.current()
         _state.update { it.copy(refreshing = true) }
         val startedAt = clock.now()
@@ -173,6 +174,7 @@ class EnergyRepository(
             carChargePowerW = carPowerW,
             carOdometerKm = carForSample?.extra?.odometerKm,
             carEnergyKwh = carForSample?.extra?.energyRemainingKwh,
+            background = background,
         )
 
         // Ladestart erkannt: aus dem Sprung im Hausverbrauch die echte Ladeleistung lernen.

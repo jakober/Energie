@@ -71,6 +71,8 @@ fun StatisticsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
     val currentMonth by vm.currentMonth.collectAsStateWithLifecycle()
     val storedDays by vm.storedDays.collectAsStateWithLifecycle()
     val driving by vm.driving.collectAsStateWithLifecycle()
+    val daySamples by vm.daySamples.collectAsStateWithLifecycle()
+    var showSamples by rememberSaveable { mutableStateOf(false) }
 
     LazyColumn(
         Modifier.fillMaxSize(),
@@ -112,7 +114,10 @@ fun StatisticsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
         }
 
         when (range) {
-            Range.DAY -> dayItems(day, settings)
+            Range.DAY -> {
+                dayItems(day, settings)
+                if (day != null && day.sampleCount > 0) sampleItems(daySamples, day.date, showSamples) { showSamples = !showSamples }
+            }
             else -> rangeItems(rangeStats, settings, range)
         }
 

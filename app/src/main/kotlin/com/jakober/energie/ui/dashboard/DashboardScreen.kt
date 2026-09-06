@@ -126,6 +126,7 @@ fun DashboardScreen(vm: EnergieViewModel, onOpenSettings: () -> Unit, contentPad
                 live.sample, showCar = carActive,
                 onNodeClick = { kind -> selectedNode = if (selectedNode == kind) null else kind },
                 forecast = pvForecastBadge(settings, live.pvPeakEstimateKw, vm.todayDate(), today?.totals?.productionWh),
+                batteryCapacityWh = live.senec?.bessNameplate?.designCapacityWh,
             )
         }
 

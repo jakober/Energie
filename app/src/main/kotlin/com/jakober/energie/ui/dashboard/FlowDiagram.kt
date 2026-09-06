@@ -84,6 +84,8 @@ fun FlowDiagram(
     showCar: Boolean = false,
     onNodeClick: ((FlowNodeKind) -> Unit)? = null,
     forecast: ForecastBadge? = null,
+    /** Nennkapazitaet des Speichers in Wh, fuer die Restlaufzeit unter dem Speicher. */
+    batteryCapacityWh: Double? = null,
     modifier: Modifier = Modifier,
 ) {
     fun click(kind: FlowNodeKind): (() -> Unit)? = onNodeClick?.let { cb -> { cb(kind) } }
@@ -268,6 +270,7 @@ fun FlowDiagram(
                 battery < -15 -> "Speicher gibt ab"
                 else -> "Speicher"
             },
+            sub = batteryEtaLabel(soc, sample?.batteryPowerW, batteryCapacityWh),
             modifier = Modifier.align(Alignment.CenterStart).offset(y = 26.dp),
             onClick = click(FlowNodeKind.BATTERY),
         )
@@ -291,6 +294,8 @@ private fun BatteryNode(
     charging: Boolean,
     value: String,
     label: String,
+    /** Dritte Zeile, etwa "leer gegen 23:15 · 2 h 40 min". */
+    sub: String?,
     modifier: Modifier,
     onClick: (() -> Unit)?,
 ) {
@@ -345,6 +350,12 @@ private fun BatteryNode(
             }
         }
         NodeText(value, label)
+        if (sub != null) {
+            Text(
+                sub, style = MaterialTheme.typography.labelSmall, color = color.copy(alpha = 0.9f), textAlign = TextAlign.Center,
+                maxLines = 2, lineHeight = 13.sp,
+            )
+        }
     }
 }
 

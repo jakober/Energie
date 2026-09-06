@@ -44,6 +44,7 @@ import com.jakober.energie.ui.theme.EnergyColors
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.plus
+import kotlinx.datetime.toLocalDateTime
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -61,7 +62,20 @@ private fun compare(today: Double, yesterday: Double?): String? {
     return "gestern ${Format.energy(yesterday)} ($sign${diff.roundToInt()} %)"
 }
 
-private fun hoursLabel(h: Double): String = if (h < 1) "${(h * 60).roundToInt()} min" else String.format(Locale.GERMANY, "%.1f h", h)
+/**
+ * "leer gegen 23:15 · 2 h 40 min" bzw. "voll gegen 12:40 · 1 h 05 min", aus dem
+ * Moment gerechnet. Null, wenn der Speicher ruht oder die Kapazitaet fehlt.
+ */
+fun batteryEtaLabel(soc: Double?, powerW: Double?, capacityWh: Double?, now: kotlinx.datetime.Instant = kotlinx.datetime.Clock.System.now()): String? {
+    val e = com.jakober.energie.core.history.BatteryRuntime.estimate(soc, powerW, capacityWh) ?: return null
+    val what = if (e.charging) "voll" else "leer"
+    if (e.beyondHorizon) return if (e.charging) "voll in über 2 Tagen" else "reicht über 2 Tage"
+    val at = now + e.duration
+    val zone = kotlinx.datetime.TimeZone.currentSystemDefault()
+    val dayOffset = at.toLocalDateTime(zone).date.toEpochDays() - now.toLocalDateTime(zone).date.toEpochDays()
+    val day = when (dayOffset) { 0 -> ""; 1 -> "morgen "; else -> "${Format.dateNum(at.toLocalDateTime(zone).date)} " }
+    return "$what ${day}gegen ${Format.time(at)} · ${Format.duration(e.duration.inWholeMinutes)}"
+}
 
 @Composable
 fun BatteryDetailCard(live: LiveState, today: DayStatistics?, onClose: () -> Unit) {
@@ -82,10 +96,9 @@ fun BatteryDetailCard(live: LiveState, today: DayStatistics?, onClose: () -> Uni
                 )
                 if (capacity != null && soc != null) {
                     Text("${Format.energy(capacity * soc / 100)} von ${Format.energy(capacity)} gespeichert", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    if (p != null && abs(p) > 50) {
-                        val remaining = if (p > 0) capacity * (100 - soc) / 100 else capacity * soc / 100
+                    batteryEtaLabel(soc, p, capacity)?.let { eta ->
                         Text(
-                            (if (p > 0) "voll in etwa " else "leer in etwa ") + hoursLabel(remaining / abs(p)),
+                            "Beim jetzigen Fluss $eta",
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }

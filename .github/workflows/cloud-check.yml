@@ -1,0 +1,30 @@
+name: Cloud-Pruefung
+
+# Von Hand starten: prueft den Datenbestand in Supabase und loest auf Wunsch einen
+# Push-Test aus. Braucht die Repository-Secrets CLOUD_EMAIL und CLOUD_PASSWORD.
+on:
+  workflow_dispatch:
+    inputs:
+      push_test:
+        description: "Test-Hinweis schreiben (loest Firebase-Push aus)"
+        type: boolean
+        default: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pruefen
+        env:
+          CLOUD_URL: https://mnqcosmyewntcdsfujdm.supabase.co
+          CLOUD_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1ucWNvc215ZXdudGNkc2Z1amRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg3MTA1MzksImV4cCI6MjEwNDI4NjUzOX0.rdMBBfPdenCYtgH-8bJM_LJ3YA9lQb-vA87KsaFYnhQ
+          CLOUD_EMAIL: ${{ secrets.CLOUD_EMAIL }}
+          CLOUD_PASSWORD: ${{ secrets.CLOUD_PASSWORD }}
+          PUSH_TEST: ${{ inputs.push_test }}
+        run: |
+          if [ -z "$CLOUD_EMAIL" ] || [ -z "$CLOUD_PASSWORD" ]; then
+            echo "Secrets CLOUD_EMAIL und CLOUD_PASSWORD fehlen (Settings -> Secrets and variables -> Actions)."
+            exit 1
+          fi
+          python3 supabase/cloud_check.py

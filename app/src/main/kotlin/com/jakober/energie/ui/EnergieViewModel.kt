@@ -183,7 +183,17 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
     fun refreshNow() {
         viewModelScope.launch {
             repo.forceCarOnNextRefresh()
+            val s = container.settings.current()
+            // Anzeige: die Zentrale soll das Auto beim naechsten Lauf frisch fragen, nicht erst nach fuenf Minuten.
+            if (s.cloudRole == CloudRole.VIEWER && s.cloudConfigured) {
+                runCatching { container.cloud.sendCommand(s, CloudSync.CMD_REFRESH) }
+            }
             runCatching { repo.refresh() }
+            if (s.cloudRole == CloudRole.VIEWER && s.cloudConfigured) {
+                // Nach dem Minutenlauf der Zentrale noch einmal abgleichen, damit der neue Autozustand ankommt.
+                delay(75.seconds)
+                runCatching { repo.refresh() }
+            }
         }
     }
 

@@ -14,6 +14,13 @@ android {
 
     defaultConfig {
         applicationId = "com.jakober.energie"
+        // Cloud-Vorgaben: URL und anon-Schluessel sind oeffentlich (Zugriff regeln die
+        // Datenbank-Policies). E-Mail und Passwort kommen nur aus GitHub-Secrets, nie aus dem Repo.
+        fun env(name: String, fallback: String = "") = (System.getenv(name) ?: fallback).replace("\"", "\\\"")
+        buildConfigField("String", "CLOUD_URL", "\"${env("CLOUD_URL", "https://mnqcosmyewntcdsfujdm.supabase.co")}\"")
+        buildConfigField("String", "CLOUD_ANON_KEY", "\"${env("CLOUD_ANON_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1ucWNvc215ZXdudGNkc2Z1amRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg3MTA1MzksImV4cCI6MjEwNDI4NjUzOX0.rdMBBfPdenCYtgH-8bJM_LJ3YA9lQb-vA87KsaFYnhQ")}\"")
+        buildConfigField("String", "CLOUD_EMAIL", "\"${env("CLOUD_EMAIL")}\"")
+        buildConfigField("String", "CLOUD_PASSWORD", "\"${env("CLOUD_PASSWORD")}\"")
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = 1
@@ -56,6 +63,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     compileOptions {

@@ -34,6 +34,11 @@ jobs:
         run: ./gradlew :core:test --stacktrace
 
       - name: Debug-APK bauen
+        # Optional: Repository-Secrets CLOUD_EMAIL und CLOUD_PASSWORD fuellen die
+        # Cloud-Anmeldung vor. Nur bei privatem Repository setzen - die APK enthaelt sie.
+        env:
+          CLOUD_EMAIL: ${{ secrets.CLOUD_EMAIL }}
+          CLOUD_PASSWORD: ${{ secrets.CLOUD_PASSWORD }}
         run: ./gradlew :app:assembleDebug --stacktrace
 
       # Ein Aussetzer bei GitHubs Artefaktdienst soll den Build nicht rot

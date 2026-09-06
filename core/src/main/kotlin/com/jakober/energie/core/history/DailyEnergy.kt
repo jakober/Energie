@@ -18,6 +18,8 @@ data class EnergyTotals(
     val batteryDischargeWh: Double,
     /** Ins Auto geladen, aus der Ladeleistung integriert. */
     val carChargeWh: Double = 0.0,
+    /** Bezug und Einspeisung stammen aus der Zaehlerstand-Differenz, nicht aus der Integration. */
+    val gridFromMeter: Boolean = false,
     /**
      * Anteil der Autoladung, der im selben Moment aus dem Netz kam. Das Auto
      * bekommt denselben Mix wie das ganze Haus: Netzbezug geteilt durch

@@ -353,7 +353,7 @@ private fun BatteryNode(
         if (sub != null) {
             Text(
                 sub, style = MaterialTheme.typography.labelSmall, color = color.copy(alpha = 0.9f), textAlign = TextAlign.Center,
-                maxLines = 2, lineHeight = 13.sp,
+                maxLines = 2, lineHeight = 13.sp, modifier = Modifier.padding(start = 14.dp, end = 4.dp, top = 2.dp),
             )
         }
     }

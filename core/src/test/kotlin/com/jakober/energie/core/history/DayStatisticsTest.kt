@@ -8,6 +8,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 
 class DayStatisticsTest {
@@ -20,6 +21,26 @@ class DayStatisticsTest {
             batterySocPercent = soc, senecGridPowerW = grid, batteryPowerW = 0.0,
             meterImportWh = 5000L + minutes, meterExportWh = 9000L,
         )
+
+    @Test
+    fun `bezug kommt vom Zaehlerstand, auch ueber die Nacht hinweg, und Luecken werden gezaehlt`() {
+        // Vortag 23:45 Ortszeit: Zaehler 4000 Wh. Heute erst ab 06:00 gemessen, Zaehler 5000.. -> 5,2 kWh Bezug ueber die Nacht.
+        val previous = EnergySample(at = t0 - (6 * 60 + 15).minutes, meterImportWh = 4000L, meterExportWh = 9000L, consumptionW = 500.0)
+        val samples = listOf(sample(0, 500.0, 0.0, 10.0), sample(60, 500.0, 0.0, 10.0), sample(240, 500.0, 0.0, 10.0))
+        val s = DayStatistics.of(LocalDate(2026, 9, 4), samples, zone, previous)
+        assertEquals(true, s.totals.gridFromMeter)
+        assertEquals(4000L, s.meterImportStartWh)
+        // 5000 + 240 - 4000
+        assertEquals(1240.0, s.totals.gridImportWh, 1e-9)
+        assertEquals(0.0, s.totals.gridExportWh, 1e-9)
+        // Luecke: Mitternacht bis 06:00 = 360 min, dazu 07:00 -> 10:00 = 180 min (ueber 90 min).
+        assertEquals(540L, s.gapMinutes)
+        // Vortagspunkt zu alt (vor 12 Uhr des Vortags): Start ist der erste eigene Punkt.
+        val old = previous.copy(at = t0 - 20.hours)
+        val s2 = DayStatistics.of(LocalDate(2026, 9, 4), samples, zone, old)
+        assertEquals(5000L, s2.meterImportStartWh)
+        assertEquals(240.0, s2.totals.gridImportWh, 1e-9)
+    }
 
     @Test
     fun spitzenMitUhrzeit() {

@@ -4,6 +4,7 @@ import com.jakober.energie.core.model.EnergySample
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.toLocalDateTime
 
 /** Ein Extremwert mit dem Zeitpunkt, an dem er auftrat. */
@@ -52,6 +53,12 @@ data class DayStatistics(
     /** Erster Messpunkt mit PV-Leistung ueber 10 W und letzter - grob Sonnenauf-/untergang. */
     val firstProduction: Instant?,
     val lastProduction: Instant?,
+    /**
+     * Minuten ohne Messung: von Mitternacht bis zum ersten Punkt und jede Luecke
+     * ueber [EnergyTotals.MAX_GAP_SECONDS] dazwischen. In dieser Zeit fehlen
+     * Erzeugung, Verbrauch und Speicher; Bezug und Einspeisung kommen vom Zaehler.
+     */
+    val gapMinutes: Long = 0,
 ) {
     /** Stunde mit dem hoechsten Verbrauch. */
     val heaviestHour: HourBucket? get() = hours.maxByOrNull { it.consumptionWh }?.takeIf { it.consumptionWh > 0 }
@@ -63,8 +70,36 @@ data class DayStatistics(
     internal var baseLoad: Double? = null
 
     companion object {
-        fun of(date: LocalDate, samples: List<EnergySample>, zone: TimeZone = TimeZone.currentSystemDefault()): DayStatistics {
+        /**
+         * `previous` ist der letzte Messpunkt des Vortags mit Zaehlerstand. Liegt er nach
+         * 12 Uhr des Vortags, beginnt die Zaehlerdifferenz dort, damit die Nacht nicht
+         * verloren geht, wenn die App bis zum Morgen schlief.
+         */
+        fun of(date: LocalDate, samples: List<EnergySample>, zone: TimeZone = TimeZone.currentSystemDefault(), previous: EnergySample? = null): DayStatistics {
             val sorted = samples.sortedBy { it.at }
+            val dayStart = date.atStartOfDayIn(zone)
+            val usePrevious = previous != null && previous.at < dayStart && (dayStart - previous.at).inWholeHours < 12 &&
+                (previous.meterImportWh != null || previous.meterExportWh != null)
+            val importStart = (if (usePrevious) previous?.meterImportWh else null) ?: sorted.firstOrNull { it.meterImportWh != null }?.meterImportWh
+            val exportStart = (if (usePrevious) previous?.meterExportWh else null) ?: sorted.firstOrNull { it.meterExportWh != null }?.meterExportWh
+            val importEnd = sorted.lastOrNull { it.meterImportWh != null }?.meterImportWh
+            val exportEnd = sorted.lastOrNull { it.meterExportWh != null }?.meterExportWh
+            var totals = EnergyTotals.of(sorted)
+            if (importStart != null && importEnd != null && exportStart != null && exportEnd != null && importEnd >= importStart && exportEnd >= exportStart) {
+                totals = totals.copy(
+                    gridImportWh = (importEnd - importStart).toDouble(), gridExportWh = (exportEnd - exportStart).toDouble(),
+                    meterImportWh = importEnd - importStart, meterExportWh = exportEnd - exportStart, gridFromMeter = true,
+                )
+            }
+            var gap = 0L
+            sorted.firstOrNull()?.let { first ->
+                val lead = (first.at - dayStart).inWholeSeconds
+                if (lead > EnergyTotals.MAX_GAP_SECONDS) gap += lead / 60
+            }
+            for (i in 1 until sorted.size) {
+                val dt = (sorted[i].at - sorted[i - 1].at).inWholeSeconds
+                if (dt > EnergyTotals.MAX_GAP_SECONDS) gap += dt / 60
+            }
             fun peakMax(sel: (EnergySample) -> Double?): Peak? =
                 sorted.mapNotNull { s -> sel(s)?.let { Peak(s.at, it) } }.maxByOrNull { it.value }?.takeIf { it.value > 0 }
             fun peakMin(sel: (EnergySample) -> Double?): Peak? =
@@ -77,7 +112,7 @@ data class DayStatistics(
             val stats = DayStatistics(
                 date = date,
                 sampleCount = sorted.size,
-                totals = EnergyTotals.of(sorted),
+                totals = totals,
                 peakConsumption = peakMax { it.consumptionW },
                 peakProduction = peakMax { it.productionW },
                 peakGridImport = peakMax { grid(it)?.coerceAtLeast(0.0) },
@@ -88,13 +123,14 @@ data class DayStatistics(
                 socMax = socs.maxByOrNull { it.value },
                 socStart = socs.firstOrNull()?.value,
                 socEnd = socs.lastOrNull()?.value,
-                meterImportStartWh = sorted.firstOrNull { it.meterImportWh != null }?.meterImportWh,
-                meterImportEndWh = sorted.lastOrNull { it.meterImportWh != null }?.meterImportWh,
-                meterExportStartWh = sorted.firstOrNull { it.meterExportWh != null }?.meterExportWh,
-                meterExportEndWh = sorted.lastOrNull { it.meterExportWh != null }?.meterExportWh,
+                meterImportStartWh = importStart,
+                meterImportEndWh = importEnd,
+                meterExportStartWh = exportStart,
+                meterExportEndWh = exportEnd,
                 hours = hourBuckets(sorted, zone),
                 firstProduction = producing.firstOrNull()?.at,
                 lastProduction = producing.lastOrNull()?.at,
+                gapMinutes = gap,
             )
             stats.baseLoad = baseLoad(sorted)
             return stats

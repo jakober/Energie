@@ -219,6 +219,7 @@ fun SettingsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
                         "Das SENEC-Kontingent „SENEC.Data 45000“ reicht für etwa eine Abfrage je Minute im Monat.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                BatteryOptimizationRow()
             }
         }
 
@@ -431,6 +432,42 @@ private fun NumberField(label: String, value: Double, onChange: (Double) -> Unit
         label = { Text(label) }, singleLine = true, modifier = Modifier.fillMaxWidth(),
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
     )
+}
+
+/**
+ * Im Ruhemodus buendelt Android die Hintergrundmessungen auf wenige Fenster, dann
+ * fehlen nachts Stunden im Verlauf. Die Ausnahme von der Akku-Optimierung laesst
+ * die 15-Minuten-Messung durchlaufen.
+ */
+@Composable
+private fun BatteryOptimizationRow() {
+    val context = LocalContext.current
+    val pm = context.getSystemService(android.content.Context.POWER_SERVICE) as android.os.PowerManager
+    var ignored by androidx.compose.runtime.remember { mutableStateOf(pm.isIgnoringBatteryOptimizations(context.packageName)) }
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(lifecycle) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, e -> if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) ignored = pm.isIgnoringBatteryOptimizations(context.packageName) }
+        lifecycle.lifecycle.addObserver(obs)
+        onDispose { lifecycle.lifecycle.removeObserver(obs) }
+    }
+    if (ignored) {
+        Text("Von der Akku-Optimierung ausgenommen: die Hintergrundmessung läuft auch nachts durch.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    } else {
+        Text(
+            "Nachts bündelt Android die Hintergrundmessungen, dann fehlen Stunden im Verlauf. Ausnahme von der Akku-Optimierung erlaubt der App, alle 15 Minuten zu messen.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error,
+        )
+        OutlinedButton(onClick = {
+            runCatching {
+                context.startActivity(
+                    Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${context.packageName}"))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+            }.onFailure {
+                runCatching { context.startActivity(Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            }
+        }) { Text("Von Akku-Optimierung ausnehmen") }
+    }
 }
 
 /** Damit der Entwurf eine Drehung des Geraets ueberlebt. */

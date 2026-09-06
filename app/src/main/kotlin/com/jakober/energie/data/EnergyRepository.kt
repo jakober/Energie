@@ -567,8 +567,15 @@ class EnergyRepository(
     private val dayCache = java.util.concurrent.ConcurrentHashMap<LocalDate, DayStatistics>()
 
     fun dayStatistics(date: LocalDate, zone: TimeZone = TimeZone.currentSystemDefault()): DayStatistics {
-        if (date >= today(zone)) return DayStatistics.of(date, history.day(date), zone)
-        return dayCache.getOrPut(date) { DayStatistics.of(date, history.day(date), zone) }
+        if (date >= today(zone)) return DayStatistics.of(date, history.day(date), zone, lastMeterSampleOf(LocalDate.fromEpochDays(date.toEpochDays() - 1)))
+        return dayCache.getOrPut(date) { DayStatistics.of(date, history.day(date), zone, lastMeterSampleOf(LocalDate.fromEpochDays(date.toEpochDays() - 1))) }
+    }
+
+    /** Letzter Messpunkt eines Tages mit Zaehlerstand, fuer die Zaehlerdifferenz des Folgetags. */
+    private val meterEndCache = java.util.concurrent.ConcurrentHashMap<LocalDate, java.util.Optional<EnergySample>>()
+    private fun lastMeterSampleOf(date: LocalDate): EnergySample? {
+        val lookup = { java.util.Optional.ofNullable(history.day(date).lastOrNull { it.meterImportWh != null || it.meterExportWh != null }) }
+        return if (date >= today()) lookup().orElse(null) else meterEndCache.getOrPut(date, lookup).orElse(null)
     }
 
     /** Summe ueber alle gespeicherten Tage. */
@@ -621,6 +628,7 @@ class EnergyRepository(
     /** Nach einer Wiederherstellung: Statistik neu rechnen und die Ansicht anstossen. */
     fun historyChanged() {
         dayCache.clear()
+        meterEndCache.clear()
         drivingCache = null
         val latest = history.latest()
         _state.update { it.copy(sample = latest ?: it.sample, lastUpdate = clock.now()) }

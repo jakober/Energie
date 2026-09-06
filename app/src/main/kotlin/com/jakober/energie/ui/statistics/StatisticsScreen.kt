@@ -244,7 +244,14 @@ private fun androidx.compose.foundation.lazy.LazyListScope.dayItems(s: DayStatis
         item { EnergieCard { Text("Für diesen Tag liegen keine Messpunkte vor.", color = MaterialTheme.colorScheme.onSurfaceVariant) } }
         return
     }
-    item { TotalsCard(s.totals, settings, "${s.sampleCount} Messpunkte") }
+    item {
+        val note = listOfNotNull(
+            "${s.sampleCount} Messpunkte",
+            if (s.gapMinutes >= 30) "Messlücke ${Format.duration(s.gapMinutes)}, Erzeugung/Verbrauch/Speicher darum unvollständig" else null,
+            if (s.totals.gridFromMeter) "Bezug und Einspeisung vom Zählerstand" else null,
+        ).joinToString(" · ")
+        TotalsCard(s.totals, settings, note)
+    }
 
     item {
         EnergieCard(title = "Stundenprofil") {

@@ -62,6 +62,15 @@ private fun compare(today: Double, yesterday: Double?): String? {
     return "gestern ${Format.energy(yesterday)} ($sign${diff.roundToInt()} %)"
 }
 
+/** Hinweis zu Messluecken und Zaehlerquelle eines Tages, null wenn nichts zu sagen ist. */
+fun coverageNote(day: DayStatistics?, what: String = "Erzeugung, Verbrauch und Speicher"): String? {
+    if (day == null || day.sampleCount == 0) return null
+    val parts = ArrayList<String>()
+    if (day.gapMinutes >= 30) parts += "Messlücke ${Format.duration(day.gapMinutes)}: $what fehlen in dieser Zeit."
+    if (day.totals.gridFromMeter) parts += "Bezug und Einspeisung stammen aus dem Zählerstand und sind davon nicht betroffen."
+    return parts.joinToString(" ").ifBlank { null }
+}
+
 /**
  * "leer gegen 23:15 · 2 h 40 min" bzw. "voll gegen 12:40 · 1 h 05 min", aus dem
  * Moment gerechnet. Null, wenn der Speicher ruht oder die Kapazitaet fehlt.
@@ -74,7 +83,13 @@ fun batteryEtaLabel(soc: Double?, powerW: Double?, capacityWh: Double?, now: kot
     val zone = kotlinx.datetime.TimeZone.currentSystemDefault()
     val dayOffset = at.toLocalDateTime(zone).date.toEpochDays() - now.toLocalDateTime(zone).date.toEpochDays()
     val day = when (dayOffset) { 0 -> ""; 1 -> "morgen "; else -> "${Format.dateNum(at.toLocalDateTime(zone).date)} " }
-    return "$what ${day}gegen ${Format.time(at)} · ${Format.duration(e.duration.inWholeMinutes)}"
+    val minutes = e.duration.inWholeMinutes
+    val dur = when {
+        minutes < 60 -> "$minutes min"
+        minutes < 600 -> Format.duration(minutes)
+        else -> "${minutes / 60} h"
+    }
+    return "$what ${day}gegen ${Format.time(at)} · $dur"
 }
 
 @Composable
@@ -203,6 +218,7 @@ fun PvDetailCard(live: LiveState, today: DayStatistics?, yesterday: DayStatistic
             BigValue(Format.energy(yesterday?.totals?.productionWh), "Gestern", modifier = Modifier.weight(1f))
         }
         if (today != null && today.sampleCount > 0) {
+            coverageNote(today, what = "Erzeugung")?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             val t = today.totals
             compare(t.productionWh, yesterday?.totals?.productionWh)?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             GroupedBarChart(
@@ -244,6 +260,7 @@ fun HouseDetailCard(live: LiveState, today: DayStatistics?, yesterday: DayStatis
             BigValue(Format.energy(today?.totals?.consumptionWh), "Heute verbraucht", EnergyColors.house, Modifier.weight(1f))
         }
         if (today != null && today.sampleCount > 0) {
+            coverageNote(today, what = "Verbrauch und Erzeugung")?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             val t = today.totals
             compare(t.consumptionWh, yesterday?.totals?.consumptionWh)?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -298,6 +315,7 @@ fun GridDetailCard(live: LiveState, today: DayStatistics?, yesterday: DayStatist
             )
         }
         if (today != null && today.sampleCount > 0) {
+            coverageNote(today)?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             val t = today.totals
             compare(t.gridImportWh, yesterday?.totals?.gridImportWh)?.let { Text("Bezug: $it", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {

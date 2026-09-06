@@ -115,8 +115,9 @@ fun StatisticsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
 
         when (range) {
             Range.DAY -> {
-                dayItems(day, settings)
-                if (day != null && day.sampleCount > 0) sampleItems(daySamples, day.date, showSamples) { showSamples = !showSamples }
+                val d = day
+                dayItems(d, settings)
+                if (d != null && d.sampleCount > 0) sampleItems(daySamples, d.date, showSamples) { showSamples = !showSamples }
             }
             else -> rangeItems(rangeStats, settings, range)
         }

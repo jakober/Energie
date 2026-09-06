@@ -1,0 +1,4 @@
+Commit:  eb950c0791b9b94e4a545c540c5b1dc856ac977d
+Lauf:    61
+Zeit:    2026-09-06 20:03 UTC
+Anzeige: manuelles Aktualisieren laesst die Zentrale das Auto sofort neu fragen

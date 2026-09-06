@@ -4,6 +4,7 @@ import android.content.Context
 import com.jakober.energie.core.history.HistoryStore
 import com.jakober.energie.data.AppSettings
 import com.jakober.energie.data.BackupManager
+import com.jakober.energie.data.CloudSync
 import com.jakober.energie.data.EnergyRepository
 import com.jakober.energie.notify.Notifier
 import com.jakober.energie.core.places.Places
@@ -34,7 +35,10 @@ class AppContainer(context: Context) {
 
     val notifier = Notifier(context)
 
+    val cloud = CloudSync(settings, http, history)
+
     val repository = EnergyRepository(settings, http, history).also { repo ->
+        repo.cloud = cloud
         repo.onAlerts = { alerts -> notifier.showAll(alerts) }
         repo.onWidgetUpdate = { sample, car ->
             val lat = car?.latitude

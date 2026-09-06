@@ -26,6 +26,16 @@ import kotlinx.coroutines.flow.map
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "einstellungen")
 
+/** Rolle dieses Geraets im Verbund mit Supabase. */
+enum class CloudRole(val label: String) {
+    /** Misst selbst, nutzt keine Cloud. */
+    STANDALONE("Eigenständig"),
+    /** Misst zu Hause und schreibt alles in die Cloud. */
+    HUB("Zentrale"),
+    /** Misst nicht, liest alles aus der Cloud. */
+    VIEWER("Anzeige"),
+}
+
 /** Alles, was der Nutzer in der App eintraegt. */
 data class Settings(
     val fritzHost: String = "fritz.box",
@@ -83,6 +93,18 @@ data class Settings(
     val places: List<NamedPlace> = emptyList(),
     /** Messstecker im Heimnetz (Shelly, Tasmota). */
     val plugs: List<com.jakober.energie.core.plugs.PlugDevice> = emptyList(),
+    // Cloud (Supabase): Zentrale misst zu Hause und schreibt, Anzeige liest unterwegs.
+    val cloudUrl: String = "",
+    val cloudAnonKey: String = "",
+    val cloudEmail: String = "",
+    val cloudPassword: String = "",
+    val cloudRole: CloudRole = CloudRole.STANDALONE,
+    /** Von der App gepflegt: Anmeldung, letzter hochgeladener bzw. geholter Messpunkt (Unix-Sekunden). */
+    val cloudSessionJson: String = "",
+    val cloudUploadedAt: Long = 0,
+    val cloudSyncedAt: Long = 0,
+    /** Wann die Anzeige zuletzt Einstellungen der Zentrale uebernommen hat (Unix-Sekunden). */
+    val cloudSettingsAppliedAt: Long = 0,
     /** PV-Prognose: Anlagenleistung in kWp (0 = aus dem Verlauf schaetzen), Neigung, Azimut (0 = Sued, -90 = Ost, 90 = West). */
     val pvPeakKw: Double = 0.0,
     val pvTiltDeg: Int = 30,
@@ -104,7 +126,8 @@ data class Settings(
     val senecConfigured: Boolean get() = senecKey.isNotBlank()
     val smartcarConfigured: Boolean get() = smartcarClientId.isNotBlank() && smartcarClientSecret.isNotBlank()
     val carConnected: Boolean get() = smartcarConfigured && smartcarVehicleId.isNotBlank()
-    val anythingConfigured: Boolean get() = fritzConfigured || senecConfigured
+    val anythingConfigured: Boolean get() = fritzConfigured || senecConfigured || (cloudRole == CloudRole.VIEWER && cloudConfigured)
+    val cloudConfigured: Boolean get() = cloudUrl.isNotBlank() && cloudAnonKey.isNotBlank() && cloudEmail.isNotBlank() && cloudPassword.isNotBlank()
     /** Ladeleistung, mit der gerechnet wird: gelernt, sonst der Annahmewert. */
     val carAssumedPowerW: Double get() = if (carLearnedPowerW > 0) carLearnedPowerW else carFallbackPowerW.toDouble()
 }
@@ -154,6 +177,15 @@ class AppSettings(private val context: Context) {
             alertState = p[ALERT_STATE]?.let { runCatching { rulesJson.decodeFromString(AlertState.serializer(), it) }.getOrNull() } ?: AlertState(),
             places = p[PLACES]?.let { runCatching { rulesJson.decodeFromString(placesSerializer, it) }.getOrNull() } ?: emptyList(),
             plugs = p[PLUGS]?.let { runCatching { rulesJson.decodeFromString(plugsSerializer, it) }.getOrNull() } ?: emptyList(),
+            cloudUrl = p[CLOUD_URL] ?: "",
+            cloudAnonKey = p[CLOUD_ANON_KEY] ?: "",
+            cloudEmail = p[CLOUD_EMAIL] ?: "",
+            cloudPassword = p[CLOUD_PASSWORD] ?: "",
+            cloudRole = p[CLOUD_ROLE]?.let { runCatching { CloudRole.valueOf(it) }.getOrNull() } ?: CloudRole.STANDALONE,
+            cloudSessionJson = p[CLOUD_SESSION] ?: "",
+            cloudUploadedAt = p[CLOUD_UPLOADED_AT] ?: 0L,
+            cloudSyncedAt = p[CLOUD_SYNCED_AT] ?: 0L,
+            cloudSettingsAppliedAt = p[CLOUD_SETTINGS_APPLIED_AT] ?: 0L,
             pvPeakKw = p[PV_PEAK_KW] ?: 0.0,
             pvTiltDeg = p[PV_TILT] ?: 30,
             pvAzimuthDeg = p[PV_AZIMUTH] ?: 0,
@@ -173,6 +205,12 @@ class AppSettings(private val context: Context) {
     suspend fun savePlaces(places: List<NamedPlace>) { context.dataStore.edit { it[PLACES] = rulesJson.encodeToString(placesSerializer, places) } }
 
     suspend fun savePlugs(plugs: List<com.jakober.energie.core.plugs.PlugDevice>) { context.dataStore.edit { it[PLUGS] = rulesJson.encodeToString(plugsSerializer, plugs) } }
+
+    suspend fun saveCloudSession(json: String) { context.dataStore.edit { it[CLOUD_SESSION] = json } }
+    suspend fun saveCloudUploadedAt(epochSeconds: Long) { context.dataStore.edit { it[CLOUD_UPLOADED_AT] = epochSeconds } }
+    suspend fun saveCloudSyncedAt(epochSeconds: Long) { context.dataStore.edit { it[CLOUD_SYNCED_AT] = epochSeconds } }
+    suspend fun saveCloudSettingsAppliedAt(epochSeconds: Long) { context.dataStore.edit { it[CLOUD_SETTINGS_APPLIED_AT] = epochSeconds } }
+    suspend fun saveCloudRole(role: CloudRole) { context.dataStore.edit { it[CLOUD_ROLE] = role.name } }
 
     suspend fun saveAlerts(a: AlertSettings) { context.dataStore.edit { it[ALERTS] = rulesJson.encodeToString(AlertSettings.serializer(), a) } }
 
@@ -198,6 +236,13 @@ class AppSettings(private val context: Context) {
             p[CAR_FALLBACK_POWER] = s.carFallbackPowerW.coerceIn(0, 22_000)
             p[SYSTEM_COST] = s.systemCostEur.coerceAtLeast(0.0)
             p[CAR_PUBLIC_PRICE] = s.carPublicPricePerKwh.coerceAtLeast(0.0)
+            // Aendert sich die Cloud-Anmeldung, ist die alte Sitzung hinfaellig.
+            val cloudChanged = p[CLOUD_URL] != s.cloudUrl.trim() || p[CLOUD_ANON_KEY] != s.cloudAnonKey.trim() || p[CLOUD_EMAIL] != s.cloudEmail.trim() || p[CLOUD_PASSWORD] != s.cloudPassword
+            p[CLOUD_URL] = s.cloudUrl.trim().trimEnd('/')
+            p[CLOUD_ANON_KEY] = s.cloudAnonKey.trim()
+            p[CLOUD_EMAIL] = s.cloudEmail.trim()
+            p[CLOUD_PASSWORD] = s.cloudPassword
+            if (cloudChanged) p.remove(CLOUD_SESSION)
             // Aendern sich Lage oder Groesse der Anlage, ist die alte Prognose hinfaellig.
             val pvChanged = p[PV_PEAK_KW] != s.pvPeakKw || p[PV_TILT] != s.pvTiltDeg || p[PV_AZIMUTH] != s.pvAzimuthDeg ||
                 p[PV_PEAK_KW2] != s.pvPeakKw2 || p[PV_TILT2] != s.pvTiltDeg2 || p[PV_AZIMUTH2] != s.pvAzimuthDeg2
@@ -229,6 +274,7 @@ class AppSettings(private val context: Context) {
         "alerts" to rulesJson.encodeToString(AlertSettings.serializer(), s.alerts),
         "places" to rulesJson.encodeToString(placesSerializer, s.places),
         "plugs" to rulesJson.encodeToString(plugsSerializer, s.plugs),
+        "cloudUrl" to s.cloudUrl, "cloudAnonKey" to s.cloudAnonKey, "cloudEmail" to s.cloudEmail,
         "pvPeakKw" to s.pvPeakKw.toString(), "pvTiltDeg" to s.pvTiltDeg.toString(), "pvAzimuthDeg" to s.pvAzimuthDeg.toString(), "pvCalibration" to s.pvCalibration.toString(),
         "pvPeakKw2" to s.pvPeakKw2.toString(), "pvTiltDeg2" to s.pvTiltDeg2.toString(), "pvAzimuthDeg2" to s.pvAzimuthDeg2.toString(),
     )
@@ -237,6 +283,7 @@ class AppSettings(private val context: Context) {
     fun secretsForBackup(s: Settings): Map<String, String> = linkedMapOf(
         "senecKey" to s.senecKey, "fritzPassword" to s.fritzPassword,
         "smartcarClientSecret" to s.smartcarClientSecret, "fordTokensJson" to s.fordTokensJson,
+        "cloudPassword" to s.cloudPassword,
     )
 
     suspend fun saveChargeOverride(on: Boolean) { context.dataStore.edit { it[CHARGE_OVERRIDE] = on } }
@@ -290,6 +337,8 @@ class AppSettings(private val context: Context) {
             dbl(HOME_LAT, "homeLat"); dbl(HOME_LON, "homeLon"); str(CHARGE_RULES, "chargeRules", plain)
             lng(CHARGE_LAST_CMD, "chargeLastCommandAt"); str(CHARGE_LOG, "chargeLog", plain); str(ALERTS, "alerts", plain); str(PLACES, "places", plain)
             str(PLUGS, "plugs", plain)
+            str(CLOUD_URL, "cloudUrl", plain); str(CLOUD_ANON_KEY, "cloudAnonKey", plain); str(CLOUD_EMAIL, "cloudEmail", plain)
+            str(CLOUD_PASSWORD, "cloudPassword", secrets)
             dbl(PV_PEAK_KW, "pvPeakKw"); int(PV_TILT, "pvTiltDeg"); int(PV_AZIMUTH, "pvAzimuthDeg"); dbl(PV_CALIBRATION, "pvCalibration")
             dbl(PV_PEAK_KW2, "pvPeakKw2"); int(PV_TILT2, "pvTiltDeg2"); int(PV_AZIMUTH2, "pvAzimuthDeg2")
             str(SENEC_KEY, "senecKey", secrets); str(FRITZ_PASSWORD, "fritzPassword", secrets)
@@ -341,6 +390,15 @@ class AppSettings(private val context: Context) {
         val ALERT_STATE = stringPreferencesKey("alert_state")
         val PLACES = stringPreferencesKey("places")
         val PLUGS = stringPreferencesKey("plugs")
+        val CLOUD_URL = stringPreferencesKey("cloud_url")
+        val CLOUD_ANON_KEY = stringPreferencesKey("cloud_anon_key")
+        val CLOUD_EMAIL = stringPreferencesKey("cloud_email")
+        val CLOUD_PASSWORD = stringPreferencesKey("cloud_password")
+        val CLOUD_ROLE = stringPreferencesKey("cloud_role")
+        val CLOUD_SESSION = stringPreferencesKey("cloud_session")
+        val CLOUD_UPLOADED_AT = longPreferencesKey("cloud_uploaded_at")
+        val CLOUD_SYNCED_AT = longPreferencesKey("cloud_synced_at")
+        val CLOUD_SETTINGS_APPLIED_AT = longPreferencesKey("cloud_settings_applied_at")
         val PV_PEAK_KW = doublePreferencesKey("pv_peak_kw")
         val PV_TILT = intPreferencesKey("pv_tilt")
         val PV_AZIMUTH = intPreferencesKey("pv_azimuth")

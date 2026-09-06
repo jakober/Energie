@@ -15,6 +15,10 @@ class EnergieApp : Application(), Configuration.Provider {
         container = AppContainer(this)
         PollWorker.schedule(this)
         BackupWorker.schedule(this) // prueft selbst, ob eine Sicherung eingerichtet ist
+        // Zentrale: Vordergrund-Dienst, damit jede Minute gemessen wird.
+        if (kotlinx.coroutines.runBlocking { container.settings.current().cloudRole } == com.jakober.energie.data.CloudRole.HUB) {
+            com.jakober.energie.hub.HubService.start(this)
+        }
     }
 
     override val workManagerConfiguration: Configuration

@@ -85,6 +85,7 @@ fun SettingsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
         fordTokensJson = saved.fordTokensJson, fordVin = saved.fordVin, fordLocationId = saved.fordLocationId, smartcarVehicleId = saved.smartcarVehicleId, smartcarUserId = saved.smartcarUserId,
         backupTreeUri = saved.backupTreeUri, backupPassword = saved.backupPassword, backupLastAt = saved.backupLastAt, backupLastResult = saved.backupLastResult,
         alerts = saved.alerts, alertState = saved.alertState, carLearnedPowerW = saved.carLearnedPowerW, places = saved.places, plugs = saved.plugs,
+        cloudRole = saved.cloudRole, cloudSessionJson = saved.cloudSessionJson, cloudUploadedAt = saved.cloudUploadedAt, cloudSyncedAt = saved.cloudSyncedAt, cloudSettingsAppliedAt = saved.cloudSettingsAppliedAt,
         pvCalibration = saved.pvCalibration, pvForecast = saved.pvForecast, pvForecastHistory = saved.pvForecastHistory) != saved
 
     LaunchedEffect(Unit) { vm.clearTestResult() }
@@ -202,6 +203,15 @@ fun SettingsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
                 status = live.automationStatus,
                 log = saved.chargeLog,
                 onSave = vm::saveRules,
+            )
+        }
+
+        item {
+            val cloudMessage by vm.cloudMessage.collectAsStateWithLifecycle()
+            val cloudCommands by vm.cloudCommands.collectAsStateWithLifecycle()
+            CloudCard(
+                draft = draft, saved = saved, live = live, message = cloudMessage, commands = cloudCommands,
+                onDraft = { draft = it }, onTest = vm::testCloud, onRole = vm::setCloudRole, onLoadCommands = vm::loadCloudCommands,
             )
         }
 
@@ -499,6 +509,7 @@ private val SettingsSaver = androidx.compose.runtime.saveable.Saver<Settings, Li
             it.pvPeakKw.toString(), it.pvTiltDeg.toString(), it.pvAzimuthDeg.toString(),
             it.pvPeakKw2.toString(), it.pvTiltDeg2.toString(), it.pvAzimuthDeg2.toString(),
             it.carPublicPricePerKwh.toString(),
+            it.cloudUrl, it.cloudAnonKey, it.cloudEmail, it.cloudPassword,
         )
     },
     restore = {
@@ -516,6 +527,7 @@ private val SettingsSaver = androidx.compose.runtime.saveable.Saver<Settings, Li
             pvTiltDeg2 = it.getOrElse(23) { "30" }.toIntOrNull() ?: 30,
             pvAzimuthDeg2 = it.getOrElse(24) { "0" }.toIntOrNull() ?: 0,
             carPublicPricePerKwh = it.getOrElse(25) { "0.59" }.toDoubleOrNull() ?: 0.59,
+            cloudUrl = it.getOrElse(26) { "" }, cloudAnonKey = it.getOrElse(27) { "" }, cloudEmail = it.getOrElse(28) { "" }, cloudPassword = it.getOrElse(29) { "" },
         )
     },
 )

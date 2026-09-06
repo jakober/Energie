@@ -25,6 +25,27 @@ class HistoryStore(
         fileFor(sample.at).appendText(json.encodeToString(sample) + "\n")
     }
 
+    /**
+     * Fuegt Messpunkte ein, die es noch nicht gibt (gleicher Zeitpunkt = vorhanden),
+     * und schreibt die betroffenen Tagesdateien chronologisch neu. Liefert die
+     * Zahl der uebernommenen Punkte.
+     */
+    fun merge(samples: List<EnergySample>): Int {
+        if (samples.isEmpty()) return 0
+        dir.mkdirs()
+        var added = 0
+        samples.groupBy { it.at.toLocalDateTime(zone).date }.forEach { (date, incoming) ->
+            val existing = day(date)
+            val known = existing.map { it.at }.toHashSet()
+            val fresh = incoming.filter { it.at !in known }.distinctBy { it.at }
+            if (fresh.isEmpty()) return@forEach
+            val all = (existing + fresh).sortedBy { it.at }
+            File(dir, "$date.jsonl").writeText(all.joinToString("\n", postfix = "\n") { json.encodeToString(it) })
+            added += fresh.size
+        }
+        return added
+    }
+
     fun day(date: LocalDate): List<EnergySample> {
         val f = File(dir, "$date.jsonl")
         if (!f.exists()) return emptyList()

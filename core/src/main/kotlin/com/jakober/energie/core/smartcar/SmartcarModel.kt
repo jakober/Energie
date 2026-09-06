@@ -1,6 +1,7 @@
 package com.jakober.energie.core.smartcar
 
 import kotlinx.datetime.Instant
+import kotlinx.serialization.Serializable
 
 /** Eine mit der Smartcar-Anwendung verbundene Fahrzeug-Nutzer-Kombination. */
 data class SmartcarConnection(
@@ -14,6 +15,7 @@ data class SmartcarConnection(
  * Fehlt ein Signal oder ist sein Format unbekannt, bleibt das Feld leer und
  * die Rohantwort steht in `raw` - so laesst sich das Parsen nachjustieren.
  */
+@Serializable
 data class CarState(
     val at: Instant,
     val vehicleId: String,

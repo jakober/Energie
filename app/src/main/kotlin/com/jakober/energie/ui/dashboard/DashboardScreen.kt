@@ -119,6 +119,7 @@ fun DashboardScreen(vm: EnergieViewModel, onOpenSettings: () -> Unit, contentPad
 
         live.senecError?.let { item { ErrorCard("SENEC", it) } }
         live.fritzError?.let { item { ErrorCard("FRITZ!Box", it) } }
+        live.cloudError?.let { item { ErrorCard("Cloud", it) } }
 
         val carActive = settings.carConnected || settings.fordConnected || live.car != null
         item {

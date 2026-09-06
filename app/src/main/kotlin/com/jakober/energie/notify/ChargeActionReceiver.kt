@@ -27,8 +27,12 @@ class ChargeActionReceiver : BroadcastReceiver() {
                 val settings = app.container.settings
                 settings.saveChargeOverride(true)
                 val s = settings.current()
-                if (s.fordConnected) runCatching { app.container.repository.fordCommand(s, FordCommand.RESUME) }
-                app.container.repository.forceCarOnNextRefresh()
+                if (s.cloudRole == com.jakober.energie.data.CloudRole.VIEWER) {
+                    runCatching { app.container.cloud.sendCommand(s, com.jakober.energie.data.CloudSync.CMD_OVERRIDE, kotlinx.serialization.json.buildJsonObject { put("on", kotlinx.serialization.json.JsonPrimitive(true)) }) }
+                } else {
+                    if (s.fordConnected) runCatching { app.container.repository.fordCommand(s, FordCommand.RESUME) }
+                    app.container.repository.forceCarOnNextRefresh()
+                }
                 runCatching { app.container.repository.refresh() }
             } finally {
                 pending.finish()

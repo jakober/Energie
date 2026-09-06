@@ -38,6 +38,10 @@ pro Tag unter `files/verlauf/`. Alles Weitere rechnet sie daraus.
   Speicher voll und Einspeisung hoch, aber das Auto lädt nicht (mit Knopf
   "Jetzt laden"); Ladestart und Ladeende des Autos mit Akkustand; Rückmeldung
   der Automatik; Quelle ausgefallen; Sicherung fehlgeschlagen.
+- **Zentrale und Anzeige:** Ein Zweithandy zu Hause misst als Zentrale jede
+  Minute (Vordergrund-Dienst) und schreibt Messpunkte, Autozustand und
+  Hinweise nach Supabase; das Handy unterwegs holt alles von dort und schickt
+  Befehle als Aufträge zurück. Schema unter `supabase/schema.sql`.
 - **Steckdosen:** Shelly- und Tasmota-Messstecker im Heimnetz (lokal, ohne
   Cloud), je Stecker ein Verbraucher. Statistik zeigt, wer wie viel
   verbraucht, mit Anteil am Haus, Kosten und nicht gemessenem Rest.

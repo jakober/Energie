@@ -4,6 +4,7 @@ package com.jakober.energie.core.model
  * Weitere Fahrzeugwerte aus der Telemetrie (FordPass), alle optional. Die
  * Karten in der Uebersicht zeigen, was da ist, und lassen den Rest weg.
  */
+@kotlinx.serialization.Serializable
 data class CarExtras(
     val odometerKm: Double? = null,
     /** 12-V-Bordbatterie. */

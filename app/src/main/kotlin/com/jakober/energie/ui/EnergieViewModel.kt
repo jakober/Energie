@@ -19,6 +19,10 @@ import com.jakober.energie.core.rules.ChargeRules
 import com.jakober.energie.core.alerts.AlertSettings
 import com.jakober.energie.core.places.NamedPlace
 import com.jakober.energie.data.LiveState
+import com.jakober.energie.data.CloudRole
+import com.jakober.energie.data.CloudSync
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import com.jakober.energie.data.Settings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -211,7 +215,53 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
     fun save(s: Settings) {
         viewModelScope.launch {
             container.settings.save(s)
+            // Anzeige: Preise, Regeln, Stecker, Hinweise auch der Zentrale mitteilen.
+            val saved = container.settings.current()
+            if (saved.cloudRole == CloudRole.VIEWER && saved.cloudConfigured) {
+                runCatching {
+                    val plain = container.settings.plainForBackup(saved).filterKeys { it !in CloudSync.CLOUD_KEYS }
+                    container.cloud.sendCommand(saved, CloudSync.CMD_SETTINGS, buildJsonObject { put("plain", buildJsonObject { plain.forEach { (k, v) -> put(k, v) } }) })
+                }.onFailure { _cloudMessage.value = "Einstellungen konnten nicht an die Zentrale gehen: ${it.message}" }
+            }
             runCatching { repo.refresh() }
+        }
+    }
+
+    // ---- Cloud ----
+    private val _cloudMessage = MutableStateFlow<String?>(null)
+    val cloudMessage: StateFlow<String?> = _cloudMessage
+    private val _cloudCommands = MutableStateFlow<List<Pair<com.jakober.energie.core.cloud.CloudCommand, String?>>>(emptyList())
+    val cloudCommands: StateFlow<List<Pair<com.jakober.energie.core.cloud.CloudCommand, String?>>> = _cloudCommands
+
+    /** Anmeldung mit dem Entwurf pruefen: speichert vorher, damit die Sitzung zu den Daten passt. */
+    fun testCloud(draft: Settings) {
+        viewModelScope.launch {
+            container.settings.save(draft)
+            _cloudMessage.value = "Melde an …"
+            val s = container.settings.current()
+            _cloudMessage.value = runCatching { withContext(Dispatchers.IO) { container.cloud.test(s) } }.getOrElse { "Fehler: ${it.message ?: it}" }
+        }
+    }
+
+    fun setCloudRole(role: CloudRole) {
+        viewModelScope.launch {
+            container.settings.saveCloudRole(role)
+            val ctx = container.context
+            if (role == CloudRole.HUB) com.jakober.energie.hub.HubService.start(ctx) else com.jakober.energie.hub.HubService.stop(ctx)
+            _cloudMessage.value = when (role) {
+                CloudRole.HUB -> "Zentrale aktiv: misst jede Minute und schreibt in die Cloud."
+                CloudRole.VIEWER -> "Anzeige aktiv: misst nicht mehr selbst, holt alles aus der Cloud."
+                CloudRole.STANDALONE -> "Eigenständig: misst selbst, keine Cloud."
+            }
+            runCatching { repo.refresh() }
+        }
+    }
+
+    fun loadCloudCommands() {
+        viewModelScope.launch {
+            val s = container.settings.current()
+            if (!s.cloudConfigured) return@launch
+            _cloudCommands.value = runCatching { withContext(Dispatchers.IO) { container.cloud.recentCommands(s) } }.getOrDefault(emptyList())
         }
     }
 
@@ -385,6 +435,19 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
     fun fordCommand(command: FordCommand) {
         viewModelScope.launch {
             val s = container.settings.current()
+            if (s.cloudRole == CloudRole.VIEWER) {
+                _fordResult.value = "${command.label} an die Zentrale übergeben …"
+                runCatching { container.cloud.sendCommand(s, CloudSync.CMD_FORD, buildJsonObject { put("command", command.name) }) }
+                    .onSuccess {
+                        _fordResult.value = "${command.label}: Auftrag liegt bei der Zentrale, Ergebnis in etwa einer Minute."
+                        delay(75.seconds)
+                        runCatching { repo.refresh() }
+                        val done = runCatching { withContext(Dispatchers.IO) { container.cloud.recentCommands(s) } }.getOrDefault(emptyList())
+                        done.firstOrNull { it.first.kind == CloudSync.CMD_FORD && it.second != null }?.let { _fordResult.value = "Zentrale: ${it.second}" }
+                    }
+                    .onFailure { _fordResult.value = "Auftrag nicht abgesetzt: ${it.message}" }
+                return@launch
+            }
             if (!s.fordConnected) { _fordResult.value = "Nicht bei Ford angemeldet."; return@launch }
             _fordResult.value = "${command.label} wird gesendet …"
             runCatching { repo.fordCommand(s, command) }
@@ -501,6 +564,11 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
     fun setChargeOverride(on: Boolean) {
         viewModelScope.launch {
             container.settings.saveChargeOverride(on)
+            val s = container.settings.current()
+            if (s.cloudRole == CloudRole.VIEWER && s.cloudConfigured) {
+                runCatching { container.cloud.sendCommand(s, CloudSync.CMD_OVERRIDE, buildJsonObject { put("on", on) }) }
+                    .onFailure { _cloudMessage.value = "Handschalter nicht an die Zentrale übergeben: ${it.message}" }
+            }
             runCatching { repo.refresh() }
         }
     }

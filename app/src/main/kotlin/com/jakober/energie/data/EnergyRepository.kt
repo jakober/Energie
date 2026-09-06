@@ -77,6 +77,11 @@ data class LiveState(
     val forecastRaw: String? = null,
     /** Fehler je Messstecker (Kennung -> Text) aus der letzten Abfrage; leer = alle erreichbar. */
     val plugErrors: Map<String, String> = emptyMap(),
+    /** Anzeige: wann sich die Zentrale zuletzt in der Cloud gemeldet hat. */
+    val hubSeenAt: Instant? = null,
+    /** Letzter Fehler bzw. letzte Meldung des Cloud-Abgleichs. */
+    val cloudError: String? = null,
+    val cloudInfo: String? = null,
 )
 
 /**
@@ -105,9 +110,13 @@ class EnergyRepository(
     private var senecBackoffUntil: Instant? = null
 
     /** Fragt beide Quellen ab. Fehler einer Quelle blockieren die andere nicht. */
+    /** Cloud-Anbindung; null, wenn die App eigenstaendig laeuft. */
+    var cloud: CloudSync? = null
+
     /** `background` markiert Messpunkte des Hintergrund-Workers, fuer die Messpunkt-Liste. */
     suspend fun refresh(background: Boolean = false): LiveState = lock.withLock {
         val s = settings.current()
+        if (s.cloudRole == CloudRole.VIEWER) return viewerRefresh(s)
         _state.update { it.copy(refreshing = true) }
         val startedAt = clock.now()
         val senecPaused = senecBackoffUntil?.let { startedAt < it } == true
@@ -248,6 +257,19 @@ class EnergyRepository(
         _state.value = newState
         runCatching { refreshForecast(s, now) }
             .onFailure { e -> _state.update { it.copy(forecastError = e.message ?: e.toString()) } }
+
+        // Zentrale: alles in die Cloud, Auftraege der Anzeige abarbeiten.
+        val cs = cloud
+        if (cs != null && s.cloudRole == CloudRole.HUB && s.cloudConfigured) {
+            runCatching {
+                val live = _state.value
+                val sent = cs.uploadPending(s)
+                cs.putStatus(s, live)
+                cs.uploadSettingsIfChanged(settings.current())
+                val done = cs.processCommands(s) { cmd -> executeCommand(cmd) }
+                _state.update { it.copy(cloudError = null, cloudInfo = "Cloud: ${clockLabel(clock.now())} · $sent Messpunkte hochgeladen" + (if (done > 0) " · $done Aufträge" else "")) }
+            }.onFailure { e -> _state.update { it.copy(cloudError = "Cloud: ${e.message ?: e}") } }
+        }
         val automationLine = runCatching { runAutomation(s, newState) }.getOrNull()
         runCatching { runAlerts(newState, automationLine) }
         if (gotSomething || senecForDisplay != null) onWidgetUpdate?.let { cb -> runCatching { cb(displaySample, newState.car) } }
@@ -304,6 +326,86 @@ class EnergyRepository(
         if (updated != s.pvCalibration) settings.savePvCalibration(updated)
     }
 
+    /**
+     * Anzeige: keine eigene Messung. Messpunkte, Status und Hinweise aus der
+     * Cloud holen, Einstellungen der Zentrale uebernehmen.
+     */
+    private suspend fun viewerRefresh(s: Settings): LiveState {
+        val cs = cloud ?: return _state.value
+        _state.update { it.copy(refreshing = true) }
+        val now = clock.now()
+        val result = runCatching {
+            withContext(Dispatchers.IO) {
+                val pulled = cs.pullSamples(s)
+                val status = cs.pullStatus(s)
+                val alerts = cs.pullAlerts(s)
+                val settingsChanged = cs.pullSettings(s)
+                Triple(pulled, status, alerts to settingsChanged)
+            }
+        }
+        result.onSuccess { (pulled, status, rest) ->
+            val (alerts, settingsChanged) = rest
+            if (pulled > 0) { dayCache.remove(today()); drivingCache = null }
+            val latest = if (pulled > 0) history.latest() else _state.value.sample ?: history.latest()
+            _state.update {
+                it.copy(
+                    sample = latest,
+                    senec = status?.senec ?: it.senec,
+                    car = status?.car ?: it.car,
+                    senecError = status?.senecError,
+                    fritzError = status?.fritzError,
+                    carError = status?.carError,
+                    automationStatus = status?.automationStatus ?: it.automationStatus,
+                    plugErrors = status?.plugErrors ?: it.plugErrors,
+                    pvPeakEstimateKw = status?.pvPeakEstimateKw ?: it.pvPeakEstimateKw,
+                    hubSeenAt = status?.hubSeenAt ?: it.hubSeenAt,
+                    lastUpdate = status?.lastUpdate ?: it.lastUpdate,
+                    refreshing = false,
+                    cloudError = null,
+                    cloudInfo = "Abgleich ${clockLabel(now)} · $pulled neue Messpunkte" + (if (settingsChanged) " · Einstellungen übernommen" else ""),
+                )
+            }
+            if (alerts.isNotEmpty()) onAlerts?.invoke(alerts)
+            val seen = status?.hubSeenAt
+            if (seen != null && now - seen > HUB_SILENT) {
+                _state.update { it.copy(cloudError = "Zentrale seit ${(now - seen).inWholeMinutes} min ohne Lebenszeichen.") }
+            }
+            latest?.let { smp -> runCatching { onWidgetUpdate?.invoke(smp, _state.value.car) } }
+        }.onFailure { e ->
+            _state.update { it.copy(refreshing = false, cloudError = "Cloud: ${e.message ?: e}") }
+        }
+        return _state.value
+    }
+
+    /** Ein Auftrag der Anzeige, auf der Zentrale ausgefuehrt. Liefert den Ergebnistext. */
+    private suspend fun executeCommand(cmd: com.jakober.energie.core.cloud.CloudCommand): String {
+        val s = settings.current()
+        return when (cmd.kind) {
+            CloudSync.CMD_FORD -> {
+                val name = CloudSync.payloadString(cmd.payload, "command") ?: return "Befehl fehlt"
+                val command = runCatching { FordCommand.valueOf(name) }.getOrNull() ?: return "Unbekannter Befehl $name"
+                if (!s.fordConnected) return "Zentrale ist nicht bei Ford angemeldet"
+                val r = fordCommand(s, command)
+                forceCarOnNextRefresh()
+                if (r.accepted) "${command.label}: angenommen (HTTP ${r.status})" else "${command.label}: abgelehnt (HTTP ${r.status})"
+            }
+            CloudSync.CMD_OVERRIDE -> {
+                val on = CloudSync.payloadBool(cmd.payload, "on") ?: true
+                settings.saveChargeOverride(on)
+                if (on && s.fordConnected) runCatching { fordCommand(s, FordCommand.RESUME) }
+                forceCarOnNextRefresh()
+                if (on) "Handschalter ein, Laden angestossen" else "Handschalter aus"
+            }
+            CloudSync.CMD_SETTINGS -> {
+                val plain = CloudSync.payloadMap(cmd.payload, "plain")
+                settings.restore(plain.filterKeys { it !in CloudSync.CLOUD_KEYS }, null)
+                "Einstellungen übernommen (${plain.size} Werte)"
+            }
+            CloudSync.CMD_REFRESH -> { forceCarOnNextRefresh(); "Auto wird neu abgefragt" }
+            else -> "Unbekannte Auftragsart ${cmd.kind}"
+        }
+    }
+
     private fun clockLabel(at: Instant): String {
         val t = at.toLocalDateTime(TimeZone.currentSystemDefault()).time
         return "%02d:%02d".format(t.hour, t.minute)
@@ -342,7 +444,12 @@ class EnergyRepository(
         )
         val result = AlertEngine.evaluate(input, s.alertState, s.alerts)
         if (result.state != s.alertState) settings.saveAlertState(result.state)
-        if (result.alerts.isNotEmpty()) sink(result.alerts)
+        if (result.alerts.isNotEmpty()) {
+            sink(result.alerts)
+            // Zentrale: Hinweise auch an die Anzeige unterwegs.
+            val cs = cloud
+            if (cs != null && s.cloudRole == CloudRole.HUB && s.cloudConfigured) runCatching { cs.pushAlerts(s, result.alerts) }
+        }
     }
 
     /**
@@ -668,6 +775,8 @@ class EnergyRepository(
 
     companion object {
         val MIN_STORE_INTERVAL = 55.seconds
+        /** Anzeige meldet, wenn die Zentrale so lange nichts geschrieben hat. */
+        val HUB_SILENT = 30.minutes
         val CAR_INTERVAL = 5.minutes
         val FORECAST_INTERVAL = 3.hours
         val SENEC_MIN_INTERVAL = 30.seconds

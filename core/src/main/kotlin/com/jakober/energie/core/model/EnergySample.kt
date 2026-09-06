@@ -46,6 +46,8 @@ data class EnergySample(
     val carEnergyKwh: Double? = null,
     /** True, wenn der Hintergrund-Worker gemessen hat; null bei alten Punkten. */
     val background: Boolean? = null,
+    /** Messstecker im Heimnetz, Schluessel = Geraetekennung. */
+    val plugs: Map<String, com.jakober.energie.core.plugs.PlugReading> = emptyMap(),
 ) {
     /** Netzleistung, bevorzugt vom geeichten Zaehler, sonst von SENEC. */
     val gridPowerW: Double? get() = meterGridPowerW ?: senecGridPowerW

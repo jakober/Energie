@@ -75,6 +75,8 @@ data class LiveState(
     val forecastError: String? = null,
     /** Rohantwort von Open-Meteo, fuer die Fehlersuche. */
     val forecastRaw: String? = null,
+    /** Fehler je Messstecker (Kennung -> Text) aus der letzten Abfrage; leer = alle erreichbar. */
+    val plugErrors: Map<String, String> = emptyMap(),
 )
 
 /**
@@ -126,10 +128,15 @@ class EnergyRepository(
                     val due = lastCarFetch?.let { clock.now() - it >= CAR_INTERVAL } ?: true
                     if ((s.carConnected || s.fordConnected) && due) runCatching { fetchCar(s) } else null
                 }
-                Triple(senecJob.await(), fritzJob.await(), carJob.await())
+                val plugJob = async { fetchPlugs(s) }
+                Fetched(senecJob.await(), fritzJob.await(), carJob.await(), plugJob.await())
             }
         }
-        val (senecResult, fritzResult, carResult) = result
+        val senecResult = result.senec
+        val fritzResult = result.fritz
+        val carResult = result.car
+        val plugReadings = result.plugs.mapNotNull { (id, r) -> r.getOrNull()?.let { id to it } }.toMap()
+        val plugErrors = result.plugs.mapNotNull { (id, r) -> r.exceptionOrNull()?.let { id to (it.message ?: it.toString()) } }.toMap()
         val now = clock.now()
         val car = carResult?.getOrNull()
         if (carResult != null) lastCarFetch = now
@@ -175,6 +182,7 @@ class EnergyRepository(
             carOdometerKm = carForSample?.extra?.odometerKm,
             carEnergyKwh = carForSample?.extra?.energyRemainingKwh,
             background = background,
+            plugs = plugReadings,
         )
 
         // Ladestart erkannt: aus dem Sprung im Hausverbrauch die echte Ladeleistung lernen.
@@ -189,7 +197,7 @@ class EnergyRepository(
             }
         }
 
-        val gotSomething = sample.hasSenec || sample.hasMeter
+        val gotSomething = sample.hasSenec || sample.hasMeter || sample.plugs.isNotEmpty()
         if (gotSomething && shouldStore(now)) {
             history.append(sample)
             lastStored = now
@@ -233,6 +241,7 @@ class EnergyRepository(
             pvPeakEstimateKw = _state.value.pvPeakEstimateKw,
             forecastError = _state.value.forecastError,
             forecastRaw = _state.value.forecastRaw,
+            plugErrors = plugErrors,
         )
         if (senec != null) lastSenecOkAt = now
         if (fritzData != null) lastFritzOkAt = now
@@ -392,6 +401,22 @@ class EnergyRepository(
     }
 
     private class SenecResult(val system: SenecSystem, val raw: String)
+
+    private class Fetched(
+        val senec: Result<SenecResult>?,
+        val fritz: Result<Pair<List<FritzDevice>, SmartMeterReading?>>?,
+        val car: Result<CarState>?,
+        val plugs: Map<String, Result<com.jakober.energie.core.plugs.PlugReading>>,
+    )
+
+    /** Alle Messstecker parallel; jeder mit kurzem Timeout, damit die Abfrage von unterwegs nicht haengt. */
+    private suspend fun fetchPlugs(s: Settings): Map<String, Result<com.jakober.energie.core.plugs.PlugReading>> {
+        if (s.plugs.isEmpty()) return emptyMap()
+        val client = com.jakober.energie.core.plugs.PlugClient(http)
+        return coroutineScope {
+            s.plugs.map { d -> async { d.id to runCatching { client.read(d) } } }.map { it.await() }
+        }.toMap()
+    }
 
     private suspend fun fetchSenec(s: Settings): SenecResult {
         val client = SenecConnectClient(http, s.senecKey, s.senecBaseUrl)
@@ -576,7 +601,7 @@ class EnergyRepository(
     /** Letzter Messpunkt eines Tages mit Zaehlerstand, fuer die Zaehlerdifferenz des Folgetags. */
     private val meterEndCache = java.util.concurrent.ConcurrentHashMap<LocalDate, java.util.Optional<EnergySample>>()
     private fun lastMeterSampleOf(date: LocalDate): EnergySample? {
-        val lookup = { java.util.Optional.ofNullable(history.day(date).lastOrNull { it.meterImportWh != null || it.meterExportWh != null }) }
+        val lookup = { history.day(date).let { d -> java.util.Optional.ofNullable(d.lastOrNull { it.meterImportWh != null || it.meterExportWh != null } ?: d.lastOrNull()) } }
         return if (date >= today()) lookup().orElse(null) else meterEndCache.getOrPut(date, lookup).orElse(null)
     }
 

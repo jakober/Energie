@@ -59,6 +59,8 @@ data class DayStatistics(
      * Erzeugung, Verbrauch und Speicher; Bezug und Einspeisung kommen vom Zaehler.
      */
     val gapMinutes: Long = 0,
+    /** Verbrauch je Messstecker (Schluessel = Geraetekennung). */
+    val plugs: Map<String, com.jakober.energie.core.plugs.PlugTotals> = emptyMap(),
 ) {
     /** Stunde mit dem hoechsten Verbrauch. */
     val heaviestHour: HourBucket? get() = hours.maxByOrNull { it.consumptionWh }?.takeIf { it.consumptionWh > 0 }
@@ -131,6 +133,7 @@ data class DayStatistics(
                 firstProduction = producing.firstOrNull()?.at,
                 lastProduction = producing.lastOrNull()?.at,
                 gapMinutes = gap,
+                plugs = com.jakober.energie.core.plugs.PlugEnergy.of(sorted, previous?.takeIf { it.at < dayStart && (dayStart - it.at).inWholeHours < 12 }),
             )
             stats.baseLoad = baseLoad(sorted)
             return stats

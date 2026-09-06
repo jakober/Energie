@@ -38,6 +38,9 @@ pro Tag unter `files/verlauf/`. Alles Weitere rechnet sie daraus.
   Speicher voll und Einspeisung hoch, aber das Auto lädt nicht (mit Knopf
   "Jetzt laden"); Ladestart und Ladeende des Autos mit Akkustand; Rückmeldung
   der Automatik; Quelle ausgefallen; Sicherung fehlgeschlagen.
+- **Steckdosen:** Shelly- und Tasmota-Messstecker im Heimnetz (lokal, ohne
+  Cloud), je Stecker ein Verbraucher. Statistik zeigt, wer wie viel
+  verbraucht, mit Anteil am Haus, Kosten und nicht gemessenem Rest.
 - **Fahrten:** Kilometer je Tag aus dem Kilometerstand, Verbrauch aus dem
   Akkuinhalt, Herkunft des Fahrstroms (Sonne, Netz, unterwegs) über ein
   Tank-Modell des Akkus, Kosten je 100 km.

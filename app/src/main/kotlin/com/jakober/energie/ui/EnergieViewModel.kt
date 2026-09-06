@@ -421,6 +421,63 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch { container.settings.savePlaces(places) }
     }
 
+    // ---- Messstecker ----
+    private val plugClient by lazy { com.jakober.energie.core.plugs.PlugClient(container.http) }
+    private val _plugMessage = MutableStateFlow<String?>(null)
+    val plugMessage: StateFlow<String?> = _plugMessage
+    private val _discovered = MutableStateFlow<List<com.jakober.energie.core.plugs.PlugDevice>>(emptyList())
+    val discovered: StateFlow<List<com.jakober.energie.core.plugs.PlugDevice>> = _discovered
+    private val _discovering = MutableStateFlow(false)
+    val discovering: StateFlow<Boolean> = _discovering
+
+    fun savePlugs(plugs: List<com.jakober.energie.core.plugs.PlugDevice>) {
+        viewModelScope.launch { container.settings.savePlugs(plugs); refreshNow() }
+    }
+
+    /** Stecker unter einer Adresse pruefen und mit Name uebernehmen; bei Shelly kommen Kennung und Name vom Geraet. */
+    fun addPlug(host: String, name: String, kind: com.jakober.energie.core.plugs.PlugKind) {
+        viewModelScope.launch {
+            _plugMessage.value = "Prüfe $host …"
+            val result = runCatching {
+                withContext(Dispatchers.IO) {
+                    val h = host.trim()
+                    val info = if (kind == com.jakober.energie.core.plugs.PlugKind.SHELLY) plugClient.shellyInfo(h) else null
+                    val reading = plugClient.read(com.jakober.energie.core.plugs.PlugDevice(info?.id ?: h, name, h, kind))
+                    val finalName = name.trim().ifBlank { info?.name ?: h }
+                    com.jakober.energie.core.plugs.PlugDevice(info?.id ?: h, finalName, h, kind) to reading
+                }
+            }
+            result.onSuccess { (device, reading) ->
+                val current = settings.value.plugs.filterNot { it.id == device.id || it.host == device.host }
+                container.settings.savePlugs(current + device)
+                _plugMessage.value = "${device.name} hinzugefügt, gerade ${Format.power(reading.powerW)}"
+                _discovered.value = _discovered.value.filterNot { it.id == device.id }
+                refreshNow()
+            }.onFailure { _plugMessage.value = "Nicht erreichbar unter $host: ${it.message}" }
+        }
+    }
+
+    fun renamePlug(id: String, name: String) = savePlugs(settings.value.plugs.map { if (it.id == id) it.copy(name = name.trim().ifBlank { it.name }) else it })
+    fun removePlug(id: String) = savePlugs(settings.value.plugs.filterNot { it.id == id })
+
+    /** Shelly-Stecker im Heimnetz suchen (mDNS), ein paar Sekunden lang. */
+    fun discoverPlugs() {
+        if (_discovering.value) return
+        viewModelScope.launch {
+            _discovering.value = true
+            _plugMessage.value = null
+            val found = runCatching { com.jakober.energie.data.PlugDiscovery(container.context).discover(6_000) }.getOrElse { emptyList() }
+            val known = settings.value.plugs.map { it.id }.toSet()
+            val enriched = found.filterNot { it.id in known }.map { d ->
+                val info = runCatching { withContext(Dispatchers.IO) { plugClient.shellyInfo(d.host) } }.getOrNull()
+                d.copy(id = info?.id ?: d.id, name = info?.name ?: d.name)
+            }
+            _discovered.value = enriched
+            _discovering.value = false
+            if (enriched.isEmpty()) _plugMessage.value = "Keine neuen Shelly-Stecker gefunden. Bist du im Heimnetz?"
+        }
+    }
+
     /** Verwirft die gespeicherte Prognose und holt sofort eine neue. */
     fun refreshForecast() {
         viewModelScope.launch {

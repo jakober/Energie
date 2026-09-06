@@ -279,6 +279,20 @@ fun HouseDetailCard(live: LiveState, today: DayStatistics?, yesterday: DayStatis
                 valueFormatter = { Format.energy(it) },
             )
             today.peakConsumption?.let { ValueRow("Verbrauchsspitze", Format.power(it.value), "um ${Format.time(it.at)}", icon = Icons.Rounded.Home, iconTint = EnergyColors.house) }
+            if (settings.plugs.isNotEmpty()) {
+                Text("Steckdosen", style = MaterialTheme.typography.titleSmall)
+                val readings = s?.plugs.orEmpty()
+                settings.plugs.sortedByDescending { readings[it.id]?.powerW ?: -1.0 }.forEach { d ->
+                    val r = readings[d.id]
+                    val dayWh = today.plugs[d.id]?.energyWh
+                    ValueRow(
+                        d.name,
+                        r?.let { Format.power(it.powerW) } ?: (if (live.plugErrors.containsKey(d.id)) "nicht erreichbar" else "–"),
+                        detail = dayWh?.let { "heute ${Format.energy(it)}" },
+                        color = if (r == null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
             today.heaviestHour?.let { ValueRow("Stärkste Stunde", Format.energy(it.consumptionWh), "${Format.hourLabel(it.hour)}–${Format.hourLabel((it.hour + 1) % 24)} Uhr") }
             today.baseLoadW?.let { ValueRow("Grundlast", Format.power(it), "kleinstes 15-min-Mittel, ≈ ${Format.energy(it * 24)} am Tag", icon = Icons.Rounded.Bolt, iconTint = EnergyColors.neutral) }
             if (t.carChargeWh > 50) ValueRow("Ins Auto geladen", Format.energy(t.carChargeWh), "Haushalt ohne Auto: ${Format.energy(t.consumptionWh - t.carChargeWh)}", icon = Icons.Rounded.ElectricCar, iconTint = EnergyColors.car)

@@ -81,6 +81,8 @@ data class Settings(
     val alertState: AlertState = AlertState(),
     /** Vom Nutzer benannte Orte (Arbeit, Oma, ...), an denen das Auto erkannt wird. */
     val places: List<NamedPlace> = emptyList(),
+    /** Messstecker im Heimnetz (Shelly, Tasmota). */
+    val plugs: List<com.jakober.energie.core.plugs.PlugDevice> = emptyList(),
     /** PV-Prognose: Anlagenleistung in kWp (0 = aus dem Verlauf schaetzen), Neigung, Azimut (0 = Sued, -90 = Ost, 90 = West). */
     val pvPeakKw: Double = 0.0,
     val pvTiltDeg: Int = 30,
@@ -151,6 +153,7 @@ class AppSettings(private val context: Context) {
             alerts = p[ALERTS]?.let { runCatching { rulesJson.decodeFromString(AlertSettings.serializer(), it) }.getOrNull() } ?: AlertSettings(),
             alertState = p[ALERT_STATE]?.let { runCatching { rulesJson.decodeFromString(AlertState.serializer(), it) }.getOrNull() } ?: AlertState(),
             places = p[PLACES]?.let { runCatching { rulesJson.decodeFromString(placesSerializer, it) }.getOrNull() } ?: emptyList(),
+            plugs = p[PLUGS]?.let { runCatching { rulesJson.decodeFromString(plugsSerializer, it) }.getOrNull() } ?: emptyList(),
             pvPeakKw = p[PV_PEAK_KW] ?: 0.0,
             pvTiltDeg = p[PV_TILT] ?: 30,
             pvAzimuthDeg = p[PV_AZIMUTH] ?: 0,
@@ -168,6 +171,8 @@ class AppSettings(private val context: Context) {
     suspend fun savePvCalibration(c: Double) { context.dataStore.edit { it[PV_CALIBRATION] = c } }
 
     suspend fun savePlaces(places: List<NamedPlace>) { context.dataStore.edit { it[PLACES] = rulesJson.encodeToString(placesSerializer, places) } }
+
+    suspend fun savePlugs(plugs: List<com.jakober.energie.core.plugs.PlugDevice>) { context.dataStore.edit { it[PLUGS] = rulesJson.encodeToString(plugsSerializer, plugs) } }
 
     suspend fun saveAlerts(a: AlertSettings) { context.dataStore.edit { it[ALERTS] = rulesJson.encodeToString(AlertSettings.serializer(), a) } }
 
@@ -223,6 +228,7 @@ class AppSettings(private val context: Context) {
         "chargeLastCommandAt" to s.chargeLastCommandAt.toString(), "chargeLog" to s.chargeLog,
         "alerts" to rulesJson.encodeToString(AlertSettings.serializer(), s.alerts),
         "places" to rulesJson.encodeToString(placesSerializer, s.places),
+        "plugs" to rulesJson.encodeToString(plugsSerializer, s.plugs),
         "pvPeakKw" to s.pvPeakKw.toString(), "pvTiltDeg" to s.pvTiltDeg.toString(), "pvAzimuthDeg" to s.pvAzimuthDeg.toString(), "pvCalibration" to s.pvCalibration.toString(),
         "pvPeakKw2" to s.pvPeakKw2.toString(), "pvTiltDeg2" to s.pvTiltDeg2.toString(), "pvAzimuthDeg2" to s.pvAzimuthDeg2.toString(),
     )
@@ -283,6 +289,7 @@ class AppSettings(private val context: Context) {
             str(FORD_VIN, "fordVin", plain); str(FORD_LOCATION, "fordLocationId", plain)
             dbl(HOME_LAT, "homeLat"); dbl(HOME_LON, "homeLon"); str(CHARGE_RULES, "chargeRules", plain)
             lng(CHARGE_LAST_CMD, "chargeLastCommandAt"); str(CHARGE_LOG, "chargeLog", plain); str(ALERTS, "alerts", plain); str(PLACES, "places", plain)
+            str(PLUGS, "plugs", plain)
             dbl(PV_PEAK_KW, "pvPeakKw"); int(PV_TILT, "pvTiltDeg"); int(PV_AZIMUTH, "pvAzimuthDeg"); dbl(PV_CALIBRATION, "pvCalibration")
             dbl(PV_PEAK_KW2, "pvPeakKw2"); int(PV_TILT2, "pvTiltDeg2"); int(PV_AZIMUTH2, "pvAzimuthDeg2")
             str(SENEC_KEY, "senecKey", secrets); str(FRITZ_PASSWORD, "fritzPassword", secrets)
@@ -333,6 +340,7 @@ class AppSettings(private val context: Context) {
         val ALERTS = stringPreferencesKey("alerts")
         val ALERT_STATE = stringPreferencesKey("alert_state")
         val PLACES = stringPreferencesKey("places")
+        val PLUGS = stringPreferencesKey("plugs")
         val PV_PEAK_KW = doublePreferencesKey("pv_peak_kw")
         val PV_TILT = intPreferencesKey("pv_tilt")
         val PV_AZIMUTH = intPreferencesKey("pv_azimuth")
@@ -344,6 +352,7 @@ class AppSettings(private val context: Context) {
         val PV_FORECAST_HISTORY = stringPreferencesKey("pv_forecast_history")
         private val historySerializer = MapSerializer(String.serializer(), Double.serializer())
         private val placesSerializer = ListSerializer(NamedPlace.serializer())
+        private val plugsSerializer = ListSerializer(com.jakober.energie.core.plugs.PlugDevice.serializer())
         private val rulesJson = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     }
 }

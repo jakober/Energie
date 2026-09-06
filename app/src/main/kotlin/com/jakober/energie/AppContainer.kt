@@ -18,6 +18,7 @@ import java.io.File
 
 /** Haelt die wenigen langlebigen Objekte der App zusammen - ohne DI-Framework. */
 class AppContainer(context: Context) {
+    val context: Context = context.applicationContext
     val settings = AppSettings(context)
 
     val http: HttpClient = HttpClient(OkHttp) {

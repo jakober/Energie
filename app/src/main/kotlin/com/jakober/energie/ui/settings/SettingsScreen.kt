@@ -84,7 +84,7 @@ fun SettingsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
     val dirty = draft.copy(chargeRules = saved.chargeRules, chargeLastCommandAt = saved.chargeLastCommandAt, chargeOverride = saved.chargeOverride, chargeLog = saved.chargeLog,
         fordTokensJson = saved.fordTokensJson, fordVin = saved.fordVin, fordLocationId = saved.fordLocationId, smartcarVehicleId = saved.smartcarVehicleId, smartcarUserId = saved.smartcarUserId,
         backupTreeUri = saved.backupTreeUri, backupPassword = saved.backupPassword, backupLastAt = saved.backupLastAt, backupLastResult = saved.backupLastResult,
-        alerts = saved.alerts, alertState = saved.alertState, carLearnedPowerW = saved.carLearnedPowerW, places = saved.places,
+        alerts = saved.alerts, alertState = saved.alertState, carLearnedPowerW = saved.carLearnedPowerW, places = saved.places, plugs = saved.plugs,
         pvCalibration = saved.pvCalibration, pvForecast = saved.pvForecast, pvForecastHistory = saved.pvForecastHistory) != saved
 
     LaunchedEffect(Unit) { vm.clearTestResult() }
@@ -206,6 +206,24 @@ fun SettingsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
         }
 
         item { NotificationsCard(saved = saved.alerts, onSave = vm::saveAlerts) }
+
+        item {
+            val discovered by vm.discovered.collectAsStateWithLifecycle()
+            val discovering by vm.discovering.collectAsStateWithLifecycle()
+            val plugMessage by vm.plugMessage.collectAsStateWithLifecycle()
+            PlugsCard(
+                plugs = saved.plugs,
+                readings = live.sample?.plugs.orEmpty(),
+                errors = live.plugErrors,
+                discovered = discovered,
+                discovering = discovering,
+                message = plugMessage,
+                onDiscover = vm::discoverPlugs,
+                onAdd = vm::addPlug,
+                onRename = vm::renamePlug,
+                onRemove = vm::removePlug,
+            )
+        }
 
         item {
             EnergieCard(title = "Abfrage") {

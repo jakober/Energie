@@ -257,6 +257,25 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    /** Schreibt einen Test-Hinweis in die Cloud; er muss per Push auf diesem Geraet ankommen. */
+    fun testPush() {
+        viewModelScope.launch {
+            val s = container.settings.current()
+            if (!s.cloudConfigured) { _cloudMessage.value = "Cloud nicht eingerichtet."; return@launch }
+            _cloudMessage.value = "Test-Hinweis wird geschrieben …"
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    container.cloud.pushAlerts(s, listOf(com.jakober.energie.core.alerts.Alert(
+                        com.jakober.energie.core.alerts.AlertKind.AUTOMATION_ACTED, "Push-Test",
+                        "Wenn du das als Benachrichtigung siehst, läuft Firebase-Push. Geschrieben ${Format.time(kotlinx.datetime.Clock.System.now())}.",
+                    )))
+                }
+            }.onSuccess {
+                _cloudMessage.value = "Test-Hinweis geschrieben. Push kommt binnen Sekunden; ohne Push spätestens mit dem nächsten Abgleich (bis 15 min)."
+            }.onFailure { _cloudMessage.value = "Test fehlgeschlagen: ${it.message}" }
+        }
+    }
+
     fun loadCloudCommands() {
         viewModelScope.launch {
             val s = container.settings.current()

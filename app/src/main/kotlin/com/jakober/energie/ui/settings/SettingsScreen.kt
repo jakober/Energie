@@ -211,7 +211,7 @@ fun SettingsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
             val cloudCommands by vm.cloudCommands.collectAsStateWithLifecycle()
             CloudCard(
                 draft = draft, saved = saved, live = live, message = cloudMessage, commands = cloudCommands,
-                onDraft = { draft = it }, onTest = vm::testCloud, onRole = vm::setCloudRole, onLoadCommands = vm::loadCloudCommands,
+                onDraft = { draft = it }, onTest = vm::testCloud, onRole = vm::setCloudRole, onLoadCommands = vm::loadCloudCommands, onTestPush = vm::testPush,
             )
         }
 

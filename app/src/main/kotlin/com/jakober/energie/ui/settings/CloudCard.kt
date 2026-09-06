@@ -53,6 +53,7 @@ fun CloudCard(
     onTest: (Settings) -> Unit,
     onRole: (CloudRole) -> Unit,
     onLoadCommands: () -> Unit,
+    onTestPush: () -> Unit = {},
 ) {
     var showKey by rememberSaveable { mutableStateOf(false) }
     var showPw by rememberSaveable { mutableStateOf(false) }
@@ -112,6 +113,7 @@ fun CloudCard(
                 ValueRow("Zentrale zuletzt gesehen", live.hubSeenAt?.let { Format.ago(it, now) } ?: "noch nie", color = if (live.hubSeenAt != null && now - live.hubSeenAt > com.jakober.energie.data.EnergyRepository.HUB_SILENT) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
             }
             if (saved.cloudRole == CloudRole.VIEWER) {
+                TextButton(onClick = onTestPush) { Text("Push testen") }
                 ValueRow(
                     "Sofort-Push (Firebase)",
                     when {

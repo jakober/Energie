@@ -55,6 +55,7 @@ androidx-security-crypto = { module = "androidx.security:security-crypto", versi
 androidx-work-runtime = { module = "androidx.work:work-runtime-ktx", version.ref = "androidx-work" }
 androidx-documentfile = { module = "androidx.documentfile:documentfile", version.ref = "androidx-documentfile" }
 androidx-glance-appwidget = { module = "androidx.glance:glance-appwidget", version.ref = "androidx-glance" }
+firebase-messaging = { module = "com.google.firebase:firebase-messaging", version = "24.1.0" }
 
 vico-compose-m3 = { module = "com.patrykandpatrick.vico:compose-m3", version.ref = "vico" }
 

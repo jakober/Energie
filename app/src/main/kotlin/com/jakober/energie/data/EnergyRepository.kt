@@ -340,6 +340,7 @@ class EnergyRepository(
                 val status = cs.pullStatus(s)
                 val alerts = cs.pullAlerts(s)
                 val settingsChanged = cs.pullSettings(s)
+                runCatching { cs.registerDeviceIfNeeded(s) }
                 Triple(pulled, status, alerts to settingsChanged)
             }
         }

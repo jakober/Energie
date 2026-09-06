@@ -21,6 +21,14 @@ android {
         buildConfigField("String", "CLOUD_ANON_KEY", "\"${env("CLOUD_ANON_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1ucWNvc215ZXdudGNkc2Z1amRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg3MTA1MzksImV4cCI6MjEwNDI4NjUzOX0.rdMBBfPdenCYtgH-8bJM_LJ3YA9lQb-vA87KsaFYnhQ")}\"")
         buildConfigField("String", "CLOUD_EMAIL", "\"${env("CLOUD_EMAIL")}\"")
         buildConfigField("String", "CLOUD_PASSWORD", "\"${env("CLOUD_PASSWORD")}\"")
+        // Firebase-Push: Kenndaten des Projekts sind unkritisch; der API-Schluessel der Android-App
+        // laesst sich ueber das Secret FIREBASE_API_KEY ueberschreiben.
+        buildConfigField("String", "FIREBASE_PROJECT_ID", "\"${env("FIREBASE_PROJECT_ID", "energie-7e6a7")}\"")
+        buildConfigField("String", "FIREBASE_SENDER_ID", "\"${env("FIREBASE_SENDER_ID", "26704680694")}\"")
+        buildConfigField("String", "FIREBASE_APP_ID", "\"${env("FIREBASE_APP_ID", "1:26704680694:android:1cd1c28205708bb60b3ed7")}\"")
+        // Der Android-API-Schluessel von Firebase ist fuer die Auslieferung in Apps gedacht (Google-Doku);
+        // er gibt nur Zugriff auf Firebase-Dienste dieser App, nicht auf die Datenbank.
+        buildConfigField("String", "FIREBASE_API_KEY", "\"${env("FIREBASE_API_KEY", "AIzaSyA3LG_2PdKNIvt8AcOkVHiO9zjFRvryPrc")}\"")
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = 1
@@ -103,6 +111,7 @@ dependencies {
     implementation(libs.androidx.work.runtime)
     implementation(libs.androidx.documentfile)
     implementation(libs.androidx.glance.appwidget)
+    implementation(libs.firebase.messaging)
 
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.ktor.client.okhttp)

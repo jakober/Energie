@@ -85,7 +85,7 @@ fun SettingsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
         fordTokensJson = saved.fordTokensJson, fordVin = saved.fordVin, fordLocationId = saved.fordLocationId, smartcarVehicleId = saved.smartcarVehicleId, smartcarUserId = saved.smartcarUserId,
         backupTreeUri = saved.backupTreeUri, backupPassword = saved.backupPassword, backupLastAt = saved.backupLastAt, backupLastResult = saved.backupLastResult,
         alerts = saved.alerts, alertState = saved.alertState, carLearnedPowerW = saved.carLearnedPowerW, places = saved.places, plugs = saved.plugs,
-        cloudRole = saved.cloudRole, cloudSessionJson = saved.cloudSessionJson, cloudUploadedAt = saved.cloudUploadedAt, cloudSyncedAt = saved.cloudSyncedAt, cloudSettingsAppliedAt = saved.cloudSettingsAppliedAt,
+        cloudRole = saved.cloudRole, cloudSessionJson = saved.cloudSessionJson, cloudUploadedAt = saved.cloudUploadedAt, cloudSyncedAt = saved.cloudSyncedAt, cloudSettingsAppliedAt = saved.cloudSettingsAppliedAt, pushToken = saved.pushToken, pushRegisteredToken = saved.pushRegisteredToken,
         pvCalibration = saved.pvCalibration, pvForecast = saved.pvForecast, pvForecastHistory = saved.pvForecastHistory) != saved
 
     LaunchedEffect(Unit) { vm.clearTestResult() }

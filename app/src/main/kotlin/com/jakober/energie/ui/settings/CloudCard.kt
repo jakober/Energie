@@ -111,6 +111,17 @@ fun CloudCard(
                 ValueRow("Abgeglichen bis", stamp(saved.cloudSyncedAt, now))
                 ValueRow("Zentrale zuletzt gesehen", live.hubSeenAt?.let { Format.ago(it, now) } ?: "noch nie", color = if (live.hubSeenAt != null && now - live.hubSeenAt > com.jakober.energie.data.EnergyRepository.HUB_SILENT) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
             }
+            if (saved.cloudRole == CloudRole.VIEWER) {
+                ValueRow(
+                    "Sofort-Push (Firebase)",
+                    when {
+                        !com.jakober.energie.notify.Push.available -> "kein Firebase-Schlüssel im Build"
+                        saved.pushRegisteredToken.isNotBlank() -> "registriert"
+                        saved.pushToken.isNotBlank() -> "Token da, noch nicht eingetragen"
+                        else -> "kein Token (Google-Dienste?)"
+                    },
+                )
+            }
             (live.cloudError ?: live.cloudInfo)?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = if (live.cloudError != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant) }
             if (commands.isNotEmpty()) {
                 Text("Letzte Aufträge", style = MaterialTheme.typography.titleSmall)

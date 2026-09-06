@@ -105,6 +105,9 @@ data class Settings(
     val cloudSyncedAt: Long = 0,
     /** Wann die Anzeige zuletzt Einstellungen der Zentrale uebernommen hat (Unix-Sekunden). */
     val cloudSettingsAppliedAt: Long = 0,
+    /** Firebase-Token dieses Geraets und das zuletzt in der Cloud eingetragene. */
+    val pushToken: String = "",
+    val pushRegisteredToken: String = "",
     /** PV-Prognose: Anlagenleistung in kWp (0 = aus dem Verlauf schaetzen), Neigung, Azimut (0 = Sued, -90 = Ost, 90 = West). */
     val pvPeakKw: Double = 0.0,
     val pvTiltDeg: Int = 30,
@@ -187,6 +190,8 @@ class AppSettings(private val context: Context) {
             cloudUploadedAt = p[CLOUD_UPLOADED_AT] ?: 0L,
             cloudSyncedAt = p[CLOUD_SYNCED_AT] ?: 0L,
             cloudSettingsAppliedAt = p[CLOUD_SETTINGS_APPLIED_AT] ?: 0L,
+            pushToken = p[PUSH_TOKEN] ?: "",
+            pushRegisteredToken = p[PUSH_REGISTERED] ?: "",
             pvPeakKw = p[PV_PEAK_KW] ?: 0.0,
             pvTiltDeg = p[PV_TILT] ?: 30,
             pvAzimuthDeg = p[PV_AZIMUTH] ?: 0,
@@ -212,6 +217,8 @@ class AppSettings(private val context: Context) {
     suspend fun saveCloudSyncedAt(epochSeconds: Long) { context.dataStore.edit { it[CLOUD_SYNCED_AT] = epochSeconds } }
     suspend fun saveCloudSettingsAppliedAt(epochSeconds: Long) { context.dataStore.edit { it[CLOUD_SETTINGS_APPLIED_AT] = epochSeconds } }
     suspend fun saveCloudRole(role: CloudRole) { context.dataStore.edit { it[CLOUD_ROLE] = role.name } }
+    suspend fun savePushToken(token: String) { context.dataStore.edit { it[PUSH_TOKEN] = token } }
+    suspend fun savePushRegistered(token: String) { context.dataStore.edit { it[PUSH_REGISTERED] = token } }
 
     suspend fun saveAlerts(a: AlertSettings) { context.dataStore.edit { it[ALERTS] = rulesJson.encodeToString(AlertSettings.serializer(), a) } }
 
@@ -400,6 +407,8 @@ class AppSettings(private val context: Context) {
         val CLOUD_UPLOADED_AT = longPreferencesKey("cloud_uploaded_at")
         val CLOUD_SYNCED_AT = longPreferencesKey("cloud_synced_at")
         val CLOUD_SETTINGS_APPLIED_AT = longPreferencesKey("cloud_settings_applied_at")
+        val PUSH_TOKEN = stringPreferencesKey("push_token")
+        val PUSH_REGISTERED = stringPreferencesKey("push_registered")
         val PV_PEAK_KW = doublePreferencesKey("pv_peak_kw")
         val PV_TILT = intPreferencesKey("pv_tilt")
         val PV_AZIMUTH = intPreferencesKey("pv_azimuth")

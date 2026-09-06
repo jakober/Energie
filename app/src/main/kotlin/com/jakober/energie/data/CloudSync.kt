@@ -197,6 +197,18 @@ class CloudSync(
         true
     }
 
+    /** Firebase-Token in der Cloud eintragen, wenn es neu ist. */
+    suspend fun registerDeviceIfNeeded(s: Settings): Boolean {
+        val token = s.pushToken
+        if (token.isBlank() || token == s.pushRegisteredToken) return false
+        withSession(s) { c, sess -> c.upsertDevice(sess, token, android.os.Build.MODEL ?: "Android") }
+        settings.savePushRegistered(token)
+        return true
+    }
+
+    /** Ein per Push zugestellter Hinweis soll beim Abholen nicht noch einmal kommen. */
+    suspend fun markDelivered(s: Settings, id: Long) = withSession(s) { c, sess -> c.markDelivered(sess, listOf(id)) }
+
     suspend fun sendCommand(s: Settings, kind: String, payload: JsonObject = JsonObject(emptyMap())) = withSession(s) { c, sess -> c.addCommand(sess, kind, payload) }
 
     suspend fun recentCommands(s: Settings): List<Pair<CloudCommand, String?>> = withSession(s) { c, sess -> c.recentCommands(sess) }

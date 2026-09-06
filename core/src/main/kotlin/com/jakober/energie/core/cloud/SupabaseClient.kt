@@ -256,6 +256,17 @@ class SupabaseClient(
         check(res, "Hinweise bestaetigen")
     }
 
+    // ---------- Geraete fuer Push ----------
+
+    suspend fun upsertDevice(session: CloudSession, token: String, name: String) {
+        upsertRow(session, "devices", buildJsonObject {
+            put("token", token)
+            put("user_id", session.userId)
+            put("name", name)
+            put("updated_at", kotlinx.datetime.Clock.System.now().toString())
+        })
+    }
+
     // ---------- Hilfen ----------
 
     private suspend fun upsertRow(session: CloudSession, table: String, row: JsonObject) {

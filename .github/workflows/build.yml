@@ -39,6 +39,7 @@ jobs:
         env:
           CLOUD_EMAIL: ${{ secrets.CLOUD_EMAIL }}
           CLOUD_PASSWORD: ${{ secrets.CLOUD_PASSWORD }}
+          FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
         run: ./gradlew :app:assembleDebug --stacktrace
 
       # Ein Aussetzer bei GitHubs Artefaktdienst soll den Build nicht rot

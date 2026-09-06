@@ -13,6 +13,7 @@ class EnergieApp : Application(), Configuration.Provider {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
+        com.jakober.energie.notify.Push.init(this)
         PollWorker.schedule(this)
         BackupWorker.schedule(this) // prueft selbst, ob eine Sicherung eingerichtet ist
         // Zentrale: Vordergrund-Dienst, damit jede Minute gemessen wird.

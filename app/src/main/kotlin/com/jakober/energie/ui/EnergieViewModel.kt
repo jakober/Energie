@@ -541,7 +541,19 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
     val discovering: StateFlow<Boolean> = _discovering
 
     fun savePlugs(plugs: List<com.jakober.energie.core.plugs.PlugDevice>) {
-        viewModelScope.launch { container.settings.savePlugs(plugs); refreshNow() }
+        viewModelScope.launch {
+            container.settings.savePlugs(plugs)
+            // Anzeige: die Zentrale fragt die Stecker ab, also muss sie die Liste bekommen.
+            val s = container.settings.current()
+            if (s.cloudRole == CloudRole.VIEWER && s.cloudConfigured) {
+                runCatching {
+                    val plain = container.settings.plainForBackup(s).filterKeys { it !in CloudSync.CLOUD_KEYS }
+                    container.cloud.sendCommand(s, CloudSync.CMD_SETTINGS, buildJsonObject { put("plain", buildJsonObject { plain.forEach { (k, v) -> put(k, v) } }) })
+                    _plugMessage.value = (_plugMessage.value ?: "") + " Steckerliste an die Zentrale übergeben."
+                }.onFailure { _plugMessage.value = "Steckerliste nicht an die Zentrale übergeben: ${it.message}" }
+            }
+            refreshNow()
+        }
     }
 
     /** Stecker unter einer Adresse pruefen und mit Name uebernehmen; bei Shelly kommen Kennung und Name vom Geraet. */

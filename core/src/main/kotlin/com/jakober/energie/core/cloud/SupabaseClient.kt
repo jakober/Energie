@@ -2,6 +2,7 @@ package com.jakober.energie.core.cloud
 
 import com.jakober.energie.core.model.EnergySample
 import io.ktor.client.HttpClient
+import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
@@ -301,6 +302,15 @@ class SupabaseClient(
             put("name", name)
             put("updated_at", kotlinx.datetime.Clock.System.now().toString())
         })
+    }
+
+    suspend fun deleteDevice(session: CloudSession, token: String) {
+        val res = http.delete("$base/rest/v1/devices") {
+            auth(session)
+            parameter("token", "eq.$token")
+            header("Prefer", "return=minimal")
+        }
+        check(res, "Geraet austragen")
     }
 
     // ---------- Hilfen ----------

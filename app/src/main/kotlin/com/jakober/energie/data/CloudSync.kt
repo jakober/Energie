@@ -202,10 +202,18 @@ class CloudSync(
     /** Firebase-Token in der Cloud eintragen, wenn es neu ist. */
     suspend fun registerDeviceIfNeeded(s: Settings): Boolean {
         val token = s.pushToken
-        if (token.isBlank() || token == s.pushRegisteredToken) return false
+        if (s.cloudRole != CloudRole.VIEWER || token.isBlank() || token == s.pushRegisteredToken) return false
         withSession(s) { c, sess -> c.upsertDevice(sess, token, android.os.Build.MODEL ?: "Android") }
         settings.savePushRegistered(token)
         return true
+    }
+
+    /** Geraet aus der Push-Liste nehmen (Zentrale oder Eigenstaendig brauchen keinen Push). */
+    suspend fun unregisterDevice(s: Settings) {
+        val token = s.pushRegisteredToken.ifBlank { s.pushToken }
+        if (token.isBlank()) return
+        runCatching { withSession(s) { c, sess -> c.deleteDevice(sess, token) } }
+        settings.savePushRegistered("")
     }
 
     /** Ein per Push zugestellter Hinweis soll beim Abholen nicht noch einmal kommen. */

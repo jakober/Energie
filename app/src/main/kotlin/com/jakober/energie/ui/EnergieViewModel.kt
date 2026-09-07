@@ -258,6 +258,9 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
             container.settings.saveCloudRole(role)
             val ctx = container.context
             if (role == CloudRole.HUB) com.jakober.energie.hub.HubService.start(ctx) else com.jakober.energie.hub.HubService.stop(ctx)
+            // Push nur fuer die Anzeige: andere Rollen aus der Geraeteliste nehmen, die Anzeige traegt sich beim Abgleich ein.
+            val s = container.settings.current()
+            if (role != CloudRole.VIEWER) runCatching { withContext(Dispatchers.IO) { container.cloud.unregisterDevice(s) } }
             _cloudMessage.value = when (role) {
                 CloudRole.HUB -> "Zentrale aktiv: misst jede Minute und schreibt in die Cloud."
                 CloudRole.VIEWER -> "Anzeige aktiv: misst nicht mehr selbst, holt alles aus der Cloud."

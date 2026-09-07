@@ -21,6 +21,11 @@ class PollWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
 
     override suspend fun doWork(): Result {
         val app = applicationContext as EnergieApp
+        // Die Zentrale misst im Vordergrund-Dienst jede Minute; der Worker wuerde nur Doppelpunkte liefern.
+        if (app.container.settings.current().cloudRole == com.jakober.energie.data.CloudRole.HUB) {
+            if (!com.jakober.energie.hub.HubService.isRunning) com.jakober.energie.hub.HubService.start(applicationContext)
+            return Result.success()
+        }
         val state = app.container.repository.refresh(background = true)
         if (runAttemptCount == 0) app.container.repository.prune()
         // Beide Quellen gescheitert: Android soll es spaeter noch einmal versuchen.

@@ -41,6 +41,7 @@ class HubService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        isRunning = true
         startInForeground("Zentrale startet …")
         if (loop?.isActive != true) loop = scope.launch { run() }
         return START_STICKY
@@ -56,6 +57,7 @@ class HubService : Service() {
                 if (s.cloudRole != CloudRole.HUB) { stopSelf(); return }
                 val started = Clock.System.now()
                 val state = runCatching { app.container.repository.refresh() }.getOrNull()
+                lastTick = started
                 val t = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).time
                 val line = buildString {
                     append("%02d:%02d".format(t.hour, t.minute))
@@ -66,8 +68,9 @@ class HubService : Service() {
                     state?.cloudError?.let { append(" · $it") } ?: state?.cloudInfo?.let { append(" · ok") }
                 }
                 update(line)
-                val elapsed = Clock.System.now() - started
-                delay((INTERVAL_MS - elapsed.inWholeMilliseconds).coerceAtLeast(5_000))
+                // Fest am Minutenraster: der naechste Lauf beginnt 60 s nach dem Start dieses Laufs.
+                val wait = INTERVAL_MS - (Clock.System.now() - started).inWholeMilliseconds
+                delay(wait.coerceIn(3_000, INTERVAL_MS))
             }
         } finally {
             runCatching { wakeLock?.release() }
@@ -101,6 +104,7 @@ class HubService : Service() {
     }
 
     override fun onDestroy() {
+        isRunning = false
         loop?.cancel()
         scope.cancel()
         runCatching { wakeLock?.release() }
@@ -111,6 +115,10 @@ class HubService : Service() {
         const val CHANNEL = "zentrale"
         const val NOTIFICATION_ID = 42
         const val INTERVAL_MS = 60_000L
+        @Volatile var isRunning: Boolean = false
+            private set
+        @Volatile var lastTick: kotlinx.datetime.Instant? = null
+            private set
 
         fun start(context: Context) {
             val intent = Intent(context, HubService::class.java)

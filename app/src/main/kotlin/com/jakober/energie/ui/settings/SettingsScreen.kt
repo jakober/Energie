@@ -209,9 +209,11 @@ fun SettingsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
         item {
             val cloudMessage by vm.cloudMessage.collectAsStateWithLifecycle()
             val cloudCommands by vm.cloudCommands.collectAsStateWithLifecycle()
+            val cloudInventory by vm.cloudInventory.collectAsStateWithLifecycle()
             CloudCard(
                 draft = draft, saved = saved, live = live, message = cloudMessage, commands = cloudCommands,
                 onDraft = { draft = it }, onTest = vm::testCloud, onRole = vm::setCloudRole, onLoadCommands = vm::loadCloudCommands, onTestPush = vm::testPush,
+                inventory = cloudInventory, onInventory = vm::checkCloudInventory,
             )
         }
 

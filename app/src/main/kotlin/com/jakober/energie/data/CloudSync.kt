@@ -24,6 +24,8 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.minutes
+import kotlinx.datetime.toLocalDateTime
 
 /** Was die Zentrale ueber den Moment in die Cloud schreibt und die Anzeige daraus liest. */
 data class HubStatus(
@@ -209,11 +211,53 @@ class CloudSync(
     /** Ein per Push zugestellter Hinweis soll beim Abholen nicht noch einmal kommen. */
     suspend fun markDelivered(s: Settings, id: Long) = withSession(s) { c, sess -> c.markDelivered(sess, listOf(id)) }
 
+    /** Bestand in der Cloud: Zahl, Zeitraum, Punkte je Tag und Luecken der letzten sieben Tage. */
+    data class Inventory(
+        val total: Long,
+        val oldest: Instant?,
+        val newest: Instant?,
+        /** Tag (lokal) -> Zahl der Punkte, letzte sieben Tage. */
+        val perDay: List<Pair<kotlinx.datetime.LocalDate, Int>>,
+        /** Luecken ueber 30 Minuten in den letzten sieben Tagen: von, bis. */
+        val gaps: List<Pair<Instant, Instant>>,
+    )
+
+    suspend fun inventory(s: Settings): Inventory = withSession(s) { c, sess ->
+        val now = Clock.System.now()
+        val zone = kotlinx.datetime.TimeZone.currentSystemDefault()
+        val from = now - 7.days
+        val total = c.countSamples(sess)
+        val oldest = c.oldestSampleAt(sess)
+        val newest = c.latestSampleAt(sess)
+        // Bis zu 10 080 Punkte in sieben Tagen: in zwei Seiten holen.
+        val times = ArrayList<Instant>()
+        var cursor = from
+        repeat(4) {
+            val page = c.sampleTimes(sess, cursor, 5000)
+            if (page.isEmpty()) return@repeat
+            times += page.filter { it > (times.lastOrNull() ?: (cursor - 1.days)) }
+            cursor = page.last() + kotlin.time.Duration.parse("1ms")
+            if (page.size < 5000) return@repeat
+        }
+        val perDay = times.groupBy { it.toLocalDateTime(zone).date }.map { (d, l) -> d to l.size }.sortedBy { it.first }
+        val gaps = ArrayList<Pair<Instant, Instant>>()
+        var prev: Instant? = from
+        for (t in times) {
+            val p = prev
+            if (p != null && t - p > GAP) gaps += p to t
+            prev = t
+        }
+        val last = prev
+        if (last != null && now - last > GAP) gaps += last to now
+        Inventory(total, oldest, newest, perDay, gaps)
+    }
+
     suspend fun sendCommand(s: Settings, kind: String, payload: JsonObject = JsonObject(emptyMap())) = withSession(s) { c, sess -> c.addCommand(sess, kind, payload) }
 
     suspend fun recentCommands(s: Settings): List<Pair<CloudCommand, String?>> = withSession(s) { c, sess -> c.recentCommands(sess) }
 
     companion object {
+        val GAP = 30.minutes
         const val BATCH = 500
         const val PAGE = 2000
         /** Beim ersten Upload bzw. Abgleich: so weit zurueck. */

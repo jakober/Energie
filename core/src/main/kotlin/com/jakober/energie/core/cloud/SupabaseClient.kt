@@ -144,6 +144,42 @@ class SupabaseClient(
         return runCatching { Instant.parse(at) }.getOrNull()
     }
 
+    /** Zahl aller Messpunkte in der Cloud (Content-Range von PostgREST). */
+    suspend fun countSamples(session: CloudSession): Long {
+        val res = http.get("$base/rest/v1/samples") {
+            auth(session)
+            header("Prefer", "count=exact")
+            header("Range-Unit", "items")
+            header("Range", "0-0")
+            parameter("select", "at")
+        }
+        check(res, "Messpunkte zaehlen")
+        val range = res.headers["Content-Range"] ?: return -1
+        return range.substringAfter('/').toLongOrNull() ?: -1
+    }
+
+    /** Zeitpunkte aller Messpunkte ab `from`, aufsteigend, hoechstens `limit`. */
+    suspend fun sampleTimes(session: CloudSession, from: Instant, limit: Int = 5000): List<Instant> {
+        val res = http.get("$base/rest/v1/samples") {
+            auth(session)
+            parameter("select", "at")
+            parameter("at", "gte.$from")
+            parameter("order", "at.asc")
+            parameter("limit", limit)
+        }
+        val text = check(res, "Messpunkt-Zeiten lesen")
+        return json.parseToJsonElement(text).jsonArray.mapNotNull { row ->
+            row.jsonObject["at"]?.jsonPrimitive?.contentOrNull?.let { runCatching { Instant.parse(it) }.getOrNull() }
+        }
+    }
+
+    suspend fun oldestSampleAt(session: CloudSession): Instant? {
+        val res = http.get("$base/rest/v1/samples") { auth(session); parameter("select", "at"); parameter("order", "at.asc"); parameter("limit", 1) }
+        val text = check(res, "Aeltesten Messpunkt lesen")
+        val at = json.parseToJsonElement(text).jsonArray.firstOrNull()?.jsonObject?.get("at")?.jsonPrimitive?.contentOrNull ?: return null
+        return runCatching { Instant.parse(at) }.getOrNull()
+    }
+
     // ---------- Status, Einstellungen ----------
 
     suspend fun putStatus(session: CloudSession, live: JsonObject) {

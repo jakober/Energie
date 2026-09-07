@@ -286,6 +286,21 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    private val _cloudInventory = MutableStateFlow<CloudSync.Inventory?>(null)
+    val cloudInventory: StateFlow<CloudSync.Inventory?> = _cloudInventory
+
+    /** Zaehlt direkt in Supabase nach: Bestand, Zeitraum, Punkte je Tag, Luecken. */
+    fun checkCloudInventory() {
+        viewModelScope.launch {
+            val s = container.settings.current()
+            if (!s.cloudConfigured) { _cloudMessage.value = "Cloud nicht eingerichtet."; return@launch }
+            _cloudMessage.value = "Zähle in der Cloud nach …"
+            runCatching { withContext(Dispatchers.IO) { container.cloud.inventory(s) } }
+                .onSuccess { _cloudInventory.value = it; _cloudMessage.value = null }
+                .onFailure { _cloudMessage.value = "Bestand nicht lesbar: ${it.message}" }
+        }
+    }
+
     fun loadCloudCommands() {
         viewModelScope.launch {
             val s = container.settings.current()

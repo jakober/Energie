@@ -54,6 +54,8 @@ fun CloudCard(
     onRole: (CloudRole) -> Unit,
     onLoadCommands: () -> Unit,
     onTestPush: () -> Unit = {},
+    inventory: com.jakober.energie.data.CloudSync.Inventory? = null,
+    onInventory: () -> Unit = {},
 ) {
     var showKey by rememberSaveable { mutableStateOf(false) }
     var showPw by rememberSaveable { mutableStateOf(false) }
@@ -125,6 +127,23 @@ fun CloudCard(
                 )
             }
             (live.cloudError ?: live.cloudInfo)?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = if (live.cloudError != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant) }
+
+            TextButton(onClick = onInventory) { Text("Bestand in der Cloud prüfen") }
+            inventory?.let { inv ->
+                val now = Clock.System.now()
+                Text("In der Cloud", style = MaterialTheme.typography.titleSmall)
+                ValueRow("Messpunkte", if (inv.total >= 0) String.format(java.util.Locale.GERMANY, "%,d", inv.total) else "?")
+                ValueRow("Ältester", inv.oldest?.let { Format.dateTime(it) } ?: "–")
+                ValueRow("Neuester", inv.newest?.let { "${Format.dateTime(it)} (${Format.ago(it, now)})" } ?: "–",
+                    color = if (inv.newest != null && now - inv.newest > com.jakober.energie.data.CloudSync.GAP) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
+                Text("Punkte je Tag, letzte 7 Tage (1 440 = jede Minute)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                inv.perDay.forEach { (d, n) -> ValueRow(Format.dateShort(d), n.toString()) }
+                Text(
+                    if (inv.gaps.isEmpty()) "Keine Lücke über 30 Minuten in den letzten 7 Tagen."
+                    else "Lücken über 30 Minuten:\n" + inv.gaps.joinToString("\n") { (a, b) -> "${Format.dateTime(a)} bis ${Format.time(b)} (${Format.duration((b - a).inWholeMinutes)})" },
+                    style = MaterialTheme.typography.bodySmall, color = if (inv.gaps.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
+                )
+            }
             if (commands.isNotEmpty()) {
                 Text("Letzte Aufträge", style = MaterialTheme.typography.titleSmall)
                 commands.forEach { (c, result) ->

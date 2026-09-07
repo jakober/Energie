@@ -545,16 +545,19 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     /** Stecker unter einer Adresse pruefen und mit Name uebernehmen; bei Shelly kommen Kennung und Name vom Geraet. */
-    fun addPlug(host: String, name: String, kind: com.jakober.energie.core.plugs.PlugKind) {
+    fun addPlug(host: String, name: String, kind: com.jakober.energie.core.plugs.PlugKind, impulsesPerKwh: Int = 1000, offsetKwh: Double = 0.0) {
         viewModelScope.launch {
             _plugMessage.value = "Prüfe $host …"
             val result = runCatching {
                 withContext(Dispatchers.IO) {
                     val h = host.trim()
-                    val info = if (kind == com.jakober.energie.core.plugs.PlugKind.SHELLY) plugClient.shellyInfo(h) else null
-                    val reading = plugClient.read(com.jakober.energie.core.plugs.PlugDevice(info?.id ?: h, name, h, kind))
+                    val isShelly = kind == com.jakober.energie.core.plugs.PlugKind.SHELLY || kind == com.jakober.energie.core.plugs.PlugKind.SHELLY_S0
+                    val info = if (isShelly) runCatching { plugClient.shellyInfo(h) }.getOrNull() else null
+                    val id = (info?.id ?: h) + (if (kind == com.jakober.energie.core.plugs.PlugKind.SHELLY_S0) "#s0" else "")
                     val finalName = name.trim().ifBlank { info?.name ?: h }
-                    com.jakober.energie.core.plugs.PlugDevice(info?.id ?: h, finalName, h, kind) to reading
+                    val device = com.jakober.energie.core.plugs.PlugDevice(id, finalName, h, kind, input = 0, impulsesPerKwh = impulsesPerKwh.coerceAtLeast(1), offsetWh = offsetKwh * 1000.0)
+                    val reading = plugClient.read(device)
+                    device to reading
                 }
             }
             result.onSuccess { (device, reading) ->

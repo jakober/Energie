@@ -25,6 +25,7 @@ class PlugClient(private val http: HttpClient) {
         when (device.kind) {
             PlugKind.SHELLY -> readShelly(device.host)
             PlugKind.TASMOTA -> readTasmota(device.host)
+            PlugKind.SHELLY_S0 -> readShellyS0(device.host, device.input, device.impulsesPerKwh, device.offsetWh)
         }
     }
 
@@ -36,6 +37,26 @@ class PlugClient(private val http: HttpClient) {
     suspend fun readTasmota(host: String): PlugReading {
         val text = http.get("http://${host.trim()}/cm?cmnd=Status%208").bodyAsText()
         return parseTasmotaStatus(text) ?: throw IllegalStateException("Keine Tasmota-Antwort von $host: ${text.take(120)}")
+    }
+
+    /**
+     * Shelly Plus Uni mit Zaehleingang am S0-Ausgang eines Stromzaehlers: `counts.total`
+     * sind Impulse seit dem letzten Reset, `freq` Impulse je Sekunde. Bei 1000 imp/kWh
+     * ist ein Impuls eine Wattstunde, ein Impuls je Sekunde 3,6 kW.
+     */
+    suspend fun readShellyS0(host: String, input: Int, impulsesPerKwh: Int, offsetWh: Double): PlugReading {
+        val text = http.get("http://${host.trim()}/rpc/Input.GetStatus?id=$input").bodyAsText()
+        return parseShellyS0(text, impulsesPerKwh, offsetWh) ?: throw IllegalStateException("Kein Zaehleingang unter $host (Eingang ${input + 1} in der Shelly-App auf Zaehler stellen): ${text.take(120)}")
+    }
+
+    fun parseShellyS0(text: String, impulsesPerKwh: Int, offsetWh: Double): PlugReading? {
+        val o = runCatching { json.parseToJsonElement(text).jsonObject }.getOrNull() ?: return null
+        val counts = o["counts"] as? JsonObject ?: return null
+        val total = (counts["total"] as? JsonPrimitive)?.doubleOrNull ?: return null
+        val perKwh = impulsesPerKwh.coerceAtLeast(1).toDouble()
+        val whPerPulse = 1000.0 / perKwh
+        val freq = (o["freq"] as? JsonPrimitive)?.doubleOrNull ?: 0.0
+        return PlugReading(powerW = freq * whPerPulse * 3600.0, energyWh = offsetWh + total * whPerPulse, on = null)
     }
 
     /** Geraetekennung und der in der Shelly-App vergebene Name. */

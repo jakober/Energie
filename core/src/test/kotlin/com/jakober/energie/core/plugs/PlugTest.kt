@@ -20,6 +20,7 @@ class PlugTest {
             when {
                 req.url.encodedPath == "/rpc/Switch.GetStatus" -> respond("""{"id":0,"source":"init","output":true,"apower":84.6,"voltage":231.2,"current":0.41,"aenergy":{"total":12345.678,"by_minute":[1,2,3],"minute_ts":1}}""")
                 req.url.encodedPath == "/rpc/Shelly.GetDeviceInfo" -> respond("""{"name":"Kühlschrank","id":"shellyplugmg3-abc123","model":"S3PL-10112EU","gen":3}""")
+                req.url.encodedPath == "/rpc/Input.GetStatus" -> respond("""{"id":0,"counts":{"total":12345,"xtotal":12345,"by_minute":[3,5,4],"minute_ts":1},"freq":0.5,"xfreq":0.5}""")
                 req.url.encodedPath == "/cm" -> respond("""{"StatusSNS":{"Time":"2026-09-07T12:00:00","ENERGY":{"Total":3.456,"Power":12,"Voltage":230}}}""")
                 else -> respond("nope")
             }
@@ -32,6 +33,10 @@ class PlugTest {
         val info = client.shellyInfo("192.168.178.50")
         assertEquals("shellyplugmg3-abc123", info.id)
         assertEquals("Kühlschrank", info.name)
+        val s0 = client.read(PlugDevice("z", "Wärmepumpe", "192.168.178.52", PlugKind.SHELLY_S0, impulsesPerKwh = 1000, offsetWh = 500_000.0))
+        // 0,5 Impulse je Sekunde bei 1 Wh je Impuls = 1800 W; 12345 Impulse + 500 kWh Startstand
+        assertEquals(1800.0, s0.powerW!!, 1e-9)
+        assertEquals(512_345.0, s0.energyWh!!, 1e-9)
         val tasmota = client.read(PlugDevice("y", "Truhe", "192.168.178.51", PlugKind.TASMOTA))
         assertEquals(12.0, tasmota.powerW)
         assertEquals(3456.0, tasmota.energyWh!!, 1e-9)

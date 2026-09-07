@@ -42,8 +42,9 @@ pro Tag unter `files/verlauf/`. Alles Weitere rechnet sie daraus.
   Minute (Vordergrund-Dienst) und schreibt Messpunkte, Autozustand und
   Hinweise nach Supabase; das Handy unterwegs holt alles von dort und schickt
   Befehle als Aufträge zurück. Schema unter `supabase/schema.sql`.
-- **Steckdosen:** Shelly- und Tasmota-Messstecker im Heimnetz (lokal, ohne
-  Cloud), je Stecker ein Verbraucher. Statistik zeigt, wer wie viel
+- **Steckdosen und Zähler:** Shelly- und Tasmota-Messstecker im Heimnetz
+  (lokal, ohne Cloud), je Stecker ein Verbraucher; dazu Impulszähler über
+  Shelly Plus Uni am S0-Ausgang eines Zwischenzählers (Wärmepumpe). Statistik zeigt, wer wie viel
   verbraucht, mit Anteil am Haus, Kosten und nicht gemessenem Rest.
 - **Fahrten:** Kilometer je Tag aus dem Kilometerstand, Verbrauch aus dem
   Akkuinhalt, Herkunft des Fahrstroms (Sonne, Netz, unterwegs) über ein

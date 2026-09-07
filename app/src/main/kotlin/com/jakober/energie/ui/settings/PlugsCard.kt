@@ -49,19 +49,21 @@ fun PlugsCard(
     discovering: Boolean,
     message: String?,
     onDiscover: () -> Unit,
-    onAdd: (host: String, name: String, kind: PlugKind) -> Unit,
+    onAdd: (host: String, name: String, kind: PlugKind, impulsesPerKwh: Int, offsetKwh: Double) -> Unit,
     onRename: (id: String, name: String) -> Unit,
     onRemove: (id: String) -> Unit,
 ) {
     var host by rememberSaveable { mutableStateOf("") }
     var name by rememberSaveable { mutableStateOf("") }
     var kind by rememberSaveable { mutableStateOf(PlugKind.SHELLY) }
+    var impulses by rememberSaveable { mutableStateOf("1000") }
+    var offset by rememberSaveable { mutableStateOf("") }
     var renaming by rememberSaveable { mutableStateOf<String?>(null) }
     var removing by rememberSaveable { mutableStateOf<String?>(null) }
 
     EnergieCard(title = "Steckdosen", accent = EnergyColors.house) {
         Text(
-            "Shelly- oder Tasmota-Messstecker im Heimnetz. Jeder Stecker steht für einen Verbraucher, etwa „Kühlschrank“; die Statistik zeigt dann, wer wie viel verbraucht. Abfrage nur im Heimnetz, von unterwegs bleibt der letzte Stand.",
+            "Shelly- oder Tasmota-Messstecker im Heimnetz, dazu Impulszähler über einen Shelly Plus Uni am S0-Ausgang eines Stromzählers (etwa Wärmepumpe). Jeder Eintrag steht für einen Verbraucher; die Statistik zeigt dann, wer wie viel verbraucht.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         if (plugs.isEmpty()) {
@@ -74,7 +76,7 @@ fun PlugsCard(
                 Column(Modifier.weight(1f)) {
                     Text(d.name, style = MaterialTheme.typography.titleSmall)
                     Text(
-                        "${d.host} · ${if (d.kind == PlugKind.SHELLY) "Shelly" else "Tasmota"}" +
+                        "${d.host} · ${when (d.kind) { PlugKind.SHELLY -> "Shelly"; PlugKind.TASMOTA -> "Tasmota"; PlugKind.SHELLY_S0 -> "Impulszähler ${d.impulsesPerKwh} imp/kWh" }}" +
                             (r?.let { " · jetzt ${Format.power(it.powerW)}" + (it.energyWh?.let { e -> " · Zähler ${Format.energy(e)}" } ?: "") } ?: "") +
                             (err?.let { " · nicht erreichbar" } ?: ""),
                         style = MaterialTheme.typography.bodySmall,
@@ -96,7 +98,7 @@ fun PlugsCard(
                     Text(d.name, style = MaterialTheme.typography.titleSmall)
                     Text(d.host, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                TextButton(onClick = { onAdd(d.host, d.name, PlugKind.SHELLY) }) { Text("Hinzufügen") }
+                TextButton(onClick = { onAdd(d.host, d.name, PlugKind.SHELLY, 1000, 0.0) }) { Text("Hinzufügen") }
             }
         }
 
@@ -104,6 +106,23 @@ fun PlugsCard(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(selected = kind == PlugKind.SHELLY, onClick = { kind = PlugKind.SHELLY }, label = { Text("Shelly") })
             FilterChip(selected = kind == PlugKind.TASMOTA, onClick = { kind = PlugKind.TASMOTA }, label = { Text("Tasmota") })
+            FilterChip(selected = kind == PlugKind.SHELLY_S0, onClick = { kind = PlugKind.SHELLY_S0 }, label = { Text("Shelly Uni (S0)") })
+        }
+        if (kind == PlugKind.SHELLY_S0) {
+            Text(
+                "Shelly Plus Uni, Eingang 1 in der Shelly-App auf „Zähler“ gestellt, am S0-Ausgang des Zählers. Impulse je kWh stehen auf dem Zähler; der Zählerstand beim Anschluss sorgt dafür, dass die App denselben Stand zeigt wie das Display.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = impulses, onValueChange = { impulses = it.filter { c -> c.isDigit() } }, label = { Text("Impulse je kWh") },
+                    singleLine = true, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                )
+                OutlinedTextField(
+                    value = offset, onValueChange = { offset = it }, label = { Text("Zählerstand jetzt in kWh") },
+                    singleLine = true, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                )
+            }
         }
         OutlinedTextField(
             value = host, onValueChange = { host = it }, label = { Text("IP-Adresse im Heimnetz, z. B. 192.168.178.50") },
@@ -113,7 +132,13 @@ fun PlugsCard(
             value = name, onValueChange = { name = it }, label = { Text("Verbraucher, z. B. Kühlschrank (leer = Name vom Gerät)") },
             singleLine = true, modifier = Modifier.fillMaxWidth(),
         )
-        Button(onClick = { onAdd(host, name, kind); host = ""; name = "" }, enabled = host.isNotBlank()) { Text("Stecker prüfen und hinzufügen") }
+        Button(
+            onClick = {
+                onAdd(host, name, kind, impulses.toIntOrNull() ?: 1000, offset.replace(',', '.').toDoubleOrNull() ?: 0.0)
+                host = ""; name = ""
+            },
+            enabled = host.isNotBlank(),
+        ) { Text(if (kind == PlugKind.SHELLY_S0) "Zähler prüfen und hinzufügen" else "Stecker prüfen und hinzufügen") }
         message?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         Text(
             "Tipp: In der FRITZ!Box unter Heimnetz → Netzwerk jedem Stecker „immer die gleiche IPv4-Adresse“ geben, dann bleibt die Adresse stabil.",

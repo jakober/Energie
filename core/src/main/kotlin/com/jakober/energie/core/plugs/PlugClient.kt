@@ -45,8 +45,15 @@ class PlugClient(private val http: HttpClient) {
      * ist ein Impuls eine Wattstunde, ein Impuls je Sekunde 3,6 kW.
      */
     suspend fun readShellyS0(host: String, input: Int, impulsesPerKwh: Int, offsetWh: Double): PlugReading {
-        val text = http.get("http://${host.trim()}/rpc/Input.GetStatus?id=$input").bodyAsText()
-        return parseShellyS0(text, impulsesPerKwh, offsetWh) ?: throw IllegalStateException("Kein Zaehleingang unter $host (Eingang ${input + 1} in der Shelly-App auf Zaehler stellen): ${text.take(120)}")
+        // Erst der eingestellte Eingang, sonst alle Eingaenge durchprobieren: beim Plus Uni
+        // haengt COUNT IN unter einer anderen Nummer als IN 1 und IN 2.
+        var last = ""
+        for (id in listOf(input) + (0..3).filter { it != input }) {
+            val text = runCatching { http.get("http://${host.trim()}/rpc/Input.GetStatus?id=$id").bodyAsText() }.getOrNull() ?: continue
+            last = text
+            parseShellyS0(text, impulsesPerKwh, offsetWh)?.let { return it }
+        }
+        throw IllegalStateException("Kein Zaehleingang unter $host gefunden (Impulse an COUNT IN und GND?): ${last.take(120)}")
     }
 
     fun parseShellyS0(text: String, impulsesPerKwh: Int, offsetWh: Double): PlugReading? {

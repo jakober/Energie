@@ -111,7 +111,7 @@ fun PlugsCard(
         }
         if (kind == PlugKind.SHELLY_S0) {
             Text(
-                "Shelly Plus Uni, Eingang 1 in der Shelly-App auf „Zähler“ gestellt, am S0-Ausgang des Zählers. Impulse je kWh stehen auf dem Zähler; der Zählerstand beim Anschluss sorgt dafür, dass die App denselben Stand zeigt wie das Display.",
+                "Shelly Plus Uni, Zähler-S0+ an COUNT IN und S0− an GND. Die App findet den zählenden Eingang selbst. Impulse je kWh stehen auf dem Zähler; der Zählerstand beim Anschluss sorgt dafür, dass die App denselben Stand zeigt wie das Display.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

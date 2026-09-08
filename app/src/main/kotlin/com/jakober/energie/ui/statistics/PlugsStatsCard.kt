@@ -12,6 +12,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.jakober.energie.core.history.DayStatistics
 import com.jakober.energie.core.plugs.PlugTotals
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import com.jakober.energie.ui.dashboard.BarSegment
+import com.jakober.energie.ui.dashboard.StackedBar
+import com.jakober.energie.ui.dashboard.plugColor
 import com.jakober.energie.data.Settings
 import com.jakober.energie.ui.BigValue
 import com.jakober.energie.ui.EnergieCard
@@ -35,6 +43,7 @@ fun PlugsStatsCard(days: List<DayStatistics>, settings: Settings, houseConsumpti
     val totals = plugTotals(days)
     if (totals.isEmpty()) return
     val names = settings.plugs.associate { it.id to it.name }
+    val colors = settings.plugs.mapIndexed { i, d -> d.id to plugColor(i) }.toMap()
     val rows = totals.entries.sortedByDescending { it.value.energyWh }
     val measured = rows.sumOf { it.value.energyWh }
     val house = houseConsumptionWh?.takeIf { it > 0 }
@@ -46,9 +55,12 @@ fun PlugsStatsCard(days: List<DayStatistics>, settings: Settings, houseConsumpti
             if (house != null) BigValue(Format.percent(measured / house), "vom Hausverbrauch", EnergyColors.house, Modifier.weight(1f))
             BigValue(Format.euro(measured / 1000 * settings.pricePerKwh), "zum Strompreis", EnergyColors.grid, Modifier.weight(1f))
         }
+        // Gleiche Farben wie in der Haus-Karte; der Rest des Hauses bleibt grau.
+        StackedBar(segments = rows.map { (id, t) -> BarSegment(colors[id] ?: EnergyColors.neutral, t.energyWh) }, total = house ?: measured)
         rows.forEach { (id, t) ->
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Box(Modifier.size(12.dp).clip(CircleShape).background(colors[id] ?: EnergyColors.neutral))
                     Column(Modifier.weight(1f)) {
                         Text(names[id] ?: id, style = MaterialTheme.typography.titleSmall)
                         Text(

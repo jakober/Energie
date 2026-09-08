@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.saveable.rememberSaveable
+import com.jakober.energie.data.CloudRole
 import com.jakober.energie.data.FordCommand
 import com.jakober.energie.core.places.NamedPlace
 import com.jakober.energie.core.places.Places
@@ -102,8 +103,10 @@ fun DashboardScreen(vm: EnergieViewModel, onOpenSettings: () -> Unit, contentPad
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("Energie", style = MaterialTheme.typography.displaySmall)
+                    // Anzeige: nicht "vor 12 s", sondern der genaue Zeitpunkt des Standes aus der Cloud.
                     Text(
-                        "Aktualisiert ${Format.ago(live.lastUpdate, now)}",
+                        if (settings.cloudRole == CloudRole.VIEWER) "Stand ${Format.stamp(live.sample?.at, now)}"
+                        else "Aktualisiert ${Format.ago(live.lastUpdate, now)}",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

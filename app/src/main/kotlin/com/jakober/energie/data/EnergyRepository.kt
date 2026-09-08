@@ -419,6 +419,21 @@ class EnergyRepository(
         return kotlin.math.round(peakW / 0.85 / 100.0) / 10.0
     }
 
+    /**
+     * Auswertung je Kuehlgeraet aus den vollen Tagen vor heute. Vergangene Tage kommen
+     * aus dem Tages-Cache, deshalb ist das auch bei jedem Durchlauf billig.
+     */
+    fun coolingReports(s: Settings, zone: TimeZone = TimeZone.currentSystemDefault()): Map<String, com.jakober.energie.core.plugs.CoolingReport> {
+        val devices = s.plugs.filter { it.isCooling }
+        if (devices.isEmpty()) return emptyMap()
+        val today = today(zone)
+        val days = history.days().filter { it < today }.sorted().takeLast(com.jakober.energie.core.plugs.CoolingHealth.BASELINE_DAYS + com.jakober.energie.core.plugs.CoolingHealth.RECENT_DAYS + 7)
+        val stats = days.map { it to dayStatistics(it, zone) }
+        return devices.associate { d ->
+            d.id to com.jakober.energie.core.plugs.CoolingHealth.of(d, stats.mapNotNull { (date, st) -> st.plugs[d.id]?.let { date to it } })
+        }
+    }
+
     /** Wer die Hinweise anzeigt (Benachrichtigungen); ohne Empfaenger passiert nichts. */
     var onAlerts: ((List<Alert>) -> Unit)? = null
 
@@ -442,6 +457,12 @@ class EnergyRepository(
             automationLine = automationLine,
             carSocPercent = car?.socPercent,
             carChargingAtHome = (live.sample?.carChargePowerW ?: 0.0) > 0,
+            coolingPlugs = s.plugs.filter { it.isCooling }.map { d ->
+                com.jakober.energie.core.alerts.CoolingLive(d.id, d.name, live.sample?.plugs?.get(d.id)?.powerW, d.ratedPowerW)
+            },
+            coolingWarnings = if (s.alerts.cooling && s.plugs.any { it.isCooling }) {
+                coolingReports(s).values.mapNotNull { r -> r.warning?.let { w -> com.jakober.energie.core.alerts.CoolingWarning(r.deviceId, s.plugs.first { it.id == r.deviceId }.name, w) } }
+            } else emptyList(),
         )
         val result = AlertEngine.evaluate(input, s.alertState, s.alerts)
         if (result.state != s.alertState) settings.saveAlertState(result.state)

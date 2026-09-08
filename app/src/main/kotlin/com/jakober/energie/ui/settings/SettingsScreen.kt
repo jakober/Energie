@@ -232,7 +232,7 @@ fun SettingsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
                 message = plugMessage,
                 onDiscover = vm::discoverPlugs,
                 onAdd = { host, name, kind, imp, off -> vm.addPlug(host, name, kind, imp, off) },
-                onRename = vm::renamePlug,
+                onEdit = vm::editPlug,
                 onRemove = vm::removePlug,
             )
         }

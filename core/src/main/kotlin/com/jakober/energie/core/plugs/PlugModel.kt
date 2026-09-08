@@ -6,6 +6,10 @@ import kotlinx.serialization.Serializable
 @Serializable
 enum class PlugKind { SHELLY, TASMOTA, SHELLY_S0 }
 
+/** Was fuer ein Verbraucher am Stecker haengt; bestimmt, welche Auswertung die App macht. */
+@Serializable
+enum class PlugType { OTHER, COOLING }
+
 /** Ein Messstecker, wie der Nutzer ihn eingerichtet hat. */
 @Serializable
 data class PlugDevice(
@@ -22,7 +26,15 @@ data class PlugDevice(
     val impulsesPerKwh: Int = 1000,
     /** Nur SHELLY_S0: Zaehlerstand in Wh beim Anschluss, damit die App denselben Stand zeigt wie das Display. */
     val offsetWh: Double = 0.0,
-)
+    /** Kuehlgeraet: Kompressorzyklen werden ueberwacht. */
+    val type: PlugType = PlugType.OTHER,
+    /** Nennleistung laut Typenschild in W, optional. */
+    val ratedPowerW: Double? = null,
+    /** Jahresverbrauch laut Energielabel in kWh, optional. */
+    val labelKwhPerYear: Double? = null,
+) {
+    val isCooling: Boolean get() = type == PlugType.COOLING
+}
 
 /** Momentaufnahme eines Steckers. `energyWh` ist ein Zaehler, der nur waechst (ausser nach einem Reset). */
 @Serializable

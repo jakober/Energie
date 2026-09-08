@@ -23,9 +23,16 @@ data class AlertSettings(
     val sourceDownMinutes: Int = 60,
     /** Naechtliche Sicherung fehlgeschlagen (wird direkt vom Worker gemeldet). */
     val backupFailed: Boolean = true,
+    /** Kuehlgeraete an Messsteckern: Dauerlauf, Stillstand, Mehrverbrauch. */
+    val cooling: Boolean = true,
+    val coolingStuckHours: Int = 3,
+    val coolingSilentHours: Int = 6,
 )
 
-enum class AlertKind { CAR_UNLOCKED_HOME, SURPLUS_UNUSED, AUTOMATION_ACTED, SOURCE_DOWN, SOURCE_BACK, BACKUP_FAILED, CHARGE_STARTED, CHARGE_STOPPED }
+enum class AlertKind {
+    CAR_UNLOCKED_HOME, SURPLUS_UNUSED, AUTOMATION_ACTED, SOURCE_DOWN, SOURCE_BACK, BACKUP_FAILED, CHARGE_STARTED, CHARGE_STOPPED,
+    COOLING_STUCK_ON, COOLING_SILENT, COOLING_BACK, COOLING_OVERLOAD, COOLING_TREND,
+}
 
 /** Ein Hinweis, wie er als Benachrichtigung erscheint. */
 data class Alert(
@@ -50,7 +57,24 @@ data class AlertState(
     val lastCharging: Boolean? = null,
     /** Autoladung beim Ladestart, fuer die Meldung am Ende. */
     val chargeStartSoc: Double? = null,
+    /** Kuehlgeraete: seit wann der Kompressor ununterbrochen laeuft (Unix-Sekunden), je Stecker-ID. */
+    val plugOnSince: Map<String, Long> = emptyMap(),
+    /** Wann der Kompressor zuletzt lief. */
+    val plugLastOnAt: Map<String, Long> = emptyMap(),
+    /** Seit wann die Leistung ueber der Nennleistung liegt. */
+    val plugHighSince: Map<String, Long> = emptyMap(),
+    val plugStuckReported: List<String> = emptyList(),
+    val plugSilentReported: List<String> = emptyList(),
+    val plugOverloadReported: List<String> = emptyList(),
+    /** Letzte Trendmeldung je Stecker (Unix-Sekunden). */
+    val coolingWarnedAt: Map<String, Long> = emptyMap(),
 )
+
+/** Ein Kuehlgeraet im aktuellen Durchlauf. `powerW` null = Stecker nicht erreichbar. */
+data class CoolingLive(val id: String, val name: String, val powerW: Double?, val ratedPowerW: Double? = null)
+
+/** Ergebnis der Tagesauswertung, wenn sie etwas zu melden hat. */
+data class CoolingWarning(val id: String, val name: String, val text: String)
 
 /** Momentaufnahme fuer die Engine. `null` = unbekannt. */
 data class AlertInput(
@@ -74,6 +98,10 @@ data class AlertInput(
     val carSocPercent: Double? = null,
     /** Ob das Auto zu Hause laedt (Ladeleistung im Messpunkt), fuer den Text. */
     val carChargingAtHome: Boolean = false,
+    /** Kuehlgeraete mit aktueller Leistung. */
+    val coolingPlugs: List<CoolingLive> = emptyList(),
+    /** Auffaellige Kuehlgeraete laut Tagesauswertung. */
+    val coolingWarnings: List<CoolingWarning> = emptyList(),
 )
 
 data class AlertResult(val alerts: List<Alert>, val state: AlertState)
@@ -86,6 +114,14 @@ object AlertEngine {
     /** Naeher als das gilt als "zu Hause". */
     const val HOME_RADIUS_M = 300.0
     val SURPLUS_REPEAT = 60.minutes
+    /** Ab dieser Leistung laeuft der Kompressor. */
+    const val COOLING_ON_W = 20.0
+    /** Leistung ueber diesem Vielfachen der Nennleistung ... */
+    const val OVERLOAD_FACTOR = 1.3
+    /** ... laenger als so lange ist ein Fehler (Abtauheizungen laufen 20 bis 30 min). */
+    val OVERLOAD_MIN = 45.minutes
+    /** Trendmeldung je Geraet hoechstens alle 7 Tage. */
+    val TREND_REPEAT = (7 * 24 * 60).minutes
 
     fun evaluate(input: AlertInput, state: AlertState, settings: AlertSettings): AlertResult {
         val alerts = ArrayList<Alert>()
@@ -187,6 +223,91 @@ object AlertEngine {
             )
         }
 
+        // --- Kuehlgeraete ---
+        if (settings.cooling) s = cooling(input, s, settings, alerts)
+
         return AlertResult(alerts, s)
+    }
+
+    private fun fmtDuration(seconds: Long): String {
+        val h = seconds / 3600; val m = (seconds % 3600) / 60
+        return if (h > 0) "$h h $m min" else "$m min"
+    }
+
+    private fun cooling(input: AlertInput, state: AlertState, settings: AlertSettings, alerts: MutableList<Alert>): AlertState {
+        val nowSec = input.now.epochSeconds
+        val onSince = state.plugOnSince.toMutableMap()
+        val lastOn = state.plugLastOnAt.toMutableMap()
+        val highSince = state.plugHighSince.toMutableMap()
+        val stuck = state.plugStuckReported.toMutableSet()
+        val silent = state.plugSilentReported.toMutableSet()
+        val overload = state.plugOverloadReported.toMutableSet()
+        val warned = state.coolingWarnedAt.toMutableMap()
+        val ids = input.coolingPlugs.map { it.id }.toSet()
+
+        for (p in input.coolingPlugs) {
+            val w = p.powerW ?: continue // nicht erreichbar: Zustand einfrieren
+            val running = w >= COOLING_ON_W
+            if (running) {
+                val since = onSince.getOrPut(p.id) { nowSec }
+                lastOn[p.id] = nowSec
+                if (p.id in silent) {
+                    alerts += Alert(AlertKind.COOLING_BACK, "${p.name} läuft wieder", "Der Kompressor von ${p.name} ist wieder angesprungen.")
+                    silent -= p.id
+                }
+                val limit = settings.coolingStuckHours * 3600L
+                if (nowSec - since >= limit && p.id !in stuck) {
+                    alerts += Alert(
+                        AlertKind.COOLING_STUCK_ON, "${p.name} läuft ohne Pause",
+                        "Der Kompressor von ${p.name} läuft seit ${fmtDuration(nowSec - since)} durch (${w.toInt()} W). " +
+                            "Tür offen, stark vereist, Thermostat defekt oder gerade viel Neues eingelagert?",
+                    )
+                    stuck += p.id
+                }
+            } else {
+                onSince -= p.id
+                stuck -= p.id
+                val last = lastOn[p.id]
+                if (last == null) lastOn[p.id] = nowSec // zum ersten Mal gesehen: ab jetzt zaehlen
+                else if (nowSec - last >= settings.coolingSilentHours * 3600L && p.id !in silent) {
+                    alerts += Alert(
+                        AlertKind.COOLING_SILENT, "${p.name} steht still",
+                        "Seit ${fmtDuration(nowSec - last)} kein Kompressorlauf bei ${p.name} (jetzt ${w.toInt()} W). " +
+                            "Stecker gezogen, Sicherung aus oder Gerät defekt? Bitte nachsehen.",
+                    )
+                    silent += p.id
+                }
+            }
+            // Ueber der Nennleistung, laenger als eine Abtauheizung braucht.
+            val rated = p.ratedPowerW
+            if (rated != null && rated > 0 && w >= rated * OVERLOAD_FACTOR) {
+                val since = highSince.getOrPut(p.id) { nowSec }
+                if (nowSec - since >= OVERLOAD_MIN.inWholeSeconds && p.id !in overload) {
+                    alerts += Alert(
+                        AlertKind.COOLING_OVERLOAD, "${p.name} zieht zu viel",
+                        "${p.name} nimmt seit ${fmtDuration(nowSec - since)} ${w.toInt()} W auf, Nennleistung ${rated.toInt()} W. " +
+                            "Kompressor schwergängig oder Heizung hängt? Bitte prüfen.",
+                    )
+                    overload += p.id
+                }
+            } else {
+                highSince -= p.id
+                overload -= p.id
+            }
+        }
+        for (wng in input.coolingWarnings) {
+            val last = warned[wng.id] ?: 0
+            if (nowSec - last >= TREND_REPEAT.inWholeSeconds) {
+                alerts += Alert(AlertKind.COOLING_TREND, "${wng.name} braucht mehr Strom", wng.text)
+                warned[wng.id] = nowSec
+            }
+        }
+        // Entfernte Stecker vergessen.
+        fun <V> Map<String, V>.keep() = filterKeys { it in ids }
+        return state.copy(
+            plugOnSince = onSince.keep(), plugLastOnAt = lastOn.keep(), plugHighSince = highSince.keep(),
+            plugStuckReported = stuck.filter { it in ids }, plugSilentReported = silent.filter { it in ids },
+            plugOverloadReported = overload.filter { it in ids }, coolingWarnedAt = warned.keep(),
+        )
     }
 }

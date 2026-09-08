@@ -98,6 +98,9 @@ object Format {
         return "$day $clock Uhr"
     }
 
+    /** Zahl fuer ein Eingabefeld: ganzzahlig ohne Nachkommastellen, sonst mit Komma. */
+    fun plain(v: Double): String = if (v == Math.rint(v)) v.toLong().toString() else String.format(de, "%.1f", v)
+
     fun hourLabel(h: Int): String = String.format(de, "%02d", h)
 
     /** "45 min", "2 h 10 min" */

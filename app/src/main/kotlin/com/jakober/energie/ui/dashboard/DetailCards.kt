@@ -249,7 +249,7 @@ fun PvDetailCard(live: LiveState, today: DayStatistics?, yesterday: DayStatistic
 }
 
 @Composable
-fun HouseDetailCard(live: LiveState, today: DayStatistics?, yesterday: DayStatistics?, settings: Settings, onClose: () -> Unit) {
+fun HouseDetailCard(live: LiveState, today: DayStatistics?, yesterday: DayStatistics?, settings: Settings, cooling: Map<String, com.jakober.energie.core.plugs.CoolingReport> = emptyMap(), onClose: () -> Unit) {
     val s = live.sample
     val household = s?.householdW
     val carW = s?.carChargePowerW ?: 0.0
@@ -281,7 +281,7 @@ fun HouseDetailCard(live: LiveState, today: DayStatistics?, yesterday: DayStatis
             today.peakConsumption?.let { ValueRow("Verbrauchsspitze", Format.power(it.value), "um ${Format.time(it.at)}", icon = Icons.Rounded.Home, iconTint = EnergyColors.house) }
             if (settings.plugs.isNotEmpty()) {
                 Spacer(Modifier.height(4.dp))
-                PlugBreakdown(live, today, settings)
+                PlugBreakdown(live, today, settings, cooling)
                 Spacer(Modifier.height(4.dp))
             }
             today.heaviestHour?.let { ValueRow("Stärkste Stunde", Format.energy(it.consumptionWh), "${Format.hourLabel(it.hour)}–${Format.hourLabel((it.hour + 1) % 24)} Uhr") }

@@ -93,6 +93,12 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
         .mapLatest { withContext(Dispatchers.IO) { repo.dayStatistics(repo.today()) } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    /** Kuehlgeraete: Normalwert, Abweichung, Laufanteil je Stecker. */
+    val coolingReports: StateFlow<Map<String, com.jakober.energie.core.plugs.CoolingReport>> =
+        combine(updates, settings.map { it.plugs }.distinctUntilChanged()) { _, _ -> Unit }
+            .mapLatest { withContext(Dispatchers.IO) { repo.coolingReports(settings.value) } }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
     /** Gestern, fuer den Vergleich in den Detailkarten. */
     val yesterdayStats: StateFlow<DayStatistics?> = updates
         .mapLatest { withContext(Dispatchers.IO) { repo.dayStatistics(repo.today().minus(1, DateTimeUnit.DAY)) } }
@@ -583,6 +589,15 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     fun renamePlug(id: String, name: String) = savePlugs(settings.value.plugs.map { if (it.id == id) it.copy(name = name.trim().ifBlank { it.name }) else it })
+
+    /** Name, Geraetetyp und Herstellerangaben eines Steckers aendern. */
+    fun editPlug(id: String, name: String, type: com.jakober.energie.core.plugs.PlugType, ratedPowerW: Double?, labelKwhPerYear: Double?) =
+        savePlugs(settings.value.plugs.map {
+            if (it.id == id) it.copy(
+                name = name.trim().ifBlank { it.name }, type = type,
+                ratedPowerW = ratedPowerW?.takeIf { v -> v > 0 }, labelKwhPerYear = labelKwhPerYear?.takeIf { v -> v > 0 },
+            ) else it
+        })
     fun removePlug(id: String) = savePlugs(settings.value.plugs.filterNot { it.id == id })
 
     /** Shelly-Stecker im Heimnetz suchen (mDNS), ein paar Sekunden lang. */

@@ -60,6 +60,15 @@ fun NotificationsCard(saved: AlertSettings, onSave: (AlertSettings) -> Unit) {
         ToggleRow("Ladestart und Ladeende", "Wenn das Auto laut Ford zu laden beginnt oder aufhört, mit Akkustand.", draft.chargeStartStop) { draft = draft.copy(chargeStartStop = it) }
         ToggleRow("Quelle ausgefallen", "SENEC oder FRITZ!Box antworten seit ${draft.sourceDownMinutes} min nicht, und wenn sie wieder da sind.", draft.sourceDown) { draft = draft.copy(sourceDown = it) }
         ToggleRow("Sicherung fehlgeschlagen", "Wenn die nächtliche Sicherung nicht geschrieben werden konnte.", draft.backupFailed) { draft = draft.copy(backupFailed = it) }
+        ToggleRow(
+            "Kühlgeräte",
+            "Steckdosen vom Typ „Kühlgerät“: Kompressor läuft seit ${draft.coolingStuckHours} h durch, seit ${draft.coolingSilentHours} h kein Lauf, dauerhaft über der Nennleistung, oder seit Tagen deutlich mehr Verbrauch als üblich.",
+            draft.cooling,
+        ) { draft = draft.copy(cooling = it) }
+        if (draft.cooling) {
+            SliderRow("Dauerlauf ab", "${draft.coolingStuckHours} h", draft.coolingStuckHours.toFloat(), 1f..8f, 6) { draft = draft.copy(coolingStuckHours = it.roundToInt()) }
+            SliderRow("Stillstand ab", "${draft.coolingSilentHours} h", draft.coolingSilentHours.toFloat(), 2f..24f, 10) { draft = draft.copy(coolingSilentHours = (it / 2).roundToInt() * 2) }
+        }
 
         Button(onClick = { onSave(draft) }, enabled = dirty, modifier = Modifier.fillMaxWidth()) { Text("Benachrichtigungen speichern") }
     }

@@ -38,6 +38,8 @@ class Notifier(private val context: Context) {
         if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return
         val channel = when (alert.kind) {
             AlertKind.CAR_UNLOCKED_HOME, AlertKind.SURPLUS_UNUSED, AlertKind.CHARGE_STARTED, AlertKind.CHARGE_STOPPED -> CHANNEL_CAR
+            // Gefriertruhe steht still: das soll auffallen wie ein Auto-Hinweis.
+            AlertKind.COOLING_SILENT, AlertKind.COOLING_STUCK_ON, AlertKind.COOLING_OVERLOAD -> CHANNEL_CAR
             else -> CHANNEL_INFO
         }
         val open = PendingIntent.getActivity(
@@ -73,6 +75,7 @@ class Notifier(private val context: Context) {
         AlertKind.SOURCE_BACK -> AlertKind.SOURCE_DOWN.ordinal + 100
         // Start und Ende teilen sich eine Kachel: das Ende ersetzt den Start.
         AlertKind.CHARGE_STOPPED -> AlertKind.CHARGE_STARTED.ordinal + 100
+        AlertKind.COOLING_BACK -> AlertKind.COOLING_SILENT.ordinal + 100
         else -> kind.ordinal + 100
     }
 

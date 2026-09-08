@@ -83,6 +83,7 @@ fun DashboardScreen(vm: EnergieViewModel, onOpenSettings: () -> Unit, contentPad
 
     val fordResult by vm.fordResult.collectAsStateWithLifecycle()
     val yesterday by vm.yesterdayStats.collectAsStateWithLifecycle()
+    val cooling by vm.coolingReports.collectAsStateWithLifecycle()
     // Welcher Knoten des Diagramms gerade seine Detailkarte zeigt; nochmal Tippen schliesst.
     var selectedNode by rememberSaveable { mutableStateOf<FlowNodeKind?>(null) }
 
@@ -147,7 +148,7 @@ fun DashboardScreen(vm: EnergieViewModel, onOpenSettings: () -> Unit, contentPad
             }
             FlowNodeKind.BATTERY -> item { BatteryDetailCard(live, today, onClose = { selectedNode = null }) }
             FlowNodeKind.PV -> item { PvDetailCard(live, today, yesterday, settings, vm.todayDate(), onClose = { selectedNode = null }) }
-            FlowNodeKind.HOUSE -> item { HouseDetailCard(live, today, yesterday, settings, onClose = { selectedNode = null }) }
+            FlowNodeKind.HOUSE -> item { HouseDetailCard(live, today, yesterday, settings, cooling, onClose = { selectedNode = null }) }
             FlowNodeKind.GRID -> item { GridDetailCard(live, today, yesterday, settings, onClose = { selectedNode = null }) }
             null -> {}
         }

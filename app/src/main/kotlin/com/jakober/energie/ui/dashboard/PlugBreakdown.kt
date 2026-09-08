@@ -24,6 +24,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.jakober.energie.core.history.DayStatistics
+import com.jakober.energie.core.plugs.CoolingReport
+import com.jakober.energie.core.plugs.CoolingVerdict
 import com.jakober.energie.core.plugs.PlugDevice
 import com.jakober.energie.core.plugs.PlugReading
 import com.jakober.energie.core.plugs.PlugTotals
@@ -79,7 +81,7 @@ private class PlugRow(val device: PlugDevice, val color: Color, val reading: Plu
  * darunter jede Steckdose mit Farbe, Leistung, Anteil und Tagesenergie.
  */
 @Composable
-fun PlugBreakdown(live: LiveState, today: DayStatistics?, settings: Settings) {
+fun PlugBreakdown(live: LiveState, today: DayStatistics?, settings: Settings, cooling: Map<String, CoolingReport> = emptyMap()) {
     val s = live.sample
     val household = s?.householdW
     val carW = s?.carChargePowerW ?: 0.0
@@ -127,6 +129,7 @@ fun PlugBreakdown(live: LiveState, today: DayStatistics?, settings: Settings) {
                 settings.cloudRole == CloudRole.VIEWER -> "wartet auf Zentrale"
                 else -> "keine Messung"
             }
+            val report = cooling[r.device.id]
             BreakdownRow(
                 color = r.color,
                 name = r.device.name,
@@ -135,7 +138,14 @@ fun PlugBreakdown(live: LiveState, today: DayStatistics?, settings: Settings) {
                 detail = listOfNotNull(
                     share(r.nowW, household)?.let { "$it jetzt" },
                     r.dayWh?.let { "heute ${Format.energy(it)}" + (share(it, dayTotal)?.let { p -> " ($p)" } ?: "") },
+                    r.day?.dutyShare?.takeIf { r.device.isCooling }?.let { "lief ${Format.percent(it)} der Zeit" },
                 ).joinToString(" · ").ifBlank { null },
+                note = report?.let { "Kühlgerät: ${it.summary}" },
+                noteColor = when (report?.verdict) {
+                    CoolingVerdict.HIGH -> MaterialTheme.colorScheme.error
+                    CoolingVerdict.OK -> EnergyColors.battery
+                    else -> muted
+                },
             )
         }
         if (carW > 0 || dayCar > 50) {
@@ -167,13 +177,14 @@ private fun share(part: Double?, total: Double?): String? {
 }
 
 @Composable
-private fun BreakdownRow(color: Color, name: String, value: String, valueColor: Color, detail: String?) {
+private fun BreakdownRow(color: Color, name: String, value: String, valueColor: Color, detail: String?, note: String? = null, noteColor: Color = Color.Unspecified) {
     // Name und Zusatz links untereinander, der Wert allein rechts: so bleibt der Name immer lesbar.
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Box(Modifier.size(12.dp).clip(CircleShape).background(color))
         Column(Modifier.weight(1f)) {
             Text(name, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (detail != null) Text(detail, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (note != null) Text(note, style = MaterialTheme.typography.labelSmall, color = noteColor)
         }
         Text(value, style = MaterialTheme.typography.titleMedium, color = valueColor, maxLines = 1)
     }

@@ -45,7 +45,16 @@ pro Tag unter `files/verlauf/`. Alles Weitere rechnet sie daraus.
 - **Steckdosen und Zähler:** Shelly- und Tasmota-Messstecker im Heimnetz
   (lokal, ohne Cloud), je Stecker ein Verbraucher; dazu Impulszähler über
   Shelly Plus Uni am S0-Ausgang eines Zwischenzählers (Wärmepumpe). Statistik zeigt, wer wie viel
-  verbraucht, mit Anteil am Haus, Kosten und nicht gemessenem Rest.
+  verbraucht, mit Anteil am Haus, Kosten und nicht gemessenem Rest. Die Haus-Karte
+  zeigt als Stapelbalken, was gerade und heute den Strom zieht.
+- **Kühlgeräte:** Ein Stecker vom Typ „Kühlgerät“ wird auf Kompressorläufe
+  überwacht (Laufanteil, Zyklen, kWh je Tag). Nach fünf vollen Tagen gilt der
+  Median als Normalwert; liegt der Median der letzten drei Tage 30 % darüber
+  und läuft der Kompressor spürbar länger, kommt ein Hinweis (vereist, Tür
+  undicht, verstaubt). Sofort gemeldet werden Dauerlauf (ab 3 h), Stillstand
+  (ab 6 h) und dauerhaft mehr als 130 % der Nennleistung (länger als eine
+  Abtauheizung braucht). Optional: Nennleistung und Jahresverbrauch vom
+  Energielabel als zweiter Maßstab.
 - **Fahrten:** Kilometer je Tag aus dem Kilometerstand, Verbrauch aus dem
   Akkuinhalt, Herkunft des Fahrstroms (Sonne, Netz, unterwegs) über ein
   Tank-Modell des Akkus, Kosten je 100 km.

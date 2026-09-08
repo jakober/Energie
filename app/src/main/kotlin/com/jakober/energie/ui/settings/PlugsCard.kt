@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import com.jakober.energie.core.plugs.PlugDevice
 import com.jakober.energie.core.plugs.PlugKind
 import com.jakober.energie.core.plugs.PlugReading
+import com.jakober.energie.core.plugs.PlugType
 import com.jakober.energie.ui.EnergieCard
 import com.jakober.energie.ui.Format
 import com.jakober.energie.ui.theme.EnergyColors
@@ -50,7 +51,7 @@ fun PlugsCard(
     message: String?,
     onDiscover: () -> Unit,
     onAdd: (host: String, name: String, kind: PlugKind, impulsesPerKwh: Int, offsetKwh: Double) -> Unit,
-    onRename: (id: String, name: String) -> Unit,
+    onEdit: (id: String, name: String, type: PlugType, ratedPowerW: Double?, labelKwhPerYear: Double?) -> Unit,
     onRemove: (id: String) -> Unit,
 ) {
     var host by rememberSaveable { mutableStateOf("") }
@@ -74,7 +75,7 @@ fun PlugsCard(
             val err = errors[d.id]
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(d.name, style = MaterialTheme.typography.titleSmall)
+                    Text(d.name + (if (d.isCooling) " · Kühlgerät" else ""), style = MaterialTheme.typography.titleSmall)
                     Text(
                         "${d.host} · ${when (d.kind) { PlugKind.SHELLY -> "Shelly"; PlugKind.TASMOTA -> "Tasmota"; PlugKind.SHELLY_S0 -> "Impulszähler ${d.impulsesPerKwh} imp/kWh" }}" +
                             (r?.let { " · jetzt ${Format.power(it.powerW)}" + (it.energyWh?.let { e -> " · Zähler ${Format.energy(e)}" } ?: "") } ?: "") +
@@ -83,7 +84,7 @@ fun PlugsCard(
                         color = if (err != null && r == null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                IconButton(onClick = { renaming = d.id }) { Icon(Icons.Rounded.Edit, "Umbenennen") }
+                IconButton(onClick = { renaming = d.id }) { Icon(Icons.Rounded.Edit, "Bearbeiten") }
                 IconButton(onClick = { removing = d.id }) { Icon(Icons.Rounded.Delete, "Entfernen") }
             }
         }
@@ -149,11 +150,41 @@ fun PlugsCard(
     renaming?.let { id ->
         val current = plugs.firstOrNull { it.id == id } ?: return@let
         var text by rememberSaveable(id) { mutableStateOf(current.name) }
+        var type by rememberSaveable(id) { mutableStateOf(current.type) }
+        var rated by rememberSaveable(id) { mutableStateOf(current.ratedPowerW?.let { Format.plain(it) } ?: "") }
+        var label by rememberSaveable(id) { mutableStateOf(current.labelKwhPerYear?.let { Format.plain(it) } ?: "") }
         AlertDialog(
             onDismissRequest = { renaming = null },
-            title = { Text("Verbraucher benennen") },
-            text = { OutlinedTextField(value = text, onValueChange = { text = it }, singleLine = true, label = { Text("Name") }) },
-            confirmButton = { TextButton(onClick = { onRename(id, text); renaming = null }) { Text("Speichern") } },
+            title = { Text("Verbraucher bearbeiten") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(value = text, onValueChange = { text = it }, singleLine = true, label = { Text("Name") })
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(selected = type == PlugType.OTHER, onClick = { type = PlugType.OTHER }, label = { Text("Sonstiges") })
+                        FilterChip(selected = type == PlugType.COOLING, onClick = { type = PlugType.COOLING }, label = { Text("Kühlgerät") })
+                    }
+                    if (type == PlugType.COOLING) {
+                        Text(
+                            "Kühlschrank oder Gefriergerät: Die App überwacht die Kompressorläufe und meldet Dauerlauf, Stillstand und Mehrverbrauch. Beide Angaben sind optional und stehen auf dem Typenschild bzw. dem Energielabel.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        OutlinedTextField(
+                            value = rated, onValueChange = { rated = it }, singleLine = true, label = { Text("Nennleistung in W (Typenschild)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        )
+                        OutlinedTextField(
+                            value = label, onValueChange = { label = it }, singleLine = true, label = { Text("Jahresverbrauch in kWh (Energielabel)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onEdit(id, text, type, rated.replace(',', '.').toDoubleOrNull(), label.replace(',', '.').toDoubleOrNull())
+                    renaming = null
+                }) { Text("Speichern") }
+            },
             dismissButton = { TextButton(onClick = { renaming = null }) { Text("Abbrechen") } },
         )
     }

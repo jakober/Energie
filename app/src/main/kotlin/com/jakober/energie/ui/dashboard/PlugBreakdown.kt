@@ -85,10 +85,12 @@ fun PlugBreakdown(live: LiveState, today: DayStatistics?, settings: Settings, co
     val s = live.sample
     val household = s?.householdW
     val carW = s?.carChargePowerW ?: 0.0
+    // Gesamt wie bei "Heute": Haus samt Auto, damit Anteile und Rest zusammenpassen.
+    val nowTotal = household?.let { it + carW }
     val readings = s?.plugs.orEmpty()
     val rows = settings.plugs.mapIndexed { i, d -> PlugRow(d, plugColor(i), readings[d.id], today?.plugs?.get(d.id)) }
     val measuredW = rows.sumOf { it.nowW ?: 0.0 }
-    val restW = household?.let { (it - measuredW - carW).coerceAtLeast(0.0) }
+    val restW = household?.let { (it - measuredW).coerceAtLeast(0.0) }
 
     val dayTotal = today?.totals?.consumptionWh
     val dayCar = today?.totals?.carChargeWh ?: 0.0
@@ -104,11 +106,11 @@ fun PlugBreakdown(live: LiveState, today: DayStatistics?, settings: Settings, co
         // Jetzt
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
             Text("Jetzt", style = MaterialTheme.typography.bodyMedium, color = muted, modifier = Modifier.weight(1f))
-            Text(Format.power(household), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = EnergyColors.house)
+            Text(Format.power(nowTotal), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = EnergyColors.house)
         }
         StackedBar(
             segments = byPower.map { BarSegment(it.color, it.nowW ?: 0.0) } + BarSegment(EnergyColors.car, carW),
-            total = household,
+            total = nowTotal,
         )
 
         // Heute
@@ -136,7 +138,7 @@ fun PlugBreakdown(live: LiveState, today: DayStatistics?, settings: Settings, co
                 value = status ?: (if (r.reading?.on == false && (r.nowW ?: 0.0) < 1) "aus" else Format.power(r.nowW)),
                 valueColor = if (status != null) muted else MaterialTheme.colorScheme.onSurface,
                 detail = listOfNotNull(
-                    share(r.nowW, household)?.let { "$it jetzt" },
+                    share(r.nowW, nowTotal)?.let { "$it jetzt" },
                     r.dayWh?.let { "heute ${Format.energy(it)}" + (share(it, dayTotal)?.let { p -> " ($p)" } ?: "") },
                     r.day?.dutyShare?.takeIf { r.device.isCooling }?.let { "lief ${Format.percent(it)} der Zeit" },
                 ).joinToString(" · ").ifBlank { null },
@@ -154,7 +156,7 @@ fun PlugBreakdown(live: LiveState, today: DayStatistics?, settings: Settings, co
                 value = if (carW > 0) Format.power(carW) else "aus",
                 valueColor = if (carW > 0) MaterialTheme.colorScheme.onSurface else muted,
                 detail = listOfNotNull(
-                    share(carW.takeIf { it > 0 }, household)?.let { "$it jetzt" },
+                    share(carW.takeIf { it > 0 }, nowTotal)?.let { "$it jetzt" },
                     dayCar.takeIf { it > 50 }?.let { "heute ${Format.energy(it)}" + (share(it, dayTotal)?.let { p -> " ($p)" } ?: "") },
                 ).joinToString(" · ").ifBlank { null },
             )
@@ -163,7 +165,7 @@ fun PlugBreakdown(live: LiveState, today: DayStatistics?, settings: Settings, co
             color = MaterialTheme.colorScheme.surfaceContainerHighest, name = "Übrige Verbraucher",
             value = Format.power(restW), valueColor = muted,
             detail = listOfNotNull(
-                share(restW, household)?.let { "$it jetzt" },
+                share(restW, nowTotal)?.let { "$it jetzt" },
                 dayRest?.let { "heute ${Format.energy(it)}" + (share(it, dayTotal)?.let { p -> " ($p)" } ?: "") },
                 "nicht einzeln gemessen",
             ).joinToString(" · "),

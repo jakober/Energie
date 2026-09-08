@@ -72,6 +72,10 @@ fun StatisticsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
     val storedDays by vm.storedDays.collectAsStateWithLifecycle()
     val driving by vm.driving.collectAsStateWithLifecycle()
     val daySamples by vm.daySamples.collectAsStateWithLifecycle()
+    val upgrade by vm.storageUpgrade.collectAsStateWithLifecycle()
+    val upgradeKwh by vm.upgradeModuleKwh.collectAsStateWithLifecycle()
+    val upgradeCost by vm.upgradeCostEur.collectAsStateWithLifecycle()
+    val liveForUpgrade by vm.live.collectAsStateWithLifecycle()
     var showSamples by rememberSaveable { mutableStateOf(false) }
 
     LazyColumn(
@@ -138,6 +142,16 @@ fun StatisticsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
 
         if (sessions.isNotEmpty()) {
             item { ChargeSessionsCard(sessions, settings) }
+        }
+
+        if (storedDays >= 2) {
+            item {
+                StorageUpgradeCard(
+                    upgrade, settings, liveForUpgrade.senec?.bessNameplate?.designCapacityWh,
+                    upgradeKwh, upgradeCost,
+                    onModuleKwh = { vm.upgradeModuleKwh.value = it }, onCost = { vm.upgradeCostEur.value = it },
+                )
+            }
         }
 
         val plugDays = if (range == Range.DAY) listOfNotNull(day) else rangeStats?.daysWithData.orEmpty()

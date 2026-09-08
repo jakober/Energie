@@ -129,6 +129,13 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    /** Speicher-Erweiterung: Modulgroesse in kWh und Kosten, vom Nutzer in der Karte einstellbar. */
+    val upgradeModuleKwh = MutableStateFlow(2.5)
+    val upgradeCostEur = MutableStateFlow(1500.0)
+    val storageUpgrade: StateFlow<com.jakober.energie.core.history.UpgradeResult?> = combine(updates, upgradeModuleKwh) { _, kwh -> kwh }
+        .mapLatest { kwh -> withContext(Dispatchers.IO) { repo.simulateUpgrade(kwh * 1000) } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
     /** Alles seit dem ersten Messpunkt, fuer die Auto-Gesamtrechnung. */
     val lifetime: StateFlow<EnergyTotals?> = updates
         .mapLatest { withContext(Dispatchers.IO) { repo.lifetimeTotals() } }

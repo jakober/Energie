@@ -55,6 +55,11 @@ pro Tag unter `files/verlauf/`. Alles Weitere rechnet sie daraus.
   (ab 6 h) und dauerhaft mehr als 130 % der Nennleistung (länger als eine
   Abtauheizung braucht). Optional: Nennleistung und Jahresverbrauch vom
   Energielabel als zweiter Maßstab.
+- **Speicher erweitern?** Statistik-Karte, die alle gespeicherten Tage mit einem
+  gedachten Zusatzmodul nachspielt: Es lädt nur, wenn der echte Speicher voll ist und
+  eingespeist wird, und liefert nur, wenn er leer ist und bezogen wird. Ergebnis:
+  zusätzlich genutzte kWh, Ersparnis, Hochrechnung aufs Jahr, Amortisation für die
+  eingegebenen Kosten, Balken je Tag.
 - **Fahrten:** Kilometer je Tag aus dem Kilometerstand, Verbrauch aus dem
   Akkuinhalt, Herkunft des Fahrstroms (Sonne, Netz, unterwegs) über ein
   Tank-Modell des Akkus, Kosten je 100 km.

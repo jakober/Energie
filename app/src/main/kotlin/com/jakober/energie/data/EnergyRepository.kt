@@ -734,6 +734,22 @@ class EnergyRepository(
         return if (date >= today()) lookup().orElse(null) else meterEndCache.getOrPut(date, lookup).orElse(null)
     }
 
+    private var upgradeCache: Triple<Double, LocalDate?, com.jakober.energie.core.history.UpgradeResult>? = null
+
+    /**
+     * Was ein Zusatzmodul ueber alle vollen Tage vor heute gebracht haette. Ergebnis wird
+     * je Modulgroesse gemerkt, bis ein neuer Tag dazukommt.
+     */
+    fun simulateUpgrade(extraWh: Double, zone: TimeZone = TimeZone.currentSystemDefault()): com.jakober.energie.core.history.UpgradeResult {
+        val today = today(zone)
+        val days = history.days().filter { it < today }.sorted()
+        val last = days.lastOrNull()
+        upgradeCache?.let { (wh, d, r) -> if (wh == extraWh && d == last) return r }
+        val result = com.jakober.energie.core.history.StorageUpgrade.simulate(days.map { it to history.day(it) }, extraWh)
+        upgradeCache = Triple(extraWh, last, result)
+        return result
+    }
+
     /** Summe ueber alle gespeicherten Tage. */
     fun lifetimeTotals(): EnergyTotals {
         val days = history.days().map { dayStatistics(it).totals }

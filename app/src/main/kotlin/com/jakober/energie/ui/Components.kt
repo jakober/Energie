@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
@@ -81,12 +82,13 @@ fun BigValue(value: String, label: String, color: Color = MaterialTheme.colorSch
 /** Zeile "Beschriftung ..... Wert", optional mit Zusatz rechts unten. */
 @Composable
 fun ValueRow(label: String, value: String, detail: String? = null, color: Color = MaterialTheme.colorScheme.onSurface, icon: ImageVector? = null, iconTint: Color = color) {
+    // Beide Seiten teilen sich die Breite; ein langer Zusatz bricht rechts um, statt die Beschriftung zu quetschen.
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         if (icon != null) Icon(icon, null, tint = iconTint, modifier = Modifier.size(20.dp))
         Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Column(horizontalAlignment = Alignment.End) {
-            Text(value, style = MaterialTheme.typography.titleMedium, color = color)
-            if (detail != null) Text(detail, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column(horizontalAlignment = Alignment.End, modifier = Modifier.weight(1.5f, fill = false)) {
+            Text(value, style = MaterialTheme.typography.titleMedium, color = color, textAlign = TextAlign.End)
+            if (detail != null) Text(detail, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.End)
         }
     }
 }

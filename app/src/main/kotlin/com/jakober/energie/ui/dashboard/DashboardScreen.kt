@@ -541,10 +541,10 @@ private fun CarBatteryHealthRows(h: com.jakober.energie.core.history.CarBatteryH
     val detail = buildString {
         if (h.healthPercent != null && ref != null) {
             append("≈ ${h.healthPercent} % von ${String.format(java.util.Locale.GERMANY, "%.1f", ref)} kWh ")
-            append(if (h.referenceFromSetting) "(neu laut Einstellung)" else "(höchster Wochenwert)")
+            append(if (h.referenceFromSetting) "neu" else "Bestwert")
             append(" · ")
         }
-        append("Restenergie ÷ Ladestand, Median aus ${h.currentDays} Tagen")
+        append("Median aus ${h.currentDays} Tagen")
     }
     ValueRow(
         "Geschätzte Akkukapazität",
@@ -568,7 +568,7 @@ private fun CarBatteryHealthRows(h: com.jakober.energie.core.history.CarBatteryH
         }
     }
     Text(
-        "Der Wert schwankt mit Temperatur und Ladestand um einige Prozent. Aussagekräftig ist der Trend über Monate, nicht der Tageswert.",
+        "Restenergie ÷ Ladestand, wie das Auto sie meldet. Der Wert schwankt mit Temperatur und Ladestand um einige Prozent; aussagekräftig ist der Trend über Monate.",
         style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 }

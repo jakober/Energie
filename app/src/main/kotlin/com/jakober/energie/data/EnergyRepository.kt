@@ -270,8 +270,11 @@ class EnergyRepository(
                 _state.update { it.copy(cloudError = null, cloudInfo = "Cloud: ${clockLabel(clock.now())} · $sent Messpunkte hochgeladen" + (if (done > 0) " · $done Aufträge" else "")) }
             }.onFailure { e -> _state.update { it.copy(cloudError = "Cloud: ${e.message ?: e}") } }
         }
-        val automationLine = runCatching { runAutomation(s, newState) }.getOrNull()
-        runCatching { runAlerts(newState, automationLine) }
+        // Nie auf dem Hauptthread: die Tagesauswertungen lesen Verlaufsdateien.
+        withContext(Dispatchers.Default) {
+            val automationLine = runCatching { runAutomation(s, newState) }.getOrNull()
+            runCatching { runAlerts(newState, automationLine) }
+        }
         if (gotSomething || senecForDisplay != null) onWidgetUpdate?.let { cb -> runCatching { cb(displaySample, newState.car) } }
         _state.value
     }
@@ -423,15 +426,23 @@ class EnergyRepository(
      * Auswertung je Kuehlgeraet aus den vollen Tagen vor heute. Vergangene Tage kommen
      * aus dem Tages-Cache, deshalb ist das auch bei jedem Durchlauf billig.
      */
+    private var coolingCache: Triple<String, LocalDate?, Map<String, com.jakober.energie.core.plugs.CoolingReport>>? = null
+
     fun coolingReports(s: Settings, zone: TimeZone = TimeZone.currentSystemDefault()): Map<String, com.jakober.energie.core.plugs.CoolingReport> {
         val devices = s.plugs.filter { it.isCooling }
         if (devices.isEmpty()) return emptyMap()
         val today = today(zone)
         val days = history.days().filter { it < today }.sorted().takeLast(com.jakober.energie.core.plugs.CoolingHealth.BASELINE_DAYS + com.jakober.energie.core.plugs.CoolingHealth.RECENT_DAYS + 7)
+        // Ergebnis haengt nur von den vollen Tagen und den Geraetedaten ab: einmal je Tag rechnen.
+        val key = devices.joinToString("|") { "${it.id}:${it.name}:${it.ratedPowerW}:${it.labelKwhPerYear}" }
+        val last = days.lastOrNull()
+        coolingCache?.let { (k, d, r) -> if (k == key && d == last) return r }
         val stats = days.map { it to dayStatistics(it, zone) }
-        return devices.associate { d ->
+        val result = devices.associate { d ->
             d.id to com.jakober.energie.core.plugs.CoolingHealth.of(d, stats.mapNotNull { (date, st) -> st.plugs[d.id]?.let { date to it } })
         }
+        coolingCache = Triple(key, last, result)
+        return result
     }
 
     /** Wer die Hinweise anzeigt (Benachrichtigungen); ohne Empfaenger passiert nichts. */

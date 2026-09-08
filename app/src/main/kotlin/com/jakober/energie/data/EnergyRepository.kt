@@ -761,6 +761,19 @@ class EnergyRepository(
         return result
     }
 
+    // Tageswerte der Akkukapazitaet: vergangene Tage aendern sich nicht mehr.
+    private val carCapacityCache = java.util.concurrent.ConcurrentHashMap<LocalDate, java.util.Optional<com.jakober.energie.core.history.CapacityPoint>>()
+
+    /** Zustand des Fahrakkus aus allen gespeicherten Tagen. */
+    fun carBatteryHealth(s: Settings, zone: TimeZone = TimeZone.currentSystemDefault()): com.jakober.energie.core.history.CarBatteryHealth {
+        val today = today(zone)
+        val points = history.days().sorted().mapNotNull { d ->
+            val lookup = { java.util.Optional.ofNullable(com.jakober.energie.core.history.CarBatteryHealth.dayPoint(d, history.day(d))) }
+            (if (d >= today) lookup() else carCapacityCache.getOrPut(d, lookup)).orElse(null)
+        }
+        return com.jakober.energie.core.history.CarBatteryHealth.of(points, s.carBatteryNominalKwh.takeIf { it > 0 })
+    }
+
     /** Summe ueber alle gespeicherten Tage. */
     fun lifetimeTotals(): EnergyTotals {
         val days = history.days().map { dayStatistics(it).totals }

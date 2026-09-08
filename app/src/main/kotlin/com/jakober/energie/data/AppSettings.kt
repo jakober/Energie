@@ -66,6 +66,8 @@ data class Settings(
     val systemCostEur: Double = 0.0,
     /** Preis fuer unterwegs geladenen Strom in Euro je kWh (Saeule), fuer die Fahrtkosten. */
     val carPublicPricePerKwh: Double = 0.59,
+    /** Nutzbare Akkukapazitaet des Autos im Neuzustand in kWh, 0 = hoechster gemessener Wert als Bezug. */
+    val carBatteryNominalKwh: Double = 0.0,
     /** FordPass (inoffiziell): Tokens als JSON, Fahrzeug und bevorzugter Ladeort. */
     val fordTokensJson: String = "",
     val fordVin: String = "",
@@ -163,6 +165,7 @@ class AppSettings(private val context: Context) {
             carLearnedPowerW = p[CAR_LEARNED_POWER] ?: 0.0,
             systemCostEur = p[SYSTEM_COST] ?: 0.0,
             carPublicPricePerKwh = p[CAR_PUBLIC_PRICE] ?: 0.59,
+            carBatteryNominalKwh = p[CAR_BATTERY_NOMINAL] ?: 0.0,
             fordTokensJson = p[FORD_TOKENS] ?: "",
             fordVin = p[FORD_VIN] ?: "",
             fordLocationId = p[FORD_LOCATION] ?: "",
@@ -244,6 +247,7 @@ class AppSettings(private val context: Context) {
             p[CAR_FALLBACK_POWER] = s.carFallbackPowerW.coerceIn(0, 22_000)
             p[SYSTEM_COST] = s.systemCostEur.coerceAtLeast(0.0)
             p[CAR_PUBLIC_PRICE] = s.carPublicPricePerKwh.coerceAtLeast(0.0)
+            p[CAR_BATTERY_NOMINAL] = s.carBatteryNominalKwh.coerceAtLeast(0.0)
             // Aendert sich die Cloud-Anmeldung, ist die alte Sitzung hinfaellig.
             val cloudChanged = p[CLOUD_URL] != s.cloudUrl.trim() || p[CLOUD_ANON_KEY] != s.cloudAnonKey.trim() || p[CLOUD_EMAIL] != s.cloudEmail.trim() || p[CLOUD_PASSWORD] != s.cloudPassword
             p[CLOUD_URL] = s.cloudUrl.trim().trimEnd('/')
@@ -275,7 +279,7 @@ class AppSettings(private val context: Context) {
         "keepDays" to s.keepDays.toString(), "smartcarAppId" to s.smartcarAppId, "smartcarClientId" to s.smartcarClientId,
         "smartcarVehicleId" to s.smartcarVehicleId, "smartcarUserId" to s.smartcarUserId, "carFallbackPowerW" to s.carFallbackPowerW.toString(),
         "carLearnedPowerW" to s.carLearnedPowerW.toString(), "systemCostEur" to s.systemCostEur.toString(),
-        "carPublicPricePerKwh" to s.carPublicPricePerKwh.toString(),
+        "carPublicPricePerKwh" to s.carPublicPricePerKwh.toString(), "carBatteryNominalKwh" to s.carBatteryNominalKwh.toString(),
         "fordVin" to s.fordVin, "fordLocationId" to s.fordLocationId, "homeLat" to s.homeLat.toString(), "homeLon" to s.homeLon.toString(),
         "chargeRules" to rulesJson.encodeToString(ChargeRules.serializer(), s.chargeRules),
         "chargeLastCommandAt" to s.chargeLastCommandAt.toString(), "chargeLog" to s.chargeLog,
@@ -340,7 +344,7 @@ class AppSettings(private val context: Context) {
             str(SMARTCAR_APP_ID, "smartcarAppId", plain); str(SMARTCAR_CLIENT_ID, "smartcarClientId", plain)
             str(SMARTCAR_VEHICLE_ID, "smartcarVehicleId", plain); str(SMARTCAR_USER_ID, "smartcarUserId", plain)
             int(CAR_FALLBACK_POWER, "carFallbackPowerW"); dbl(CAR_LEARNED_POWER, "carLearnedPowerW"); dbl(SYSTEM_COST, "systemCostEur")
-            dbl(CAR_PUBLIC_PRICE, "carPublicPricePerKwh")
+            dbl(CAR_PUBLIC_PRICE, "carPublicPricePerKwh"); dbl(CAR_BATTERY_NOMINAL, "carBatteryNominalKwh")
             str(FORD_VIN, "fordVin", plain); str(FORD_LOCATION, "fordLocationId", plain)
             dbl(HOME_LAT, "homeLat"); dbl(HOME_LON, "homeLon"); str(CHARGE_RULES, "chargeRules", plain)
             lng(CHARGE_LAST_CMD, "chargeLastCommandAt"); str(CHARGE_LOG, "chargeLog", plain); str(ALERTS, "alerts", plain); str(PLACES, "places", plain)
@@ -381,6 +385,7 @@ class AppSettings(private val context: Context) {
         val CAR_LEARNED_POWER = doublePreferencesKey("car_learned_power")
         val SYSTEM_COST = doublePreferencesKey("system_cost_eur")
         val CAR_PUBLIC_PRICE = doublePreferencesKey("car_public_price")
+        val CAR_BATTERY_NOMINAL = doublePreferencesKey("car_battery_nominal_kwh")
         val FORD_TOKENS = stringPreferencesKey("ford_tokens")
         val FORD_VIN = stringPreferencesKey("ford_vin")
         val FORD_LOCATION = stringPreferencesKey("ford_location")

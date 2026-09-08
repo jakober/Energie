@@ -60,6 +60,10 @@ pro Tag unter `files/verlauf/`. Alles Weitere rechnet sie daraus.
   eingespeist wird, und liefert nur, wenn er leer ist und bezogen wird. Ergebnis:
   zusätzlich genutzte kWh, Ersparnis, Hochrechnung aufs Jahr, Amortisation für die
   eingegebenen Kosten, Balken je Tag.
+- **Akkuzustand des Autos:** Restenergie geteilt durch Ladestand ergibt die Kapazität,
+  die das Auto gerade für voll hält. Median je Tag und je Woche, aktueller Wert aus
+  14 Tagen, Prozent gegenüber Neuzustand (Einstellung oder höchster Wochenwert),
+  Verlauf in der Auto-Karte.
 - **Fahrten:** Kilometer je Tag aus dem Kilometerstand, Verbrauch aus dem
   Akkuinhalt, Herkunft des Fahrstroms (Sonne, Netz, unterwegs) über ein
   Tank-Modell des Akkus, Kosten je 100 km.

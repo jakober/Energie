@@ -99,6 +99,12 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
             .mapLatest { withContext(Dispatchers.IO) { repo.coolingReports(settings.value) } }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
+    /** Fahrakku: geschaetzte Kapazitaet aus Restenergie und Ladestand, mit Wochenverlauf. */
+    val carBatteryHealth: StateFlow<com.jakober.energie.core.history.CarBatteryHealth?> =
+        combine(updates, settings.map { it.carBatteryNominalKwh }.distinctUntilChanged()) { _, _ -> Unit }
+            .mapLatest { withContext(Dispatchers.IO) { repo.carBatteryHealth(settings.value) } }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
     /** Gestern, fuer den Vergleich in den Detailkarten. */
     val yesterdayStats: StateFlow<DayStatistics?> = updates
         .mapLatest { withContext(Dispatchers.IO) { repo.dayStatistics(repo.today().minus(1, DateTimeUnit.DAY)) } }

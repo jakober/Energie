@@ -84,6 +84,7 @@ fun DashboardScreen(vm: EnergieViewModel, onOpenSettings: () -> Unit, contentPad
     val fordResult by vm.fordResult.collectAsStateWithLifecycle()
     val yesterday by vm.yesterdayStats.collectAsStateWithLifecycle()
     val cooling by vm.coolingReports.collectAsStateWithLifecycle()
+    val carHealth by vm.carBatteryHealth.collectAsStateWithLifecycle()
     // Welcher Knoten des Diagramms gerade seine Detailkarte zeigt; nochmal Tippen schliesst.
     var selectedNode by rememberSaveable { mutableStateOf<FlowNodeKind?>(null) }
 
@@ -144,6 +145,7 @@ fun DashboardScreen(vm: EnergieViewModel, onOpenSettings: () -> Unit, contentPad
                     commandResult = fordResult,
                     onClose = { selectedNode = null },
                     onSavePlaces = vm::savePlaces,
+                    health = carHealth,
                 )
             }
             FlowNodeKind.BATTERY -> item { BatteryDetailCard(live, today, onClose = { selectedNode = null }) }
@@ -319,6 +321,7 @@ private fun CarCard(
     commandResult: String? = null,
     onClose: () -> Unit = {},
     onSavePlaces: (List<NamedPlace>) -> Unit = {},
+    health: com.jakober.energie.core.history.CarBatteryHealth? = null,
 ) {
     val car = live.car
     var confirmUnlock by rememberSaveable { mutableStateOf(false) }
@@ -391,6 +394,7 @@ private fun CarCard(
             }
         }
         commandResult?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        CarBatteryHealthRows(health)
         if (confirmUnlock) {
             AlertDialog(
                 onDismissRequest = { confirmUnlock = false },
@@ -518,4 +522,53 @@ private fun MeterCard(live: LiveState) {
             )
         }
     }
+}
+
+
+/** Geschaetzte Akkukapazitaet des Autos mit Wochenverlauf. */
+@Composable
+private fun CarBatteryHealthRows(h: com.jakober.energie.core.history.CarBatteryHealth?) {
+    if (h == null) return
+    val cur = h.currentKwh
+    if (cur == null) {
+        Text(
+            "Akkuzustand: noch zu wenig Daten. Braucht Tage mit Ladestand ab 20 % und Restenergie vom Auto.",
+            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        return
+    }
+    val ref = h.referenceKwh
+    val detail = buildString {
+        if (h.healthPercent != null && ref != null) {
+            append("≈ ${h.healthPercent} % von ${String.format(java.util.Locale.GERMANY, "%.1f", ref)} kWh ")
+            append(if (h.referenceFromSetting) "(neu laut Einstellung)" else "(höchster Wochenwert)")
+            append(" · ")
+        }
+        append("Restenergie ÷ Ladestand, Median aus ${h.currentDays} Tagen")
+    }
+    ValueRow(
+        "Geschätzte Akkukapazität",
+        String.format(java.util.Locale.GERMANY, "%.1f kWh", cur),
+        detail,
+        icon = Icons.Rounded.BatteryChargingFull, iconTint = EnergyColors.car,
+    )
+    if (h.weekly.size >= 2) {
+        val ws = h.weekly.takeLast(26)
+        val lo = ws.minOf { it.capacityKwh }
+        val hi = ws.maxOf { it.capacityKwh }
+        val pad = ((hi - lo) * 0.5).coerceAtLeast(1.0)
+        Column {
+            Text("Verlauf je Woche", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            com.jakober.energie.ui.charts.LineChart(
+                series = listOf(com.jakober.energie.ui.charts.LineSeries("Kapazität", EnergyColors.car, ws.map { it.capacityKwh }, fill = true)),
+                modifier = Modifier.fillMaxWidth().height(100.dp),
+                min = lo - pad, max = hi + pad,
+                xLabels = listOf(0f to Format.dateNum(ws.first().date), 1f to Format.dateNum(ws.last().date)),
+            )
+        }
+    }
+    Text(
+        "Der Wert schwankt mit Temperatur und Ladestand um einige Prozent. Aussagekräftig ist der Trend über Monate, nicht der Tageswert.",
+        style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }

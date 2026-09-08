@@ -267,6 +267,11 @@ fun SettingsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
                     "Damit bewertet die Fahrtstatistik den Strom, der nicht zu Hause geladen wurde.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                NumberField("Akku des Autos neu, nutzbar in kWh (0 = höchster gemessener Wert)", draft.carBatteryNominalKwh) { draft = draft.copy(carBatteryNominalKwh = it) }
+                Text(
+                    "Bezug für den Akkuzustand in der Auto-Karte. Mustang Mach-E Extended Range: etwa 91, Standard Range: etwa 72.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
 
@@ -512,6 +517,7 @@ private val SettingsSaver = androidx.compose.runtime.saveable.Saver<Settings, Li
             it.pvPeakKw2.toString(), it.pvTiltDeg2.toString(), it.pvAzimuthDeg2.toString(),
             it.carPublicPricePerKwh.toString(),
             it.cloudUrl, it.cloudAnonKey, it.cloudEmail, it.cloudPassword,
+            it.carBatteryNominalKwh.toString(),
         )
     },
     restore = {
@@ -530,6 +536,7 @@ private val SettingsSaver = androidx.compose.runtime.saveable.Saver<Settings, Li
             pvAzimuthDeg2 = it.getOrElse(24) { "0" }.toIntOrNull() ?: 0,
             carPublicPricePerKwh = it.getOrElse(25) { "0.59" }.toDoubleOrNull() ?: 0.59,
             cloudUrl = it.getOrElse(26) { "" }, cloudAnonKey = it.getOrElse(27) { "" }, cloudEmail = it.getOrElse(28) { "" }, cloudPassword = it.getOrElse(29) { "" },
+            carBatteryNominalKwh = it.getOrElse(30) { "0.0" }.toDoubleOrNull() ?: 0.0,
         )
     },
 )

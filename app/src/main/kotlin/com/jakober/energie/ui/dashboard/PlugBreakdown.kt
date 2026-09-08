@@ -21,6 +21,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.jakober.energie.core.history.DayStatistics
 import com.jakober.energie.core.plugs.PlugDevice
@@ -167,12 +168,13 @@ private fun share(part: Double?, total: Double?): String? {
 
 @Composable
 private fun BreakdownRow(color: Color, name: String, value: String, valueColor: Color, detail: String?) {
+    // Name und Zusatz links untereinander, der Wert allein rechts: so bleibt der Name immer lesbar.
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Box(Modifier.size(12.dp).clip(CircleShape).background(color))
-        Text(name, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-        Column(horizontalAlignment = Alignment.End) {
-            Text(value, style = MaterialTheme.typography.titleMedium, color = valueColor)
+        Column(Modifier.weight(1f)) {
+            Text(name, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (detail != null) Text(detail, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+        Text(value, style = MaterialTheme.typography.titleMedium, color = valueColor, maxLines = 1)
     }
 }

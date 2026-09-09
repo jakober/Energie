@@ -21,6 +21,8 @@ object Format {
     private val dayNum = DateTimeFormatter.ofPattern("d.M.", de)
     private val dayFull = DateTimeFormatter.ofPattern("dd.MM.yyyy", de)
     private val monthLong = DateTimeFormatter.ofPattern("MMMM yyyy", de)
+    private val monthShortF = DateTimeFormatter.ofPattern("MMM", de)
+    private val monthName = DateTimeFormatter.ofPattern("MMMM", de)
 
     /** 850 W, 1,25 kW, -3,4 kW */
     fun power(w: Double?, signed: Boolean = false): String {
@@ -68,6 +70,10 @@ object Format {
     fun dateShort(d: LocalDate): String = dayShort.format(d.toJavaLocalDate())
     fun dateNum(d: LocalDate): String = dayNum.format(d.toJavaLocalDate())
     fun month(d: LocalDate): String = monthLong.format(d.toJavaLocalDate())
+    /** "Sep" */
+    fun monthShort(d: LocalDate): String = monthShortF.format(d.toJavaLocalDate()).removeSuffix(".")
+    /** "September" */
+    fun monthName(d: LocalDate): String = monthName.format(d.toJavaLocalDate())
 
     /** "vor 12 s", "vor 3 min", "vor 2 h" */
     fun ago(at: Instant?, now: Instant): String {

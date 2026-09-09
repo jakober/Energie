@@ -55,6 +55,9 @@ pro Tag unter `files/verlauf/`. Alles Weitere rechnet sie daraus.
   (ab 6 h) und dauerhaft mehr als 130 % der Nennleistung (länger als eine
   Abtauheizung braucht). Optional: Nennleistung und Jahresverbrauch vom
   Energielabel als zweiter Maßstab.
+- **Jahresblick:** Statistik mit Zeitraum Jahr, Balken je Monat (Erzeugung, Verbrauch,
+  Netzbezug, Einspeisung, Auto), Liste je Monat mit Kosten und Vergütung, bester
+  Monat und Tag. Verlauf standardmäßig 400 Tage.
 - **Speicher erweitern?** Statistik-Karte, die alle gespeicherten Tage mit einem
   gedachten Zusatzmodul nachspielt: Es lädt nur, wenn der echte Speicher voll ist und
   eingespeist wird, und liefert nur, wenn er leer ist und bezogen wird. Ergebnis:

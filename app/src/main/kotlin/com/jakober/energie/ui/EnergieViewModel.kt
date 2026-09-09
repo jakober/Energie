@@ -47,7 +47,7 @@ import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 import kotlin.time.Duration.Companion.seconds
 
-enum class Range { DAY, WEEK, MONTH }
+enum class Range { DAY, WEEK, MONTH, YEAR }
 
 /** Zusammenfassung mehrerer Tage (Woche, Monat). */
 data class RangeStatistics(
@@ -122,7 +122,9 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
     val rangeStats: StateFlow<RangeStatistics?> = combine(_selectedDate, _range, updates) { d, r, _ -> d to r }
         .mapLatest { (d, r) ->
             if (r == Range.DAY) return@mapLatest null
-            val (from, to) = bounds(d, r)
+            val (from, to0) = bounds(d, r)
+            // Jahr: keine Tage in der Zukunft durchgehen.
+            val to = if (r == Range.YEAR) minOf(to0, repo.today()) else to0
             withContext(Dispatchers.IO) {
                 val list = ArrayList<DayStatistics>()
                 var day = from
@@ -130,7 +132,7 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
                     list += repo.dayStatistics(day)
                     day = day.plus(1, DateTimeUnit.DAY)
                 }
-                RangeStatistics(from, to, list)
+                RangeStatistics(from, to0, list)
             }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
@@ -153,8 +155,17 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
             val (from, to) = bounds(d, r)
             withContext(Dispatchers.IO) {
                 val zone = TimeZone.currentSystemDefault()
-                val samples = repo.history.range(from.atStartOfDayIn(zone), to.plus(1, DateTimeUnit.DAY).atStartOfDayIn(zone))
-                ChargeSessions.of(samples)
+                if (r == Range.YEAR) {
+                    // Monatsweise, damit nicht ein ganzes Jahr Messpunkte auf einmal im Speicher liegt.
+                    (1..12).flatMap { m ->
+                        val a = LocalDate(from.year, m, 1)
+                        if (a > repo.today()) emptyList()
+                        else ChargeSessions.of(repo.history.range(a.atStartOfDayIn(zone), a.plus(1, DateTimeUnit.MONTH).atStartOfDayIn(zone)))
+                    }
+                } else {
+                    val samples = repo.history.range(from.atStartOfDayIn(zone), to.plus(1, DateTimeUnit.DAY).atStartOfDayIn(zone))
+                    ChargeSessions.of(samples)
+                }
             }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -227,6 +238,7 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
             Range.DAY -> d.plus(steps, DateTimeUnit.DAY)
             Range.WEEK -> d.plus(steps * 7, DateTimeUnit.DAY)
             Range.MONTH -> d.plus(steps, DateTimeUnit.MONTH)
+            Range.YEAR -> d.plus(steps, DateTimeUnit.YEAR)
         }
     }
 
@@ -746,6 +758,7 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
                 val first = LocalDate(d.year, d.month, 1)
                 first to first.plus(1, DateTimeUnit.MONTH).minus(1, DateTimeUnit.DAY)
             }
+            Range.YEAR -> LocalDate(d.year, 1, 1) to LocalDate(d.year, 12, 31)
         }
     }
 }

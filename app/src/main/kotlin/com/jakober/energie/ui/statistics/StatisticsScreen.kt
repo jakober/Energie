@@ -56,6 +56,7 @@ import com.jakober.energie.ui.charts.GroupedBarChart
 import com.jakober.energie.ui.charts.LineChart
 import com.jakober.energie.ui.charts.LineSeries
 import com.jakober.energie.ui.theme.EnergyColors
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
@@ -96,7 +97,7 @@ fun StatisticsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
                         selected = range == r,
                         onClick = { vm.setRange(r) },
                         shape = SegmentedButtonDefaults.itemShape(i, Range.entries.size),
-                    ) { Text(when (r) { Range.DAY -> "Tag"; Range.WEEK -> "Woche"; Range.MONTH -> "Monat" }) }
+                    ) { Text(when (r) { Range.DAY -> "Tag"; Range.WEEK -> "Woche"; Range.MONTH -> "Monat"; Range.YEAR -> "Jahr" }) }
                 }
             }
         }
@@ -106,6 +107,7 @@ fun StatisticsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
                 Range.DAY -> Format.dateLong(date)
                 Range.WEEK -> EnergieViewModel.bounds(date, Range.WEEK).let { (a, b) -> "${Format.dateNum(a)} – ${Format.dateShort(b)}" }
                 Range.MONTH -> Format.month(date)
+                Range.YEAR -> date.year.toString()
             }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { vm.shift(-1) }) { Icon(Icons.Rounded.ChevronLeft, "Zurück") }
@@ -365,6 +367,11 @@ private fun androidx.compose.foundation.lazy.LazyListScope.rangeItems(r: RangeSt
     }
     item { TotalsCard(r.totals, settings, "${r.daysWithData.size} Tage mit Daten") }
 
+    if (range == Range.YEAR) {
+        yearItems(r, settings)
+        return
+    }
+
     item {
         EnergieCard(title = if (range == Range.WEEK) "Tage der Woche" else "Tage des Monats") {
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -455,5 +462,92 @@ private fun TotalsCard(t: EnergyTotals, settings: Settings, subtitle: String) {
         ValueRow("Einspeisevergütung", Format.euro(income), "bei ${Format.euro(settings.feedInPerKwh)}/kWh")
         ValueRow("Gespart durch Eigenverbrauch", Format.euro(saved))
         Text(subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+
+/** Ein Monat im Jahresblick. */
+private class MonthRow(val first: LocalDate, val days: List<DayStatistics>) {
+    val totals = RangeStatistics(first, first, days).totals
+    val withData get() = days.count { it.sampleCount > 0 }
+}
+
+private fun androidx.compose.foundation.lazy.LazyListScope.yearItems(r: RangeStatistics, settings: Settings) {
+    val months = (1..12).map { m ->
+        val first = LocalDate(r.from.year, m, 1)
+        MonthRow(first, r.days.filter { it.date.month == first.month })
+    }
+    val labels = months.map { Format.monthShort(it.first).take(1) }
+
+    item {
+        EnergieCard(title = "Monate des Jahres") {
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                LegendItem(EnergyColors.sun, "Erzeugung")
+                LegendItem(EnergyColors.house, "Verbrauch")
+            }
+            GroupedBarChart(
+                categories = labels,
+                series = listOf(
+                    BarSeries("Erzeugung", EnergyColors.sun, months.map { it.totals.productionWh }),
+                    BarSeries("Verbrauch", EnergyColors.house, months.map { it.totals.consumptionWh }),
+                ),
+                modifier = Modifier.fillMaxWidth().height(180.dp),
+                valueFormatter = { Format.energy(it) },
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                LegendItem(EnergyColors.grid, "Netzbezug")
+                LegendItem(EnergyColors.export, "Einspeisung")
+                LegendItem(EnergyColors.car, "Auto")
+            }
+            GroupedBarChart(
+                categories = labels,
+                series = listOf(
+                    BarSeries("Netzbezug", EnergyColors.grid, months.map { it.totals.gridImportWh }),
+                    BarSeries("Einspeisung", EnergyColors.export, months.map { it.totals.gridExportWh }),
+                    BarSeries("Auto", EnergyColors.car, months.map { it.totals.carChargeWh }),
+                ),
+                modifier = Modifier.fillMaxWidth().height(150.dp),
+                valueFormatter = { Format.energy(it) },
+            )
+        }
+    }
+
+    item {
+        EnergieCard(title = "Je Monat") {
+            val withData = months.filter { it.withData > 0 }
+            if (withData.isEmpty()) Text("Noch keine Monate mit Daten.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            withData.forEach { m ->
+                val t = m.totals
+                val cost = t.gridImportWh / 1000 * settings.pricePerKwh
+                val feed = t.gridExportWh / 1000 * settings.feedInPerKwh
+                ValueRow(
+                    Format.monthName(m.first),
+                    "${Format.energy(t.productionWh)} · ${Format.energy(t.consumptionWh)}",
+                    "Netz ${Format.energy(t.gridImportWh)} (${Format.euro(cost)}) · eingespeist ${Format.energy(t.gridExportWh)} (${Format.euro(feed)})" +
+                        (if (t.carChargeWh > 50) " · Auto ${Format.energy(t.carChargeWh)}" else "") +
+                        " · ${m.withData} Tage",
+                )
+            }
+            Text(
+                "Wert = Erzeugung · Verbrauch. Monate ohne Messung fehlen; die Aufzeichnung beginnt mit dem ersten gespeicherten Tag.",
+                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+
+    item {
+        EnergieCard(title = "Auffälligkeiten") {
+            months.filter { it.withData > 0 }.maxByOrNull { it.totals.productionWh }?.takeIf { it.totals.productionWh > 0 }?.let {
+                ValueRow("Bester PV-Monat", Format.energy(it.totals.productionWh), Format.monthName(it.first), icon = Icons.Rounded.WbSunny, iconTint = EnergyColors.sun)
+            }
+            months.filter { it.withData > 0 }.maxByOrNull { it.totals.consumptionWh }?.takeIf { it.totals.consumptionWh > 0 }?.let {
+                ValueRow("Verbrauchsstärkster Monat", Format.energy(it.totals.consumptionWh), Format.monthName(it.first), icon = Icons.Rounded.Home, iconTint = EnergyColors.house)
+            }
+            r.bestProductionDay?.let { ValueRow("Bester PV-Tag", Format.energy(it.totals.productionWh), Format.dateShort(it.date), icon = Icons.Rounded.WbSunny, iconTint = EnergyColors.sun) }
+            r.heaviestConsumptionDay?.let { ValueRow("Verbrauchsstärkster Tag", Format.energy(it.totals.consumptionWh), Format.dateShort(it.date), icon = Icons.Rounded.Home, iconTint = EnergyColors.house) }
+            r.peakConsumption?.let { ValueRow("Höchste Verbrauchsspitze", Format.power(it.value), "${Format.dateShort(it.at.toLocalDateTime(TimeZone.currentSystemDefault()).date)} um ${Format.time(it.at)}", icon = Icons.Rounded.Bolt, iconTint = EnergyColors.house) }
+            r.averageConsumptionWh?.let { ValueRow("Verbrauch je Tag", Format.energy(it), "Durchschnitt über ${r.daysWithData.size} Tage") }
+        }
     }
 }

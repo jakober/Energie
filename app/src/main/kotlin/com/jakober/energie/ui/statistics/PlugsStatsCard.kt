@@ -39,7 +39,7 @@ fun plugTotals(days: List<DayStatistics>): Map<String, PlugTotals> {
  * und Kosten zum Strompreis, dazu der nicht gemessene Rest.
  */
 @Composable
-fun PlugsStatsCard(days: List<DayStatistics>, settings: Settings, houseConsumptionWh: Double?) {
+fun PlugsStatsCard(days: List<DayStatistics>, settings: Settings, houseConsumptionWh: Double?, carChargeWh: Double = 0.0) {
     val totals = plugTotals(days)
     if (totals.isEmpty()) return
     val names = settings.plugs.associate { it.id to it.name }
@@ -47,7 +47,9 @@ fun PlugsStatsCard(days: List<DayStatistics>, settings: Settings, houseConsumpti
     val rows = totals.entries.sortedByDescending { it.value.energyWh }
     val measured = rows.sumOf { it.value.energyWh }
     val house = houseConsumptionWh?.takeIf { it > 0 }
-    val rest = house?.let { (it - measured).coerceAtLeast(0.0) }
+    // Das Auto steckt im Hausverbrauch, ist aber kein "nicht gemessener" Verbraucher: eigene Zeile.
+    val car = carChargeWh.coerceAtLeast(0.0)
+    val rest = house?.let { (it - measured - car).coerceAtLeast(0.0) }
 
     EnergieCard(title = "Verbraucher", accent = EnergyColors.house) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -56,7 +58,7 @@ fun PlugsStatsCard(days: List<DayStatistics>, settings: Settings, houseConsumpti
             BigValue(Format.euro(measured / 1000 * settings.pricePerKwh), "zum Strompreis", EnergyColors.grid, Modifier.weight(1f))
         }
         // Gleiche Farben wie in der Haus-Karte; der Rest des Hauses bleibt grau.
-        StackedBar(segments = rows.map { (id, t) -> BarSegment(colors[id] ?: EnergyColors.neutral, t.energyWh) }, total = house ?: measured)
+        StackedBar(segments = rows.map { (id, t) -> BarSegment(colors[id] ?: EnergyColors.neutral, t.energyWh) } + BarSegment(EnergyColors.car, car), total = house ?: measured)
         rows.forEach { (id, t) ->
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -80,9 +82,23 @@ fun PlugsStatsCard(days: List<DayStatistics>, settings: Settings, houseConsumpti
                 if (house != null) ShareBar("Anteil am Haus", t.energyWh / house, EnergyColors.house)
             }
         }
+        if (car > 50 && house != null) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(Modifier.size(12.dp).clip(CircleShape).background(EnergyColors.car))
+                Column(Modifier.weight(1f)) {
+                    Text("Auto laden", style = MaterialTheme.typography.titleSmall)
+                    Text("aus der Ladeleistung im Messpunkt", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(Format.energy(car), style = MaterialTheme.typography.titleMedium, color = EnergyColors.car)
+                    Text(Format.euro(car / 1000 * settings.pricePerKwh), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            ShareBar("Anteil am Haus", car / house, EnergyColors.car)
+        }
         if (rest != null && rest > 50) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Nicht gemessen (Rest)", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Übrige Verbraucher, nicht gemessen", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(Format.energy(rest), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             ShareBar("Anteil am Haus", rest / house!!, EnergyColors.neutral)

@@ -156,7 +156,7 @@ fun StatisticsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
 
         val plugDays = if (range == Range.DAY) listOfNotNull(day) else rangeStats?.daysWithData.orEmpty()
         if (plugDays.any { it.plugs.isNotEmpty() }) {
-            item { PlugsStatsCard(plugDays, settings, periodTotals?.consumptionWh) }
+            item { PlugsStatsCard(plugDays, settings, periodTotals?.consumptionWh, periodTotals?.carChargeWh ?: 0.0) }
         }
 
         if (settings.carConnected || settings.fordConnected || (lifetime?.carChargeWh ?: 0.0) > 0) {

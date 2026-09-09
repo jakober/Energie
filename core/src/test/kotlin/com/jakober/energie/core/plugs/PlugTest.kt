@@ -20,9 +20,10 @@ class PlugTest {
             when {
                 req.url.encodedPath == "/rpc/Switch.GetStatus" -> respond("""{"id":0,"source":"init","output":true,"apower":84.6,"voltage":231.2,"current":0.41,"aenergy":{"total":12345.678,"by_minute":[1,2,3],"minute_ts":1}}""")
                 req.url.encodedPath == "/rpc/Shelly.GetDeviceInfo" -> respond("""{"name":"Kühlschrank","id":"shellyplugmg3-abc123","model":"S3PL-10112EU","gen":3}""")
-                // Nur Eingang 2 zaehlt (COUNT IN am Plus Uni); 0 und 1 sind Schalter.
+                // Eingang 2 (COUNT IN) hat die echten Impulse; Eingang 0 ist faelschlich auch ein Zaehler, aber ohne Draht.
                 req.url.encodedPath == "/rpc/Input.GetStatus" && req.url.parameters["id"] == "2" -> respond("""{"id":2,"counts":{"total":12345,"xtotal":12345,"by_minute":[3,5,4],"minute_ts":1},"freq":0.5,"xfreq":0.5}""")
-                req.url.encodedPath == "/rpc/Input.GetStatus" -> respond("""{"id":0,"state":false}""")
+                req.url.encodedPath == "/rpc/Input.GetStatus" && req.url.parameters["id"] == "0" -> respond("""{"id":0,"counts":{"total":7,"xtotal":7,"by_minute":[0,0,0],"minute_ts":1},"freq":0,"xfreq":0}""")
+                req.url.encodedPath == "/rpc/Input.GetStatus" -> respond("""{"id":1,"state":false}""")
                 req.url.encodedPath == "/cm" -> respond("""{"StatusSNS":{"Time":"2026-09-07T12:00:00","ENERGY":{"Total":3.456,"Power":12,"Voltage":230}}}""")
                 else -> respond("nope")
             }

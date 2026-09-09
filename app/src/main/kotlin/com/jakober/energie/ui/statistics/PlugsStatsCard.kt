@@ -39,16 +39,19 @@ fun plugTotals(days: List<DayStatistics>): Map<String, PlugTotals> {
  * und Kosten zum Strompreis, dazu der nicht gemessene Rest.
  */
 @Composable
-fun PlugsStatsCard(days: List<DayStatistics>, settings: Settings, houseConsumptionWh: Double?, carChargeWh: Double = 0.0) {
+fun PlugsStatsCard(days: List<DayStatistics>, settings: Settings) {
     val totals = plugTotals(days)
     if (totals.isEmpty()) return
     val names = settings.plugs.associate { it.id to it.name }
     val colors = settings.plugs.mapIndexed { i, d -> d.id to plugColor(i) }.toMap()
     val rows = totals.entries.sortedByDescending { it.value.energyWh }
     val measured = rows.sumOf { it.value.energyWh }
-    val house = houseConsumptionWh?.takeIf { it > 0 }
+    // Anteile nur ueber die Tage, an denen Stecker gemessen haben; sonst sind Anteile und
+    // Rest in Woche und Monat schief, solange die Stecker juenger sind als der Zeitraum.
+    val covered = days.filter { it.plugs.isNotEmpty() }
+    val house = covered.sumOf { it.totals.consumptionWh }.takeIf { it > 0 }
     // Das Auto steckt im Hausverbrauch, ist aber kein "nicht gemessener" Verbraucher: eigene Zeile.
-    val car = carChargeWh.coerceAtLeast(0.0)
+    val car = covered.sumOf { it.totals.carChargeWh }.coerceAtLeast(0.0)
     val rest = house?.let { (it - measured - car).coerceAtLeast(0.0) }
 
     EnergieCard(title = "Verbraucher", accent = EnergyColors.house) {
@@ -56,6 +59,12 @@ fun PlugsStatsCard(days: List<DayStatistics>, settings: Settings, houseConsumpti
             BigValue(Format.energy(measured), "Gemessen", EnergyColors.house, Modifier.weight(1f))
             if (house != null) BigValue(Format.percent(measured / house), "vom Hausverbrauch", EnergyColors.house, Modifier.weight(1f))
             BigValue(Format.euro(measured / 1000 * settings.pricePerKwh), "zum Strompreis", EnergyColors.grid, Modifier.weight(1f))
+        }
+        if (covered.size < days.size) {
+            Text(
+                "Stecker an ${covered.size} von ${days.size} Tagen gemessen; Anteile und Rest beziehen sich nur auf diese Tage.",
+                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
         // Gleiche Farben wie in der Haus-Karte; der Rest des Hauses bleibt grau.
         StackedBar(segments = rows.map { (id, t) -> BarSegment(colors[id] ?: EnergyColors.neutral, t.energyWh) } + BarSegment(EnergyColors.car, car), total = house ?: measured)

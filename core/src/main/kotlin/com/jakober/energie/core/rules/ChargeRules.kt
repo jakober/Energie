@@ -64,6 +64,13 @@ data class ChargeDecision(val action: ChargeAction, val reason: String)
  * Ueberschuss mit Hysterese, Wartezeit zwischen Befehlen.
  */
 object ChargeRuleEngine {
+    /**
+     * Faellt der Speicher so viele Punkte unter die Pausiergrenze, pausiert die
+     * Automatik sofort und wartet nicht. Die Wartezeit soll Flattern im
+     * Grenzbereich verhindern; laeuft der Speicher dagegen deutlich leer, kostet
+     * jede Minute Warten Speicherinhalt, den spaeter das Netz ersetzen muss.
+     */
+    const val URGENT_MARGIN_PERCENT = 5
 
     fun decide(rules: ChargeRules, input: ChargeInput): ChargeDecision {
         if (!rules.enabled) return ChargeDecision(ChargeAction.NONE, "Automatik aus")
@@ -102,8 +109,13 @@ object ChargeRuleEngine {
         return when {
             wantCharge && !charging -> gated(rules, input, ChargeAction.RESUME,
                 if (soc >= rules.batteryOnPercent) "Speicher ${soc.toInt()} % >= ${rules.batteryOnPercent} %" else "Ueberschuss ${available.toInt()} W >= ${rules.surplusOnW} W")
-            wantPause && charging -> gated(rules, input, ChargeAction.PAUSE,
-                "Speicher ${soc.toInt()} % < ${rules.batteryOffPercent} %, Ueberschuss ${available.toInt()} W" + (if (discharge > 0) ", Speicher gibt ${discharge.toInt()} W ab" else ""))
+            wantPause && charging -> {
+                val reason = "Speicher ${soc.toInt()} % < ${rules.batteryOffPercent} %, Ueberschuss ${available.toInt()} W" +
+                    (if (discharge > 0) ", Speicher gibt ${discharge.toInt()} W ab" else "")
+                // Deutlich unter der Grenze: nicht auf die Wartezeit warten.
+                if (soc <= rules.batteryOffPercent - URGENT_MARGIN_PERCENT) ChargeDecision(ChargeAction.PAUSE, "$reason - sofort, deutlich unter der Grenze")
+                else gated(rules, input, ChargeAction.PAUSE, reason)
+            }
             charging -> ChargeDecision(ChargeAction.NONE, "Auto laedt, Speicher ${soc.toInt()} %")
             else -> ChargeDecision(ChargeAction.NONE, "Auto pausiert, Speicher ${soc.toInt()} %")
         }

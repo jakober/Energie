@@ -58,6 +58,9 @@ pro Tag unter `files/verlauf/`. Alles Weitere rechnet sie daraus.
 - **Aus dem Netz gekauft (Startseite):** Streifen mit Bezug und Einspeisung je Monat,
   umschaltbar auf Jahre, mit Pfeilen durch die Vergangenheit blätterbar, Kosten je
   Eintrag und Saldo nach Vergütung.
+- **Notaus der Ladeautomatik:** Fällt der Hausspeicher mehr als fünf Punkte unter die
+  Pausiergrenze, pausiert das Laden sofort statt die Wartezeit zwischen Befehlen
+  abzusitzen; im Grenzbereich bleibt die Wartezeit, damit nichts flattert.
 - **Wächter der Zentrale:** Die Anzeige prüft alle 15 Minuten, wann die Zentrale
   zuletzt geschrieben hat, und meldet lokal, wenn sie länger schweigt (und wenn sie
   wieder da ist). Eine hängende Zentrale kann sich nicht selbst melden.

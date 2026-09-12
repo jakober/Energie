@@ -82,4 +82,22 @@ class ChargeRuleEngineTest {
         assertTrue(d.reason.contains("Wartezeit"), d.reason)
         assertEquals(ChargeAction.RESUME, ChargeRuleEngine.decide(rules, input(soc = 80.0, charging = false, last = t0 - 16.minutes)).action)
     }
+
+    @Test
+    fun `tief unter der grenze pausiert sofort, knapp darunter gilt die Wartezeit`() {
+        // Der Fall aus der Praxis: Speicher 38 % bei Grenze 45 %, Auto zieht 2,2 kW aus dem Speicher,
+        // letzter Befehl vor zwei Minuten. Warten wuerde nur weiteren Speicherinhalt kosten.
+        val r = ChargeRules(enabled = true, batteryOnPercent = 50, batteryOffPercent = 45, surplusOnW = 750, carReservePercent = 60)
+        fun at(soc: Double) = input(
+            time = LocalTime(20, 55), soc = soc, grid = 2.0, carSoc = 77.0, charging = true,
+            carPower = 2200.0, last = t0 - 2.minutes, battery = -2958.0,
+        )
+        val deep = ChargeRuleEngine.decide(r, at(38.0))
+        assertEquals(ChargeAction.PAUSE, deep.action)
+        assertTrue(deep.reason.contains("sofort"), deep.reason)
+        // Nur knapp darunter: die Wartezeit bleibt, damit die Automatik nicht flattert.
+        val shallow = ChargeRuleEngine.decide(r, at(43.0))
+        assertEquals(ChargeAction.NONE, shallow.action)
+        assertTrue(shallow.reason.contains("Wartezeit"), shallow.reason)
+    }
 }

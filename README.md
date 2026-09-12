@@ -55,6 +55,11 @@ pro Tag unter `files/verlauf/`. Alles Weitere rechnet sie daraus.
   (ab 6 h) und dauerhaft mehr als 130 % der Nennleistung (länger als eine
   Abtauheizung braucht). Optional: Nennleistung und Jahresverbrauch vom
   Energielabel als zweiter Maßstab.
+- **Netzbezug je Monat:** Statistik-Karte aus den Zählerständen des Hauptzählers:
+  je Monat wirklich zugekaufte kWh mit Kosten, Einspeisung mit Vergütung, Saldo,
+  Balken über zwölf Monate, Hochrechnung des laufenden Monats und Jahresmittel.
+- **Breite Geräte:** Das Flussdiagramm skaliert mit der Breite (aufgeklapptes
+  Faltgerät, Tablet): Symbole, Speicher, Schrift und Höhe wachsen bis Faktor 1,7 mit.
 - **Jahresblick:** Statistik mit Zeitraum Jahr, Balken je Monat (Erzeugung, Verbrauch,
   Netzbezug, Einspeisung, Auto), Liste je Monat mit Kosten und Vergütung, bester
   Monat und Tag. Verlauf standardmäßig 400 Tage.

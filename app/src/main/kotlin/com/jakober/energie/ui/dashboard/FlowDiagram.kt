@@ -10,6 +10,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -66,6 +67,27 @@ private val EdgeInset = 26.dp
 private val HubRadius = 44.dp
 
 /**
+ * Alle Groessen des Diagramms in einem Satz, mit [scale] gestreckt. Auf breiten
+ * Geraeten (aufgeklapptes Faltgeraet, Tablet) waere das Diagramm sonst flach und
+ * die Symbole winzig: dort waechst alles mit, Symbole, Speicher und Schrift.
+ */
+private data class FlowDims(val scale: Float) {
+    val node = NodeRadius * scale
+    val edge = EdgeInset * scale
+    val hub = HubRadius * scale
+    val sideNode = (EdgeInset + NodeRadius) * 2 * scale
+    val sideGap = 62.dp * scale
+    val batteryWidth = BatteryWidth * scale
+    val batteryHeight = BatteryHeight * scale
+    val icon = 26.dp * scale
+    fun height(showCar: Boolean) = (if (showCar) 400.dp else 372.dp) * scale
+}
+
+/** Referenzbreite eines Handys im Hochformat; darueber waechst das Diagramm mit. */
+private val ReferenceWidth = 380.dp
+private const val MaxScale = 1.7f
+
+/**
  * Das Herzstueck der Uebersicht: PV oben, Haus rechts, Netz unten, Speicher
  * links, alle mit der Mitte verbunden. Fliesst Energie, wandern Leuchtpunkte
  * entlang geschwungener Pfade in Flussrichtung, umso kraeftiger, je mehr
@@ -103,10 +125,12 @@ fun FlowDiagram(
         0f, 1f, infiniteRepeatable(tween(2200, easing = LinearEasing), RepeatMode.Restart), label = "phase",
     )
 
+    BoxWithConstraints(modifier.fillMaxWidth()) {
+    val dims = FlowDims(((maxWidth / ReferenceWidth).coerceIn(1f, MaxScale)))
     Box(
-        modifier
+        Modifier
             .fillMaxWidth()
-            .height(if (showCar) 400.dp else 372.dp)
+            .height(dims.height(showCar))
             .clip(RoundedCornerShape(28.dp))
             .background(
                 Brush.linearGradient(
@@ -117,13 +141,13 @@ fun FlowDiagram(
     ) {
         Canvas(Modifier.fillMaxSize()) {
             val c = center
-            val nodeR = NodeRadius.toPx()
-            val inset = EdgeInset.toPx() + nodeR
-            val hubR = HubRadius.toPx()
+            val nodeR = dims.node.toPx()
+            val inset = dims.edge.toPx() + nodeR
+            val hubR = dims.hub.toPx()
             val top = Offset(c.x, inset)
             val bottom = Offset(c.x, size.height - inset)
             val left = Offset(inset, c.y)
-            val sideGap = 62.dp.toPx()
+            val sideGap = dims.sideGap.toPx()
             val right = if (showCar) Offset(size.width - inset, c.y - sideGap) else Offset(size.width - inset, c.y)
             val carPos = Offset(size.width - inset, c.y + sideGap)
             val measure = PathMeasure()
@@ -153,7 +177,7 @@ fun FlowDiagram(
                 }
                 val active = abs(watts) >= 15.0
                 val strength = min(1f, (abs(watts) / 4000.0).toFloat())
-                val width = (2.5f + 4f * strength).dp.toPx()
+                val width = ((2.5f + 4f * strength) * dims.scale).dp.toPx()
 
                 if (!active) {
                     drawPath(path, Color.White.copy(alpha = 0.07f), style = Stroke(width, cap = StrokeCap.Round))
@@ -171,8 +195,8 @@ fun FlowDiagram(
                     val p = measure.getPosition(t * total)
                     // An den Enden ausblenden, damit die Punkte weich erscheinen und verschwinden.
                     val fade = sin(t * PI).toFloat().coerceIn(0.15f, 1f)
-                    drawCircle(color.copy(alpha = 0.30f * fade), radius = (6f + 4f * strength).dp.toPx(), center = p)
-                    drawCircle(color.copy(alpha = fade), radius = (3f + 1.5f * strength).dp.toPx(), center = p)
+                    drawCircle(color.copy(alpha = 0.30f * fade), radius = ((6f + 4f * strength) * dims.scale).dp.toPx(), center = p)
+                    drawCircle(color.copy(alpha = fade), radius = ((3f + 1.5f * strength) * dims.scale).dp.toPx(), center = p)
                 }
             }
 
@@ -185,14 +209,14 @@ fun FlowDiagram(
             else link(bottom, grid, EnergyColors.export, towardsHub = false)
             // Speicher: laden von der Mitte weg, entladen zur Mitte hin. Der Pfad
             // beginnt an der rechten Kante des Speicher-Rechtecks.
-            val batteryEdge = BatteryWidth.toPx() / 2 + 2.dp.toPx()
+            val batteryEdge = dims.batteryWidth.toPx() / 2 + 2.dp.toPx()
             if (battery >= 0) link(left, battery, EnergyColors.battery, towardsHub = false, startInset = batteryEdge)
             else link(left, battery, EnergyColors.battery, towardsHub = true, startInset = batteryEdge)
 
             // Die Mitte: Glasscheibe mit Autarkie-Ring.
             drawCircle(Color.White.copy(alpha = 0.06f), hubR, c)
             drawCircle(Color.White.copy(alpha = 0.12f), hubR, c, style = Stroke(1.5.dp.toPx()))
-            val ringStroke = 5.dp.toPx()
+            val ringStroke = 5.dp.toPx() * dims.scale
             val ringR = hubR - ringStroke
             val ringTopLeft = Offset(c.x - ringR, c.y - ringR)
             val ringSize = Size(ringR * 2, ringR * 2)
@@ -205,12 +229,12 @@ fun FlowDiagram(
         // PV-Prognose links oben, wo der Speicher Platz laesst.
         if (forecast != null) {
             Column(
-                Modifier.align(Alignment.TopStart).padding(start = 18.dp, top = 16.dp).width(SideNodeWidth + 10.dp)
+                Modifier.align(Alignment.TopStart).padding(start = 18.dp * dims.scale, top = 16.dp * dims.scale).width(dims.sideNode + 10.dp)
                     .let { m -> onNodeClick?.let { cb -> m.clip(RoundedCornerShape(12.dp)).clickable { cb(FlowNodeKind.PV) } } ?: m }
                     .padding(4.dp),
             ) {
                 Text(forecast.label, style = MaterialTheme.typography.labelSmall, color = EnergyColors.sun.copy(alpha = 0.9f))
-                Text(forecast.value, style = MaterialTheme.typography.titleMedium, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1)
+                Text(forecast.value, style = MaterialTheme.typography.titleMedium.copy(fontSize = MaterialTheme.typography.titleMedium.fontSize * dims.scale), color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1)
                 Text(forecast.detail, style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.6f), maxLines = 3, overflow = TextOverflow.Ellipsis, lineHeight = 13.sp)
             }
         }
@@ -219,20 +243,21 @@ fun FlowDiagram(
         Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 if (autarky != null) Format.percent(autarky) else "–",
-                style = MaterialTheme.typography.titleLarge, color = Color.White, fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.titleLarge.copy(fontSize = MaterialTheme.typography.titleLarge.fontSize * dims.scale),
+                color = Color.White, fontWeight = FontWeight.Bold,
             )
             Text("Autarkie", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.6f))
         }
 
         FlowNode(
             Icons.Rounded.WbSunny, EnergyColors.sun, Format.power(production), "PV",
-            Modifier.align(Alignment.TopCenter).padding(top = EdgeInset), textBelow = true, onClick = click(FlowNodeKind.PV),
+            Modifier.align(Alignment.TopCenter).padding(top = dims.edge), textBelow = true, onClick = click(FlowNodeKind.PV), dims = dims,
         )
         if (showCar) {
             // Text ueber dem Haus, unter dem Auto - so bleibt zwischen beiden Platz.
             FlowNode(
                 Icons.Rounded.Home, EnergyColors.house, Format.power(consumption), "Haus",
-                Modifier.align(Alignment.CenterEnd).offset(y = (-86).dp), textBelow = false, onClick = click(FlowNodeKind.HOUSE),
+                Modifier.align(Alignment.CenterEnd).offset(y = (-86).dp * dims.scale), textBelow = false, onClick = click(FlowNodeKind.HOUSE), dims = dims,
             )
             // Auto: laedt es, steht die Leistung gross; sonst der Ladestand. Kurze
             // Beschriftung, damit nichts in die Nachbarn laeuft.
@@ -247,20 +272,20 @@ fun FlowDiagram(
                     sample?.carPluggedIn == false -> "Auto nicht angeschlossen"
                     else -> "Auto"
                 },
-                Modifier.align(Alignment.CenterEnd).offset(y = 86.dp), textBelow = true,
+                Modifier.align(Alignment.CenterEnd).offset(y = 86.dp * dims.scale), textBelow = true,
                 ring = sample?.carSocPercent?.let { (it / 100.0).toFloat() },
-                onClick = click(FlowNodeKind.CAR),
+                onClick = click(FlowNodeKind.CAR), dims = dims,
             )
         } else {
             FlowNode(
                 Icons.Rounded.Home, EnergyColors.house, Format.power(consumption), "Haus",
-                Modifier.align(Alignment.CenterEnd).offset(y = 26.dp), textBelow = true, onClick = click(FlowNodeKind.HOUSE),
+                Modifier.align(Alignment.CenterEnd).offset(y = 26.dp * dims.scale), textBelow = true, onClick = click(FlowNodeKind.HOUSE), dims = dims,
             )
         }
         FlowNode(
             Icons.Rounded.Bolt, if (grid < -15) EnergyColors.export else EnergyColors.grid,
             Format.power(abs(grid)), if (grid < -15) "Einspeisung" else if (grid > 15) "Netzbezug" else "Netz",
-            Modifier.align(Alignment.BottomCenter).padding(bottom = EdgeInset), textBelow = false, onClick = click(FlowNodeKind.GRID),
+            Modifier.align(Alignment.BottomCenter).padding(bottom = dims.edge), textBelow = false, onClick = click(FlowNodeKind.GRID), dims = dims,
         )
         BatteryNode(
             soc = soc, charging = battery > 15,
@@ -271,14 +296,12 @@ fun FlowDiagram(
                 else -> "Speicher"
             },
             sub = batteryEtaLabel(soc, sample?.batteryPowerW, batteryCapacityWh),
-            modifier = Modifier.align(Alignment.CenterStart).offset(y = 26.dp),
-            onClick = click(FlowNodeKind.BATTERY),
+            modifier = Modifier.align(Alignment.CenterStart).offset(y = 26.dp * dims.scale),
+            onClick = click(FlowNodeKind.BATTERY), dims = dims,
         )
     }
+    }
 }
-
-/** Breite eines Seitenknotens: Symbol mittig ueber der Kreismitte des Canvas, Text darf umbrechen. */
-private val SideNodeWidth = (EdgeInset + NodeRadius) * 2
 
 private val BatteryWidth = 46.dp
 private val BatteryHeight = 88.dp
@@ -298,17 +321,18 @@ private fun BatteryNode(
     sub: String?,
     modifier: Modifier,
     onClick: (() -> Unit)?,
+    dims: FlowDims,
 ) {
     val color = EnergyColors.battery
     val fraction = ((soc ?: 0.0) / 100.0).toFloat().coerceIn(0f, 1f)
-    Column(modifier.width(SideNodeWidth), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(modifier.width(dims.sideNode), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier
-                .size(BatteryWidth + 16.dp, BatteryHeight + 8.dp)
+                .size(dims.batteryWidth + 16.dp, dims.batteryHeight + 8.dp)
                 .let { m -> if (onClick != null) m.clip(RoundedCornerShape(14.dp)).clickable(onClick = onClick) else m },
             contentAlignment = Alignment.Center,
         ) {
-            Canvas(Modifier.size(BatteryWidth, BatteryHeight)) {
+            Canvas(Modifier.size(dims.batteryWidth, dims.batteryHeight)) {
                 val w = size.width
                 val h = size.height
                 val capW = w * 0.42f
@@ -344,16 +368,18 @@ private fun BatteryNode(
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     soc?.let { Format.percentValue(it) } ?: "–",
-                    style = MaterialTheme.typography.labelLarge, color = Color.White, fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.labelLarge.copy(fontSize = MaterialTheme.typography.labelLarge.fontSize * dims.scale),
+                    color = Color.White, fontWeight = FontWeight.Bold,
                 )
-                if (charging) Icon(Icons.Rounded.Bolt, null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(14.dp))
+                if (charging) Icon(Icons.Rounded.Bolt, null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(14.dp * dims.scale))
             }
         }
-        NodeText(value, label)
+        NodeText(value, label, dims = dims)
         if (sub != null) {
             Text(
-                sub, style = MaterialTheme.typography.labelSmall, color = color.copy(alpha = 0.9f), textAlign = TextAlign.Center,
-                maxLines = 2, lineHeight = 13.sp, modifier = Modifier.padding(start = 14.dp, end = 4.dp, top = 2.dp),
+                sub, style = MaterialTheme.typography.labelSmall.copy(fontSize = MaterialTheme.typography.labelSmall.fontSize * dims.scale),
+                color = color.copy(alpha = 0.9f), textAlign = TextAlign.Center,
+                maxLines = 2, lineHeight = 13.sp * dims.scale, modifier = Modifier.padding(start = 14.dp, end = 4.dp, top = 2.dp),
             )
         }
     }
@@ -375,14 +401,15 @@ private fun FlowNode(
     ring: Float? = null,
     ringLabel: String? = null,
     onClick: (() -> Unit)? = null,
+    dims: FlowDims,
 ) {
     // Seitliche Knoten bekommen eine feste Breite, deren Mitte genau auf der
     // Kreismitte des Canvas liegt - lange Beschriftungen brechen um, statt das
     // Symbol zur Seite zu schieben.
-    Column(modifier.width(SideNodeWidth), horizontalAlignment = Alignment.CenterHorizontally) {
-        if (!textBelow) NodeText(value, label)
+    Column(modifier.width(dims.sideNode), horizontalAlignment = Alignment.CenterHorizontally) {
+        if (!textBelow) NodeText(value, label, dims = dims)
         Box(
-            Modifier.size(NodeRadius * 2).let { m -> if (onClick != null) m.clip(CircleShape).clickable(onClick = onClick) else m },
+            Modifier.size(dims.node * 2).let { m -> if (onClick != null) m.clip(CircleShape).clickable(onClick = onClick) else m },
             contentAlignment = Alignment.Center,
         ) {
             // Schein
@@ -393,7 +420,7 @@ private fun FlowNode(
             )
             if (ring != null) {
                 Canvas(Modifier.fillMaxSize()) {
-                    val stroke = 4.dp.toPx()
+                    val stroke = 4.dp.toPx() * dims.scale
                     val inset = stroke / 2 + 1.dp.toPx()
                     val arcSize = Size(size.width - 2 * inset, size.height - 2 * inset)
                     drawArc(Color.White.copy(alpha = 0.14f), -90f, 360f, false, Offset(inset, inset), arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
@@ -402,27 +429,28 @@ private fun FlowNode(
             }
             Box(
                 Modifier
-                    .size(NodeRadius * 2 - 18.dp)
+                    .size(dims.node * 2 - 18.dp * dims.scale)
                     .background(color.copy(alpha = 0.22f), CircleShape)
                     .border(1.5.dp, color.copy(alpha = 0.75f), CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(icon, null, tint = color, modifier = Modifier.size(26.dp))
+                Icon(icon, null, tint = color, modifier = Modifier.size(dims.icon))
             }
         }
-        if (textBelow) NodeText(value, label, ringLabel)
+        if (textBelow) NodeText(value, label, ringLabel, dims)
     }
 }
 
 @Composable
-private fun NodeText(value: String, label: String, extra: String? = null) {
+private fun NodeText(value: String, label: String, extra: String? = null, dims: FlowDims) {
     Text(
-        value, style = MaterialTheme.typography.titleLarge, color = Color.White,
-        fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 1,
+        value, style = MaterialTheme.typography.titleLarge.copy(fontSize = MaterialTheme.typography.titleLarge.fontSize * dims.scale),
+        color = Color.White, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 1,
     )
     Text(
         if (extra != null) "$label · $extra" else label,
-        style = MaterialTheme.typography.labelMedium, color = Color.White.copy(alpha = 0.65f), textAlign = TextAlign.Center,
-        maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 14.sp,
+        style = MaterialTheme.typography.labelMedium.copy(fontSize = MaterialTheme.typography.labelMedium.fontSize * dims.scale),
+        color = Color.White.copy(alpha = 0.65f), textAlign = TextAlign.Center,
+        maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 14.sp * dims.scale,
     )
 }

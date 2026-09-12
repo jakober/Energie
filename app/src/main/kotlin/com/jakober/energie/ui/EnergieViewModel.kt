@@ -144,6 +144,11 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
         .mapLatest { kwh -> withContext(Dispatchers.IO) { repo.simulateUpgrade(kwh * 1000) } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    /** Echter Netzbezug je Monat aus den Zaehlerstaenden, fuer die Stromrechnung. */
+    val gridMonths: StateFlow<List<com.jakober.energie.core.history.GridMonth>> = updates
+        .mapLatest { withContext(Dispatchers.IO) { repo.gridMonths() } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     /** Alles seit dem ersten Messpunkt, fuer die Auto-Gesamtrechnung. */
     val lifetime: StateFlow<EnergyTotals?> = updates
         .mapLatest { withContext(Dispatchers.IO) { repo.lifetimeTotals() } }

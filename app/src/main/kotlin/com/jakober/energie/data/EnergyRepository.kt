@@ -344,6 +344,8 @@ class EnergyRepository(
                 val alerts = cs.pullAlerts(s)
                 val settingsChanged = cs.pullSettings(s)
                 runCatching { cs.registerDeviceIfNeeded(s) }
+                // Die Prognose steht nicht in der Cloud: die Anzeige holt sie selbst von Open-Meteo.
+                runCatching { refreshForecast(settings.current(), now) }
                 Triple(pulled, status, alerts to settingsChanged)
             }
         }
@@ -772,6 +774,19 @@ class EnergyRepository(
             (if (d >= today) lookup() else carCapacityCache.getOrPut(d, lookup)).orElse(null)
         }
         return com.jakober.energie.core.history.CarBatteryHealth.of(points, s.carBatteryNominalKwh.takeIf { it > 0 })
+    }
+
+    private var gridMonthsCache: Pair<LocalDate?, List<com.jakober.energie.core.history.GridMonth>>? = null
+
+    /** Netzbezug und Einspeisung je Monat aus den Zaehlerstaenden, aelteste zuerst. */
+    fun gridMonths(zone: TimeZone = TimeZone.currentSystemDefault()): List<com.jakober.energie.core.history.GridMonth> {
+        val today = today(zone)
+        val all = history.days().sorted()
+        val last = all.lastOrNull()
+        gridMonthsCache?.let { (d, r) -> if (d == last && r.isNotEmpty()) return r }
+        val result = com.jakober.energie.core.history.GridMonths.of(all.map { dayStatistics(it, zone) }, today)
+        gridMonthsCache = last to result
+        return result
     }
 
     /** Summe ueber alle gespeicherten Tage. */

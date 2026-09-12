@@ -77,6 +77,7 @@ fun StatisticsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
     val upgradeKwh by vm.upgradeModuleKwh.collectAsStateWithLifecycle()
     val upgradeCost by vm.upgradeCostEur.collectAsStateWithLifecycle()
     val liveForUpgrade by vm.live.collectAsStateWithLifecycle()
+    val gridMonths by vm.gridMonths.collectAsStateWithLifecycle()
     var showSamples by rememberSaveable { mutableStateOf(false) }
 
     LazyColumn(
@@ -130,6 +131,10 @@ fun StatisticsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
 
         val periodTotals = if (range == Range.DAY) day?.totals else rangeStats?.totals
         val hasData = if (range == Range.DAY) (day?.sampleCount ?: 0) > 0 else rangeStats?.daysWithData?.isNotEmpty() == true
+
+        if (gridMonths.isNotEmpty()) {
+            item { GridBillCard(gridMonths, settings) }
+        }
 
         // Hochrechnung: heute oder im laufenden Monat.
         val today = vm.isToday || (range == Range.MONTH && EnergieViewModel.bounds(date, Range.MONTH) == EnergieViewModel.bounds(vm.todayDate(), Range.MONTH))

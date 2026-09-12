@@ -28,6 +28,7 @@ import com.jakober.energie.core.smartcar.ConnectionsResult
 import com.jakober.energie.core.smartcar.SmartcarClient
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -575,11 +576,20 @@ class EnergyRepository(
         return when (decision.action) {
             ChargeAction.NONE -> { _state.update { it.copy(automationStatus = decision.reason) }; null }
             ChargeAction.PAUSE, ChargeAction.RESUME -> {
+                // Beim Wiederholen zuerst wecken: ein schlafendes Auto quittiert Befehle,
+                // fuehrt sie aber erst aus, wenn es wieder online ist. Beim ersten Versuch
+                // sparen wir den Weckruf, er kostet Zeit und Fahrzeugstrom.
+                val retry = (pendingCommand?.takeIf { it.first == decision.action }?.third ?: 0) > 0
+                val woken = if (retry) {
+                    withContext(Dispatchers.IO) { runCatching { fordpass(s).statusRefresh(s.fordVin) }.getOrNull() }
+                        ?.also { delay(WAKE_DELAY) }
+                } else null
                 val result = withContext(Dispatchers.IO) {
                     if (decision.action == ChargeAction.PAUSE) fordpass(s).pauseCharge(s.fordVin) else fordpass(s).startCharge(s.fordVin)
                 }
                 val verb = if (decision.action == ChargeAction.PAUSE) "Pausiert" else "Fortgesetzt"
-                val line = if (result.accepted) "$stamp $verb: ${decision.reason}" else "$stamp $verb FEHLGESCHLAGEN (HTTP ${result.status}): ${decision.reason}"
+                val wake = if (woken != null) " (nach Weckruf)" else ""
+                val line = if (result.accepted) "$stamp $verb$wake: ${decision.reason}" else "$stamp $verb FEHLGESCHLAGEN (HTTP ${result.status}): ${decision.reason}"
                 settings.noteChargeCommand(now.epochSeconds)
                 settings.appendChargeLog(line)
                 _state.update { it.copy(automationStatus = line) }
@@ -920,6 +930,8 @@ class EnergyRepository(
         const val MAX_COMMAND_RETRY = 2
         /** So lange sendet die Automatik nichts mehr, wenn das Auto die Befehle ignoriert. */
         val GIVE_UP_PAUSE = 30.minutes
+        /** So lange bekommt das Auto nach dem Weckruf Zeit, bevor der Befehl folgt. */
+        val WAKE_DELAY = 20.seconds
         val FORECAST_INTERVAL = 3.hours
         val SENEC_MIN_INTERVAL = 30.seconds
         val SENEC_BACKOFF = 5.minutes

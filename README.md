@@ -55,6 +55,12 @@ pro Tag unter `files/verlauf/`. Alles Weitere rechnet sie daraus.
   (ab 6 h) und dauerhaft mehr als 130 % der Nennleistung (länger als eine
   Abtauheizung braucht). Optional: Nennleistung und Jahresverbrauch vom
   Energielabel als zweiter Maßstab.
+- **Aus dem Netz gekauft (Startseite):** Streifen mit Bezug und Einspeisung je Monat,
+  umschaltbar auf Jahre, mit Pfeilen durch die Vergangenheit blätterbar, Kosten je
+  Eintrag und Saldo nach Vergütung.
+- **Wächter der Zentrale:** Die Anzeige prüft alle 15 Minuten, wann die Zentrale
+  zuletzt geschrieben hat, und meldet lokal, wenn sie länger schweigt (und wenn sie
+  wieder da ist). Eine hängende Zentrale kann sich nicht selbst melden.
 - **Netzbezug je Monat:** Statistik-Karte aus den Zählerständen des Hauptzählers:
   je Monat wirklich zugekaufte kWh mit Kosten, Einspeisung mit Vergütung, Saldo,
   Balken über zwölf Monate, Hochrechnung des laufenden Monats und Jahresmittel.

@@ -38,6 +38,21 @@ data class GridMonth(
         if (days <= 0) null else importWh / days * daysInMonth
 }
 
+/** Ein Kalenderjahr auf der Stromrechnung. */
+data class GridYear(
+    val year: Int,
+    val importWh: Double,
+    val exportWh: Double,
+    val months: Int,
+    val days: Int,
+) {
+    fun costEur(pricePerKwh: Double): Double = importWh / 1000.0 * pricePerKwh
+    fun feedInEur(feedInPerKwh: Double): Double = exportWh / 1000.0 * feedInPerKwh
+    fun balanceEur(pricePerKwh: Double, feedInPerKwh: Double): Double = costEur(pricePerKwh) - feedInEur(feedInPerKwh)
+    /** True, wenn alle zwoelf Monate Daten haben. */
+    val complete: Boolean get() = months >= 12
+}
+
 object GridMonths {
     /** Ab so vielen fehlenden Tagen gilt ein Monat als unvollstaendig. */
     const val FULL_DAY_MINUTES = 5
@@ -67,6 +82,20 @@ object GridMonths {
             }
             .sortedBy { it.first }
     }
+
+    /** Fasst Monate zu Jahren zusammen, aeltestes zuerst. */
+    fun years(months: List<GridMonth>): List<GridYear> =
+        months.groupBy { it.year }
+            .map { (year, list) ->
+                GridYear(
+                    year = year,
+                    importWh = list.sumOf { it.importWh },
+                    exportWh = list.sumOf { it.exportWh },
+                    months = list.size,
+                    days = list.sumOf { it.days },
+                )
+            }
+            .sortedBy { it.year }
 
     fun lastOfMonth(first: LocalDate): LocalDate {
         val nextMonth = if (first.month.number == 12) LocalDate(first.year + 1, 1, 1) else LocalDate(first.year, first.month.number + 1, 1)

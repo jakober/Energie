@@ -3,6 +3,7 @@ package com.jakober.energie
 import android.app.Application
 import androidx.work.Configuration
 import com.jakober.energie.work.BackupWorker
+import com.jakober.energie.work.HubWatchWorker
 import com.jakober.energie.work.PollWorker
 
 class EnergieApp : Application(), Configuration.Provider {
@@ -16,6 +17,7 @@ class EnergieApp : Application(), Configuration.Provider {
         com.jakober.energie.notify.Push.init(this)
         PollWorker.schedule(this)
         BackupWorker.schedule(this) // prueft selbst, ob eine Sicherung eingerichtet ist
+        HubWatchWorker.schedule(this) // Anzeige: meldet, wenn die Zentrale schweigt
         // Zentrale: Vordergrund-Dienst, damit jede Minute gemessen wird.
         if (kotlinx.coroutines.runBlocking { container.settings.current().cloudRole } == com.jakober.energie.data.CloudRole.HUB) {
             com.jakober.energie.hub.HubService.start(this)

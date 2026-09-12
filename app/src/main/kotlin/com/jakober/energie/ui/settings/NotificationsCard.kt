@@ -61,6 +61,14 @@ fun NotificationsCard(saved: AlertSettings, onSave: (AlertSettings) -> Unit) {
         ToggleRow("Quelle ausgefallen", "SENEC oder FRITZ!Box antworten seit ${draft.sourceDownMinutes} min nicht, und wenn sie wieder da sind.", draft.sourceDown) { draft = draft.copy(sourceDown = it) }
         ToggleRow("Sicherung fehlgeschlagen", "Wenn die nächtliche Sicherung nicht geschrieben werden konnte.", draft.backupFailed) { draft = draft.copy(backupFailed = it) }
         ToggleRow(
+            "Zentrale meldet sich nicht",
+            "Nur auf dem Anzeige-Gerät: Hinweis, wenn die Zentrale seit ${draft.hubSilentMinutes} min keine Messwerte mehr geschrieben hat, und wenn sie wieder da ist.",
+            draft.hubSilent,
+        ) { draft = draft.copy(hubSilent = it) }
+        if (draft.hubSilent) {
+            SliderRow("Stille ab", "${draft.hubSilentMinutes} min", draft.hubSilentMinutes.toFloat(), 15f..120f, 6) { draft = draft.copy(hubSilentMinutes = (it / 15).roundToInt() * 15) }
+        }
+        ToggleRow(
             "Kühlgeräte",
             "Steckdosen vom Typ „Kühlgerät“: Kompressor läuft seit ${draft.coolingStuckHours} h durch, seit ${draft.coolingSilentHours} h kein Lauf, dauerhaft über der Nennleistung, oder seit Tagen deutlich mehr Verbrauch als üblich.",
             draft.cooling,

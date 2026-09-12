@@ -85,6 +85,7 @@ fun DashboardScreen(vm: EnergieViewModel, onOpenSettings: () -> Unit, contentPad
     val yesterday by vm.yesterdayStats.collectAsStateWithLifecycle()
     val cooling by vm.coolingReports.collectAsStateWithLifecycle()
     val carHealth by vm.carBatteryHealth.collectAsStateWithLifecycle()
+    val gridMonths by vm.gridMonths.collectAsStateWithLifecycle()
     // Welcher Knoten des Diagramms gerade seine Detailkarte zeigt; nochmal Tippen schliesst.
     var selectedNode by rememberSaveable { mutableStateOf<FlowNodeKind?>(null) }
 
@@ -157,6 +158,10 @@ fun DashboardScreen(vm: EnergieViewModel, onOpenSettings: () -> Unit, contentPad
 
         // Erst die aufgeklappte Detailkarte, dann der Wochenstreifen, sonst sieht man nicht, dass etwas aufging.
         item { WeatherStrip(live, settings, vm.todayDate(), onClick = { selectedNode = if (selectedNode == FlowNodeKind.PV) null else FlowNodeKind.PV }) }
+
+        if (gridMonths.isNotEmpty()) {
+            item { GridBillStrip(gridMonths, settings) }
+        }
 
         item { BatteryAndGridRow(live) }
 

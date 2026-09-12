@@ -91,6 +91,8 @@ data class Settings(
     /** Benachrichtigungen und der Merkzustand der Hinweis-Engine. */
     val alerts: AlertSettings = AlertSettings(),
     val alertState: AlertState = AlertState(),
+    /** Die Anzeige hat gemeldet, dass die Zentrale schweigt (damit es nur einmal kommt). */
+    val hubSilentReported: Boolean = false,
     /** Vom Nutzer benannte Orte (Arbeit, Oma, ...), an denen das Auto erkannt wird. */
     val places: List<NamedPlace> = emptyList(),
     /** Messstecker im Heimnetz (Shelly, Tasmota). */
@@ -181,6 +183,7 @@ class AppSettings(private val context: Context) {
             backupLastResult = p[BACKUP_LAST_RESULT] ?: "",
             alerts = p[ALERTS]?.let { runCatching { rulesJson.decodeFromString(AlertSettings.serializer(), it) }.getOrNull() } ?: AlertSettings(),
             alertState = p[ALERT_STATE]?.let { runCatching { rulesJson.decodeFromString(AlertState.serializer(), it) }.getOrNull() } ?: AlertState(),
+            hubSilentReported = p[HUB_SILENT_REPORTED] ?: false,
             places = p[PLACES]?.let { runCatching { rulesJson.decodeFromString(placesSerializer, it) }.getOrNull() } ?: emptyList(),
             plugs = p[PLUGS]?.let { runCatching { rulesJson.decodeFromString(plugsSerializer, it) }.getOrNull() } ?: emptyList(),
             // Vorgaben aus dem Build: URL und Schluessel immer, E-Mail und Passwort nur, wenn beim Bauen hinterlegt.
@@ -224,6 +227,8 @@ class AppSettings(private val context: Context) {
     suspend fun savePushRegistered(token: String) { context.dataStore.edit { it[PUSH_REGISTERED] = token } }
 
     suspend fun saveAlerts(a: AlertSettings) { context.dataStore.edit { it[ALERTS] = rulesJson.encodeToString(AlertSettings.serializer(), a) } }
+
+    suspend fun saveHubSilentReported(v: Boolean) { context.dataStore.edit { it[HUB_SILENT_REPORTED] = v } }
 
     suspend fun saveAlertState(s: AlertState) { context.dataStore.edit { it[ALERT_STATE] = rulesJson.encodeToString(AlertState.serializer(), s) } }
 
@@ -401,6 +406,7 @@ class AppSettings(private val context: Context) {
         val BACKUP_LAST_RESULT = stringPreferencesKey("backup_last_result")
         val ALERTS = stringPreferencesKey("alerts")
         val ALERT_STATE = stringPreferencesKey("alert_state")
+        val HUB_SILENT_REPORTED = booleanPreferencesKey("hub_silent_reported")
         val PLACES = stringPreferencesKey("places")
         val PLUGS = stringPreferencesKey("plugs")
         val CLOUD_URL = stringPreferencesKey("cloud_url")

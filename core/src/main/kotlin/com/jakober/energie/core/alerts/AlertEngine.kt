@@ -23,6 +23,9 @@ data class AlertSettings(
     val sourceDownMinutes: Int = 60,
     /** Naechtliche Sicherung fehlgeschlagen (wird direkt vom Worker gemeldet). */
     val backupFailed: Boolean = true,
+    /** Die Anzeige meldet, wenn die Zentrale nichts mehr liefert. */
+    val hubSilent: Boolean = true,
+    val hubSilentMinutes: Int = 30,
     /** Kuehlgeraete an Messsteckern: Dauerlauf, Stillstand, Mehrverbrauch. */
     val cooling: Boolean = true,
     val coolingStuckHours: Int = 3,
@@ -32,6 +35,7 @@ data class AlertSettings(
 enum class AlertKind {
     CAR_UNLOCKED_HOME, SURPLUS_UNUSED, AUTOMATION_ACTED, SOURCE_DOWN, SOURCE_BACK, BACKUP_FAILED, CHARGE_STARTED, CHARGE_STOPPED,
     COOLING_STUCK_ON, COOLING_SILENT, COOLING_BACK, COOLING_OVERLOAD, COOLING_TREND,
+    HUB_SILENT, HUB_BACK,
 }
 
 /** Ein Hinweis, wie er als Benachrichtigung erscheint. */

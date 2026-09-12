@@ -74,6 +74,24 @@ class GridMonthsTest {
     }
 
     @Test
+    fun `jahre fassen die monate zusammen`() {
+        val days = listOf(
+            day(LocalDate(2026, 8, 30), 90_000L, 4_000L, 0L, 1_000L),
+            day(LocalDate(2026, 9, 1), 100_000L, 5_000L, 0L, 2_000L),
+        )
+        val years = GridMonths.years(GridMonths.of(days, today = LocalDate(2026, 9, 1)))
+        assertEquals(1, years.size)
+        val y = years.single()
+        assertEquals(2026, y.year)
+        assertEquals(9_000.0, y.importWh, 1.0)
+        assertEquals(3_000.0, y.exportWh, 1.0)
+        assertEquals(2, y.months)
+        assertEquals(2, y.days)
+        assertFalse(y.complete)
+        assertEquals(9.0 * 0.28, y.costEur(0.28), 0.01)
+    }
+
+    @Test
     fun `letzter tag und tage je monat`() {
         assertEquals(LocalDate(2026, 12, 31), GridMonths.lastOfMonth(LocalDate(2026, 12, 1)))
         assertEquals(28, GridMonths.daysInMonth(LocalDate(2026, 2, 1)))

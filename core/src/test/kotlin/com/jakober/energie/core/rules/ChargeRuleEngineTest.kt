@@ -92,9 +92,17 @@ class ChargeRuleEngineTest {
             time = LocalTime(20, 55), soc = soc, grid = 2.0, carSoc = 77.0, charging = true,
             carPower = 2200.0, last = t0 - 2.minutes, battery = -2958.0,
         )
-        val deep = ChargeRuleEngine.decide(r, at(38.0))
+        // Zwei Minuten nach dem letzten Befehl: auch im Eilfall gilt der kurze Mindestabstand.
+        val tooSoon = ChargeRuleEngine.decide(r, at(38.0))
+        assertEquals(ChargeAction.NONE, tooSoon.action)
+        assertTrue(tooSoon.reason.contains("Wartezeit"), tooSoon.reason)
+        // Nach dem kurzen Abstand darf pausiert werden, ohne die vollen 15 Minuten abzuwarten.
+        val deep = ChargeRuleEngine.decide(r, input(
+            time = LocalTime(20, 55), soc = 38.0, grid = 2.0, carSoc = 77.0, charging = true,
+            carPower = 2200.0, last = t0 - 6.minutes, battery = -2958.0,
+        ))
         assertEquals(ChargeAction.PAUSE, deep.action)
-        assertTrue(deep.reason.contains("sofort"), deep.reason)
+        assertTrue(deep.reason.contains("deutlich unter der Grenze"), deep.reason)
         // Nur knapp darunter: die Wartezeit bleibt, damit die Automatik nicht flattert.
         val shallow = ChargeRuleEngine.decide(r, at(43.0))
         assertEquals(ChargeAction.NONE, shallow.action)

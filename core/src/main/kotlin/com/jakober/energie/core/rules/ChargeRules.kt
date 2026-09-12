@@ -72,6 +72,13 @@ object ChargeRuleEngine {
      */
     const val URGENT_MARGIN_PERCENT = 5
 
+    /**
+     * Auch im Eilfall bleibt ein Mindestabstand zwischen zwei Befehlen. Ohne ihn
+     * wuerde die Automatik im Minutentakt Befehle an Ford schicken, solange das
+     * Auto nicht reagiert, und dabei nichts gewinnen.
+     */
+    const val URGENT_GAP_MINUTES = 5
+
     fun decide(rules: ChargeRules, input: ChargeInput): ChargeDecision {
         if (!rules.enabled) return ChargeDecision(ChargeAction.NONE, "Automatik aus")
         if (input.carPluggedIn != true) return ChargeDecision(ChargeAction.NONE, "Auto nicht angeschlossen")
@@ -113,7 +120,8 @@ object ChargeRuleEngine {
                 val reason = "Speicher ${soc.toInt()} % < ${rules.batteryOffPercent} %, Ueberschuss ${available.toInt()} W" +
                     (if (discharge > 0) ", Speicher gibt ${discharge.toInt()} W ab" else "")
                 // Deutlich unter der Grenze: nicht auf die Wartezeit warten.
-                if (soc <= rules.batteryOffPercent - URGENT_MARGIN_PERCENT) ChargeDecision(ChargeAction.PAUSE, "$reason - sofort, deutlich unter der Grenze")
+                if (soc <= rules.batteryOffPercent - URGENT_MARGIN_PERCENT)
+                    gated(rules, input, ChargeAction.PAUSE, "$reason - deutlich unter der Grenze", URGENT_GAP_MINUTES)
                 else gated(rules, input, ChargeAction.PAUSE, reason)
             }
             charging -> ChargeDecision(ChargeAction.NONE, "Auto laedt, Speicher ${soc.toInt()} %")
@@ -121,10 +129,12 @@ object ChargeRuleEngine {
         }
     }
 
-    private fun gated(rules: ChargeRules, input: ChargeInput, action: ChargeAction, reason: String): ChargeDecision {
+    /** [gapMinutes] ueberschreibt die eingestellte Wartezeit, etwa im Eilfall. */
+    private fun gated(rules: ChargeRules, input: ChargeInput, action: ChargeAction, reason: String, gapMinutes: Int? = null): ChargeDecision {
+        val gap = gapMinutes ?: rules.minCommandGapMinutes
         val last = input.lastCommandAt
-        if (last != null && input.now - last < rules.minCommandGapMinutes.minutes) {
-            val wait = rules.minCommandGapMinutes - (input.now - last).inWholeMinutes
+        if (last != null && input.now - last < gap.minutes) {
+            val wait = gap - (input.now - last).inWholeMinutes
             return ChargeDecision(ChargeAction.NONE, "$reason - Wartezeit noch $wait min")
         }
         return ChargeDecision(action, reason)

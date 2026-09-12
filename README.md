@@ -62,9 +62,10 @@ pro Tag unter `files/verlauf/`. Alles Weitere rechnet sie daraus.
   auszuführen. Drei Minuten nach jedem Befehl prüft die Automatik den Fahrzeugstatus,
   hebt bei ausbleibender Wirkung die Wartezeit auf und versucht es erneut; nach dem
   dritten Fehlversuch steht im Protokoll, dass das Auto den Befehl ignoriert.
-- **Notaus der Ladeautomatik:** Fällt der Hausspeicher mehr als fünf Punkte unter die
-  Pausiergrenze, pausiert das Laden sofort statt die Wartezeit zwischen Befehlen
-  abzusitzen; im Grenzbereich bleibt die Wartezeit, damit nichts flattert.
+- **Eilfall der Ladeautomatik:** Fällt der Hausspeicher mehr als fünf Punkte unter die
+  Pausiergrenze, gilt statt der eingestellten Wartezeit ein kurzer Mindestabstand von
+  fünf Minuten; im Grenzbereich bleibt die volle Wartezeit, damit nichts flattert.
+  Reagiert das Auto dreimal nicht, setzt die Automatik 30 Minuten aus.
 - **Wächter der Zentrale:** Die Anzeige prüft alle 15 Minuten, wann die Zentrale
   zuletzt geschrieben hat, und meldet lokal, wenn sie länger schweigt (und wenn sie
   wieder da ist). Eine hängende Zentrale kann sich nicht selbst melden.

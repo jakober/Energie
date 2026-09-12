@@ -494,6 +494,9 @@ class EnergyRepository(
     /** Zuletzt gesendeter Ladebefehl mit Zeitpunkt und Zahl der Versuche, fuer die Erfolgskontrolle. */
     private var pendingCommand: Triple<ChargeAction, Instant, Int>? = null
 
+    /** Bis dahin schickt die Automatik nichts mehr, weil das Auto die Befehle ignoriert. */
+    private var giveUpUntil: Instant? = null
+
     /**
      * Prueft, ob der letzte Befehl gewirkt hat. Ford nimmt Befehle mit HTTP 201 an,
      * fuehrt sie aber nicht immer aus (schlafendes Auto, Ladeplan im Fahrzeug). Bleibt
@@ -515,13 +518,15 @@ class EnergyRepository(
         if (worked) return null
         val stamp = clockLabel(now)
         return if (tries < MAX_COMMAND_RETRY) {
-            // Wartezeit aufheben, damit der naechste Durchlauf es sofort erneut versucht.
-            settings.noteChargeCommand(0)
+            // Nicht die Wartezeit aufheben: sonst schickt die Automatik im Minutentakt Befehle.
             pendingCommand = Triple(action, now, tries + 1)
-            "$stamp $verb blieb wirkungslos, Versuch ${tries + 1} folgt"
+            "$stamp $verb blieb wirkungslos, Versuch ${tries + 2} folgt"
         } else {
-            "$stamp $verb blieb ${tries + 1} Mal wirkungslos. Ford nimmt den Befehl an, das Auto führt ihn nicht aus. " +
-                "Prüfe in FordPass den Ladeplan des Ladeorts und ob im Auto \"Jetzt laden\" aktiv ist."
+            // Aufgeben statt weiter zu senden - das Auto nimmt den Befehl nicht an.
+            giveUpUntil = now + GIVE_UP_PAUSE
+            "$stamp $verb blieb ${tries + 1} Mal wirkungslos, Automatik pausiert ${GIVE_UP_PAUSE.inWholeMinutes} min. " +
+                "Ford nimmt den Befehl an, das Auto führt ihn nicht aus. Prüfe in FordPass den Ladeplan des Ladeorts " +
+                "und ob im Auto \"Jetzt laden\" aktiv ist."
         }
     }
 
@@ -532,10 +537,19 @@ class EnergyRepository(
         val sample = live.sample
         val now = clock.now()
 
-        // Hat der letzte Befehl gewirkt? Sonst Wartezeit aufheben und erneut versuchen.
+        // Hat der letzte Befehl gewirkt? Sonst zaehlen und nach einigen Versuchen aufgeben.
         checkCommandEffect(live, now)?.let { note ->
             settings.appendChargeLog(note)
             _state.update { it.copy(automationStatus = note) }
+        }
+        // Das Auto ignoriert die Befehle: eine Weile nichts mehr senden.
+        giveUpUntil?.let { until ->
+            if (now < until) {
+                val line = "Automatik ausgesetzt, das Auto ignoriert die Befehle (noch ${(until - now).inWholeMinutes} min)"
+                _state.update { it.copy(automationStatus = line) }
+                return null
+            }
+            giveUpUntil = null
         }
 
         // Abgesteckt: Handschalter zuruecksetzen.
@@ -569,7 +583,11 @@ class EnergyRepository(
                 settings.noteChargeCommand(now.epochSeconds)
                 settings.appendChargeLog(line)
                 _state.update { it.copy(automationStatus = line) }
-                if (result.accepted) pendingCommand = Triple(decision.action, now, pendingCommand?.third ?: 0)
+                // Versuche derselben Richtung weiterzaehlen, damit die Kontrolle irgendwann aufgibt.
+                if (result.accepted) {
+                    val tries = pendingCommand?.takeIf { it.first == decision.action }?.third ?: 0
+                    pendingCommand = Triple(decision.action, now, tries)
+                }
                 // Den neuen Zustand bald nachlesen, nicht erst in 5 Minuten.
                 lastCarFetch = now - CAR_INTERVAL + 90.seconds
                 line
@@ -900,6 +918,8 @@ class EnergyRepository(
         val COMMAND_EFFECT_DELAY = 3.minutes
         /** So oft wird ein wirkungsloser Befehl wiederholt, bevor die App aufgibt und es meldet. */
         const val MAX_COMMAND_RETRY = 2
+        /** So lange sendet die Automatik nichts mehr, wenn das Auto die Befehle ignoriert. */
+        val GIVE_UP_PAUSE = 30.minutes
         val FORECAST_INTERVAL = 3.hours
         val SENEC_MIN_INTERVAL = 30.seconds
         val SENEC_BACKOFF = 5.minutes

@@ -491,12 +491,52 @@ class EnergyRepository(
      * Ladeautomatik: entscheidet aus Speicher, Netz und Autozustand, ob das Auto
      * pausieren oder weiterladen soll, und schickt den Befehl ueber FordPass.
      */
+    /** Zuletzt gesendeter Ladebefehl mit Zeitpunkt und Zahl der Versuche, fuer die Erfolgskontrolle. */
+    private var pendingCommand: Triple<ChargeAction, Instant, Int>? = null
+
+    /**
+     * Prueft, ob der letzte Befehl gewirkt hat. Ford nimmt Befehle mit HTTP 201 an,
+     * fuehrt sie aber nicht immer aus (schlafendes Auto, Ladeplan im Fahrzeug). Bleibt
+     * die Wirkung aus, wird die Wartezeit aufgehoben und es darf sofort erneut
+     * versucht werden - hoechstens [MAX_COMMAND_RETRY] Mal, damit es nicht endlos laeuft.
+     */
+    private suspend fun checkCommandEffect(live: LiveState, now: Instant): String? {
+        val (action, at, tries) = pendingCommand ?: return null
+        if (now - at < COMMAND_EFFECT_DELAY) return null
+        val charging = live.car?.isCharging
+        if (charging == null) return null
+        val worked = when (action) {
+            ChargeAction.PAUSE -> !charging
+            ChargeAction.RESUME -> charging
+            else -> true
+        }
+        val verb = if (action == ChargeAction.PAUSE) "Pause" else "Start"
+        pendingCommand = null
+        if (worked) return null
+        val stamp = clockLabel(now)
+        return if (tries < MAX_COMMAND_RETRY) {
+            // Wartezeit aufheben, damit der naechste Durchlauf es sofort erneut versucht.
+            settings.noteChargeCommand(0)
+            pendingCommand = Triple(action, now, tries + 1)
+            "$stamp $verb blieb wirkungslos, Versuch ${tries + 1} folgt"
+        } else {
+            "$stamp $verb blieb ${tries + 1} Mal wirkungslos. Ford nimmt den Befehl an, das Auto führt ihn nicht aus. " +
+                "Prüfe in FordPass den Ladeplan des Ladeorts und ob im Auto \"Jetzt laden\" aktiv ist."
+        }
+    }
+
     private suspend fun runAutomation(s0: Settings, live: LiveState): String? {
         val s = settings.current() // Regeln koennten sich seit Beginn des Refresh geaendert haben
         if (!s.fordConnected || !s.chargeRules.enabled) return null
         val car = live.car ?: return null
         val sample = live.sample
         val now = clock.now()
+
+        // Hat der letzte Befehl gewirkt? Sonst Wartezeit aufheben und erneut versuchen.
+        checkCommandEffect(live, now)?.let { note ->
+            settings.appendChargeLog(note)
+            _state.update { it.copy(automationStatus = note) }
+        }
 
         // Abgesteckt: Handschalter zuruecksetzen.
         if (car.isPluggedIn == false && s.chargeOverride) settings.saveChargeOverride(false)
@@ -529,6 +569,7 @@ class EnergyRepository(
                 settings.noteChargeCommand(now.epochSeconds)
                 settings.appendChargeLog(line)
                 _state.update { it.copy(automationStatus = line) }
+                if (result.accepted) pendingCommand = Triple(decision.action, now, pendingCommand?.third ?: 0)
                 // Den neuen Zustand bald nachlesen, nicht erst in 5 Minuten.
                 lastCarFetch = now - CAR_INTERVAL + 90.seconds
                 line
@@ -855,6 +896,10 @@ class EnergyRepository(
         /** Anzeige meldet, wenn die Zentrale so lange nichts geschrieben hat. */
         val HUB_SILENT = 30.minutes
         val CAR_INTERVAL = 5.minutes
+        /** So lange bekommt ein Ladebefehl Zeit, bis die Wirkung geprueft wird. */
+        val COMMAND_EFFECT_DELAY = 3.minutes
+        /** So oft wird ein wirkungsloser Befehl wiederholt, bevor die App aufgibt und es meldet. */
+        const val MAX_COMMAND_RETRY = 2
         val FORECAST_INTERVAL = 3.hours
         val SENEC_MIN_INTERVAL = 30.seconds
         val SENEC_BACKOFF = 5.minutes

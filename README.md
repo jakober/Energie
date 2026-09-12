@@ -58,6 +58,10 @@ pro Tag unter `files/verlauf/`. Alles Weitere rechnet sie daraus.
 - **Aus dem Netz gekauft (Startseite):** Streifen mit Bezug und Einspeisung je Monat,
   umschaltbar auf Jahre, mit Pfeilen durch die Vergangenheit blätterbar, Kosten je
   Eintrag und Saldo nach Vergütung.
+- **Erfolgskontrolle der Ladebefehle:** Ford nimmt Befehle an, ohne sie immer
+  auszuführen. Drei Minuten nach jedem Befehl prüft die Automatik den Fahrzeugstatus,
+  hebt bei ausbleibender Wirkung die Wartezeit auf und versucht es erneut; nach dem
+  dritten Fehlversuch steht im Protokoll, dass das Auto den Befehl ignoriert.
 - **Notaus der Ladeautomatik:** Fällt der Hausspeicher mehr als fünf Punkte unter die
   Pausiergrenze, pausiert das Laden sofort statt die Wartezeit zwischen Befehlen
   abzusitzen; im Grenzbereich bleibt die Wartezeit, damit nichts flattert.

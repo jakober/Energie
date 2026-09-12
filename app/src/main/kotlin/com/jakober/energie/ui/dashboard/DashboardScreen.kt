@@ -417,17 +417,36 @@ private fun CarCard(
         car.extra?.let { CarExtrasSection(it) }
         live.carError?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
         if (settings.fordConnected) {
+            // Warum das Auto gerade laedt oder nicht: der wichtigste Satz der Karte, deshalb
+            // gross und mit dem Handschalter als Warnung, denn der setzt die Automatik aus.
+            ValueRow(
+                "Ladeautomatik",
+                when {
+                    !settings.chargeRules.enabled -> "aus"
+                    settings.chargeOverride -> "ausgesetzt"
+                    else -> "an"
+                },
+                live.automationStatus ?: if (settings.chargeRules.enabled) "wartet auf erste Messung" else null,
+                color = when {
+                    !settings.chargeRules.enabled -> MaterialTheme.colorScheme.onSurfaceVariant
+                    settings.chargeOverride -> MaterialTheme.colorScheme.error
+                    else -> EnergyColors.battery
+                },
+                icon = Icons.Rounded.Bolt,
+                iconTint = if (settings.chargeOverride) MaterialTheme.colorScheme.error else EnergyColors.car,
+            )
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("Jetzt voll laden", style = MaterialTheme.typography.titleSmall)
-                    Text("Automatik aussetzen, bis das Auto abgesteckt wird", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        if (settings.chargeOverride) "Handschalter an: die Automatik pausiert nicht, bis du absteckst oder hier ausschaltest."
+                        else "Automatik aussetzen, bis das Auto abgesteckt wird",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (settings.chargeOverride) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
                 Switch(checked = settings.chargeOverride, onCheckedChange = onOverride)
             }
-            Text(
-                if (settings.chargeRules.enabled) "Automatik: ${live.automationStatus ?: "wartet auf erste Messung"}" else "Automatik aus",
-                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
     }
 }

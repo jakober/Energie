@@ -361,7 +361,12 @@ private fun CarCard(
                     )
                 }
                 car.chargeLimitPercent?.let { Text("Ladeziel ${Format.percentValue(it)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                Text("Stand ${Format.time(car.at)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                // Abgerufen ist nicht gleich gemessen: Ford liefert oft einen aelteren Ladestatus.
+                Text(
+                    "Abgerufen ${Format.time(car.at)}" +
+                        (car.chargeStatusAt?.let { " · Ladestatus von ${Format.time(it)}" } ?: ""),
+                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
         car.lockState?.let { lock ->

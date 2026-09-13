@@ -62,6 +62,10 @@ pro Tag unter `files/verlauf/`. Alles Weitere rechnet sie daraus.
   auszuführen. Drei Minuten nach jedem Befehl prüft die Automatik den Fahrzeugstatus,
   hebt bei ausbleibender Wirkung die Wartezeit auf und versucht es erneut; nach dem
   dritten Fehlversuch steht im Protokoll, dass das Auto den Befehl ignoriert.
+- **Verlässlicher Ladestatus:** Ob das Auto lädt, entscheidet die gemessene Leistung am
+  Lader (Spannung mal Strom), nicht der Statustext von Ford, der stundenalt sein kann.
+  Das Alter des Status steht in der Auto-Karte; ist er älter als 15 Minuten, weckt die
+  Automatik das Auto und wartet auf frische Daten, statt blind zu schalten.
 - **Eilfall der Ladeautomatik:** Fällt der Hausspeicher mehr als fünf Punkte unter die
   Pausiergrenze, gilt statt der eingestellten Wartezeit ein kurzer Mindestabstand von
   fünf Minuten; im Grenzbereich bleibt die volle Wartezeit, damit nichts flattert.

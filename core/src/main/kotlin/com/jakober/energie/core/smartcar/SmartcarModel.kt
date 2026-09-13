@@ -35,6 +35,8 @@ data class CarState(
     val lockState: String? = null,
     /** Weitere Werte (Reifendruck, Kilometerstand, ...), wenn die Quelle sie liefert. */
     val extra: com.jakober.energie.core.model.CarExtras? = null,
+    /** Wann die Quelle den Ladestatus zuletzt aktualisiert hat; kann aelter sein als [at]. */
+    val chargeStatusAt: Instant? = null,
     /** Rohantworten je Signalcode. */
     val raw: Map<String, String> = emptyMap(),
 )

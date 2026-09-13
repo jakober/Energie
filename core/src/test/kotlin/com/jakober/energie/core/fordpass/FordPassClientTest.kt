@@ -196,4 +196,23 @@ class FordPassClientTest {
         assertTrue(client.vehicles().isEmpty())
         assertEquals(1, refreshCalls)
     }
+
+    @Test
+    fun `gemessener ladestrom schlaegt den statustext`() {
+        // Ford meldet "STOPPED", am Lader liegen aber 230 V und 10 A an: das Auto laedt.
+        val fliesst = FordCarState(
+            at = Instant.parse("2026-09-13T11:28:00Z"), vin = "X", socPercent = 78.0, rangeKm = 306.0,
+            chargeStatus = "STOPPED", plugStatus = "CONNECTED", chargerVoltage = 230.0, chargerCurrent = 10.0, raw = "",
+        )
+        assertEquals(true, fliesst.isCharging)
+        // Kein Strom, Status sagt IN_PROGRESS: dann gilt der Text.
+        val gemeldet = fliesst.copy(chargeStatus = "IN_PROGRESS", chargerVoltage = 0.0, chargerCurrent = 0.0)
+        assertEquals(true, gemeldet.isCharging)
+        // Kein Strom, Status sagt PAUSED: pausiert.
+        val pausiert = fliesst.copy(chargeStatus = "PAUSED", chargerVoltage = 0.0, chargerCurrent = 0.0)
+        assertEquals(false, pausiert.isCharging)
+        // Unter der Schwelle zaehlt es nicht als Laden (Messrauschen).
+        val rauschen = fliesst.copy(chargeStatus = "PAUSED", chargerVoltage = 12.0, chargerCurrent = 1.0)
+        assertEquals(false, rauschen.isCharging)
+    }
 }

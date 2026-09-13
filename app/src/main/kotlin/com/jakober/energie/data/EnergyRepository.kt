@@ -569,6 +569,16 @@ class EnergyRepository(
             overrideFullCharge = s.chargeOverride && car.isPluggedIn != false,
             houseBatteryPowerW = sample?.batteryPowerW,
         )
+        // Alter Ladestatus: erst wecken und neu lesen, statt auf Verdacht zu schalten.
+        val statusAge = car.chargeStatusAt?.let { now - it }
+        if (statusAge != null && statusAge > STATUS_STALE_MAX) {
+            val line = "Ladestatus von Ford ist ${statusAge.inWholeMinutes} min alt, Auto wird geweckt"
+            _state.update { it.copy(automationStatus = line) }
+            withContext(Dispatchers.IO) { runCatching { fordpass(s).statusRefresh(s.fordVin) } }
+            forceCarOnNextRefresh()
+            return null
+        }
+
         val decision = ChargeRuleEngine.decide(s.chargeRules, input)
         val time = now.toLocalDateTime(TimeZone.currentSystemDefault()).time
         val stamp = "%02d:%02d".format(time.hour, time.minute)
@@ -703,6 +713,7 @@ class EnergyRepository(
         lockState = lockState,
         extra = extra,
         distanceHomeM = if (lat != null && lon != null && (s.homeLat != 0.0 || s.homeLon != 0.0)) distanceMeters(lat, lon, s.homeLat, s.homeLon) else null,
+        chargeStatusAt = chargeStatusAt,
         raw = mapOf("fordpass-telemetry" to raw),
         )
     }
@@ -935,6 +946,8 @@ class EnergyRepository(
         val GIVE_UP_PAUSE = 30.minutes
         /** So lange bekommt das Auto nach dem Weckruf Zeit, bevor der Befehl folgt. */
         val WAKE_DELAY = 20.seconds
+        /** Aelter darf der Ladestatus von Ford nicht sein, sonst wird erst geweckt. */
+        val STATUS_STALE_MAX = 15.minutes
         val FORECAST_INTERVAL = 3.hours
         val SENEC_MIN_INTERVAL = 30.seconds
         val SENEC_BACKOFF = 5.minutes

@@ -212,6 +212,9 @@ class FordPassClient(
         val metrics = (parse(text) as? JsonObject)?.get("metrics") as? JsonObject
         fun metricNumber(key: String) = (metrics?.get(key) as? JsonObject)?.get("value")?.let { (it as? JsonPrimitive)?.doubleOrNull }
         fun metricString(key: String) = (metrics?.get(key) as? JsonObject)?.get("value")?.let { (it as? JsonPrimitive)?.contentOrNull }
+        // Wann Ford den Wert zuletzt gesehen hat; ohne das wirkt ein stundenalter Status frisch.
+        fun metricAt(key: String) = ((metrics?.get(key) as? JsonObject)?.get("updateTime") as? JsonPrimitive)?.contentOrNull
+            ?.let { runCatching { Instant.parse(it) }.getOrNull() }
         // Position: metrics.position.value.location.{lat,lon}
         val location = ((metrics?.get("position") as? JsonObject)?.get("value") as? JsonObject)?.get("location") as? JsonObject
         val lat = (location?.get("lat") as? JsonPrimitive)?.doubleOrNull
@@ -227,6 +230,10 @@ class FordPassClient(
             plugStatus = metricString("xevPlugChargerStatus"),
             chargerVoltage = metricNumber("xevBatteryChargerVoltageOutput"),
             chargerCurrent = metricNumber("xevBatteryChargerCurrentOutput"),
+            chargeStatusAt = listOfNotNull(
+                metricAt("xevBatteryChargeDisplayStatus"), metricAt("xevPlugChargerStatus"),
+                metricAt("xevBatteryChargerCurrentOutput"),
+            ).maxOrNull(),
             latitude = lat,
             longitude = lon,
             lockState = lockState,

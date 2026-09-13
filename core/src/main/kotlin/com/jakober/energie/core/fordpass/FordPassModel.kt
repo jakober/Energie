@@ -39,15 +39,32 @@ data class FordCarState(
     val longitude: Double? = null,
     /** LOCKED, PARTLY_LOCKED, UNLOCKED oder null, wenn Ford nichts liefert. */
     val lockState: String? = null,
+    /** Wann Ford den Ladestatus zuletzt aktualisiert hat; kann Stunden alt sein. */
+    val chargeStatusAt: Instant? = null,
     /** Reifendruck, Kilometerstand, 12-V-Batterie, Tueren, Fenster ... */
     val extra: CarExtras? = null,
     val raw: String,
 ) {
-    val isCharging: Boolean? get() = chargeStatus?.let { it.uppercase() == "IN_PROGRESS" } ?: plugStatus?.let { it.uppercase().startsWith("CHARGING") }
+    /**
+     * Laedt das Auto? Der Statustext von Ford veraltet, Spannung und Strom am Lader
+     * sind dagegen Messwerte: fliesst Strom, laedt es - egal was der Text sagt. Erst
+     * ohne Messwert entscheidet der Text.
+     */
+    val isCharging: Boolean? get() = when {
+        (chargePowerW ?: 0.0) >= MIN_CHARGE_W -> true
+        chargeStatus != null -> chargeStatus.uppercase() == "IN_PROGRESS"
+        plugStatus != null -> plugStatus.uppercase().startsWith("CHARGING")
+        else -> null
+    }
     val isPluggedIn: Boolean? get() = plugStatus?.let { it.uppercase() != "DISCONNECTED" }
     val isPaused: Boolean get() = chargeStatus?.uppercase() == "PAUSED"
     /** Leistung an der Batterie in W, falls Ford Spannung und Strom liefert. */
     val chargePowerW: Double? get() = if (chargerVoltage != null && chargerCurrent != null && chargerVoltage > 0 && chargerCurrent > 0) chargerVoltage * chargerCurrent else null
+
+    companion object {
+        /** Ab dieser Leistung am Lader gilt das Auto sicher als ladend. */
+        const val MIN_CHARGE_W = 300.0
+    }
 }
 
 /** Ein Ladeort mit Ladeprofil, wie Ford ihn unter "preferred charge times" fuehrt. */

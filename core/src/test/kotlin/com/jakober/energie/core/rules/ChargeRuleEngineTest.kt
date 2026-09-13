@@ -108,4 +108,19 @@ class ChargeRuleEngineTest {
         assertEquals(ChargeAction.NONE, shallow.action)
         assertTrue(shallow.reason.contains("Wartezeit"), shallow.reason)
     }
+
+    @Test
+    fun `handschalter haelt den mindestabstand ein`() {
+        val r = ChargeRules(enabled = true, minCommandGapMinutes = 15)
+        // Erster Druck: sofort starten.
+        val first = ChargeRuleEngine.decide(r, input(charging = false, override = true, last = null))
+        assertEquals(ChargeAction.RESUME, first.action)
+        // Eine Minute spaeter, Auto laedt noch nicht: nicht erneut senden.
+        val again = ChargeRuleEngine.decide(r, input(charging = false, override = true, last = t0 - 1.minutes))
+        assertEquals(ChargeAction.NONE, again.action)
+        assertTrue(again.reason.contains("Wartezeit"), again.reason)
+        // Nach dem kurzen Abstand darf es erneut versucht werden, ohne die vollen 15 Minuten.
+        val retry = ChargeRuleEngine.decide(r, input(charging = false, override = true, last = t0 - 6.minutes))
+        assertEquals(ChargeAction.RESUME, retry.action)
+    }
 }

@@ -85,7 +85,9 @@ object ChargeRuleEngine {
         val charging = input.carCharging ?: return ChargeDecision(ChargeAction.NONE, "Ladestatus unbekannt")
 
         if (input.overrideFullCharge) {
-            return if (!charging) ChargeDecision(ChargeAction.RESUME, "Handschalter: jetzt voll laden")
+            // Auch der Handschalter braucht einen Mindestabstand, sonst schickt die
+            // Automatik im Minutentakt Startbefehle, solange das Auto nicht anspringt.
+            return if (!charging) gated(rules, input, ChargeAction.RESUME, "Handschalter: jetzt voll laden", URGENT_GAP_MINUTES)
             else ChargeDecision(ChargeAction.NONE, "Handschalter aktiv, Auto laedt")
         }
 

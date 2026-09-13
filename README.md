@@ -67,7 +67,8 @@ pro Tag unter `files/verlauf/`. Alles Weitere rechnet sie daraus.
   fünf Minuten; im Grenzbereich bleibt die volle Wartezeit, damit nichts flattert.
   Reagiert das Auto dreimal nicht, setzt die Automatik 30 Minuten aus. Vor jedem
   Wiederholungsversuch weckt sie das Fahrzeug, weil ein schlafendes Auto Befehle
-  quittiert, aber erst später ausführt.
+  quittiert, aber erst später ausführt. Beim Handschalter weckt sie schon beim ersten
+  Versuch. Auch der Handschalter hält den Mindestabstand von fünf Minuten ein.
 - **Wächter der Zentrale:** Die Anzeige prüft alle 15 Minuten, wann die Zentrale
   zuletzt geschrieben hat, und meldet lokal, wenn sie länger schweigt (und wenn sie
   wieder da ist). Eine hängende Zentrale kann sich nicht selbst melden.

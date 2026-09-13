@@ -579,8 +579,11 @@ class EnergyRepository(
                 // Beim Wiederholen zuerst wecken: ein schlafendes Auto quittiert Befehle,
                 // fuehrt sie aber erst aus, wenn es wieder online ist. Beim ersten Versuch
                 // sparen wir den Weckruf, er kostet Zeit und Fahrzeugstrom.
+                // Beim Handschalter weckt die App gleich beim ersten Mal: der Nutzer hat eben
+                // gedrueckt und erwartet, dass etwas passiert.
                 val retry = (pendingCommand?.takeIf { it.first == decision.action }?.third ?: 0) > 0
-                val woken = if (retry) {
+                val wakeNow = retry || (s.chargeOverride && decision.action == ChargeAction.RESUME)
+                val woken = if (wakeNow) {
                     withContext(Dispatchers.IO) { runCatching { fordpass(s).statusRefresh(s.fordVin) }.getOrNull() }
                         ?.also { delay(WAKE_DELAY) }
                 } else null

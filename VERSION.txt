@@ -1,0 +1,4 @@
+Commit:  d3f6ba5fb8f18f72455226dc856ed96ba6440950
+Lauf:    87
+Zeit:    2026-09-13 09:48 UTC
+Ladestatus aus der gemessenen Leistung statt aus dem Statustext

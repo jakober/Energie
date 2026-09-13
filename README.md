@@ -69,9 +69,15 @@ pro Tag unter `files/verlauf/`. Alles Weitere rechnet sie daraus.
 - **Eilfall der Ladeautomatik:** Fällt der Hausspeicher mehr als fünf Punkte unter die
   Pausiergrenze, gilt statt der eingestellten Wartezeit ein kurzer Mindestabstand von
   fünf Minuten; im Grenzbereich bleibt die volle Wartezeit, damit nichts flattert.
-  Reagiert das Auto dreimal nicht, setzt die Automatik 30 Minuten aus. Vor jedem
-  Wiederholungsversuch weckt sie das Fahrzeug, weil ein schlafendes Auto Befehle
-  quittiert, aber erst später ausführt. Beim Handschalter weckt sie schon beim ersten
+  Reagiert das Auto dreimal nicht, setzt die Automatik 30 Minuten aus. Ob ein Befehl
+  gewirkt hat, beurteilt sie nur mit Ford-Daten, die jünger sind als der Befehl; sonst
+  weckt sie das Auto und liest nach (nach zehn Minuten ohne frische Daten gilt der
+  Befehl als wirkungslos). Eine fällige Wiederholung geht sofort raus, ohne die
+  normale Wartezeit; sie ist über den Drei-Minuten-Takt der Kontrolle und die
+  Zahl der Versuche begrenzt. Vor jedem Wiederholungsversuch weckt sie das Fahrzeug,
+  weil ein schlafendes Auto Befehle quittiert, aber erst später ausführt. Das
+  Protokoll nennt bei einem wirkungslosen Befehl das Alter des Ladestatus und die
+  Leistung am Lader. Beim Handschalter weckt sie schon beim ersten
   Versuch. Auch der Handschalter hält den Mindestabstand von fünf Minuten ein.
 - **Wächter der Zentrale:** Die Anzeige prüft alle 15 Minuten, wann die Zentrale
   zuletzt geschrieben hat, und meldet lokal, wenn sie länger schweigt (und wenn sie

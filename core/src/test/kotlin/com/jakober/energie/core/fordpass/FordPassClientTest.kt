@@ -9,6 +9,9 @@ import io.ktor.http.content.TextContent
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlin.test.assertNull
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -214,5 +217,17 @@ class FordPassClientTest {
         // Unter der Schwelle zaehlt es nicht als Laden (Messrauschen).
         val rauschen = fliesst.copy(chargeStatus = "PAUSED", chargerVoltage = 12.0, chargerCurrent = 1.0)
         assertEquals(false, rauschen.isCharging)
+    }
+
+    @Test
+    fun `nur UNLOCKED zaehlt als offen, Fehlerwerte werden ignoriert`() {
+        val client = FordPassClient(HttpClient(MockEngine { respond("") }), null)
+        fun doors(json: String) = Json.parseToJsonElement(json) as JsonArray
+        assertEquals("UNLOCKED", client.lockStateOf(doors("""[{"value":"UNLOCKED","vehicleDoor":"ALL_DOORS"}]""")))
+        assertEquals("LOCKED", client.lockStateOf(doors("""[{"value":"LOCKED","vehicleDoor":"FRONT_LEFT"},{"value":"UNKNOWN","vehicleDoor":"TAILGATE"}]""")))
+        assertEquals("PARTLY_LOCKED", client.lockStateOf(doors("""[{"value":"LOCKED","vehicleDoor":"FRONT_LEFT"},{"value":"UNLOCKED","vehicleDoor":"TAILGATE"}]""")))
+        // ERROR, NOT_AVAILABLE und Co. sind kein offenes Auto.
+        assertNull(client.lockStateOf(doors("""[{"value":"ERROR","vehicleDoor":"ALL_DOORS"},{"value":"NOT_AVAILABLE","vehicleDoor":"FRONT_LEFT"}]""")))
+        assertNull(client.lockStateOf(doors("[]")))
     }
 }

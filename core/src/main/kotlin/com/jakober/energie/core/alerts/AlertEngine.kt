@@ -53,6 +53,8 @@ data class AlertState(
     /** Seit wann das Auto zu Hause unverschlossen steht (Unix-Sekunden), null = nicht. */
     val unlockedSince: Long? = null,
     val unlockedReported: Boolean = false,
+    /** Seit wann das Auto zu Hause steht (Unix-Sekunden), null = unterwegs oder unbekannt. */
+    val homeSince: Long? = null,
     /** Letzter Ueberschuss-Hinweis (Unix-Sekunden). */
     val lastSurplusAt: Long = 0,
     val senecDownReported: Boolean = false,
@@ -106,6 +108,12 @@ data class AlertInput(
     val coolingPlugs: List<CoolingLive> = emptyList(),
     /** Auffaellige Kuehlgeraete laut Tagesauswertung. */
     val coolingWarnings: List<CoolingWarning> = emptyList(),
+    /**
+     * Wann der Hersteller die Verriegelung zuletzt gemeldet hat. Ist die Meldung aelter als
+     * die Ankunft zu Hause, sagt sie nichts ueber den jetzigen Zustand; null = kein Zeitstempel,
+     * der Wert gilt dann als aktuell.
+     */
+    val carLockUpdatedAt: Instant? = null,
 )
 
 data class AlertResult(val alerts: List<Alert>, val state: AlertState)
@@ -134,7 +142,18 @@ object AlertEngine {
 
         // --- Auto zu Hause nicht abgeschlossen ---
         val atHome = input.carDistanceHomeM?.let { it <= HOME_RADIUS_M }
-        val unlocked = when (input.carLockState) { "UNLOCKED", "PARTLY_LOCKED" -> true; "LOCKED" -> false; else -> null }
+        s = when (atHome) {
+            true -> if (s.homeSince == null) s.copy(homeSince = nowSec) else s
+            false -> s.copy(homeSince = null)
+            null -> s
+        }
+        // Eine Verriegelungsmeldung von vor der Ankunft beschreibt die Fahrt, nicht das Parken.
+        val lockFresh = input.carLockUpdatedAt?.let { at -> s.homeSince?.let { at.epochSeconds >= it } ?: true } ?: true
+        val unlocked = when (input.carLockState) {
+            "UNLOCKED", "PARTLY_LOCKED" -> if (lockFresh) true else null
+            "LOCKED" -> false
+            else -> null
+        }
         when {
             atHome == true && unlocked == true -> {
                 val since = s.unlockedSince ?: nowSec

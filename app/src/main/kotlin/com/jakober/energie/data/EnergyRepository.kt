@@ -462,6 +462,7 @@ class EnergyRepository(
             carPluggedIn = car?.isPluggedIn,
             carCharging = car?.isCharging,
             carLockState = car?.lockState,
+            carLockUpdatedAt = car?.extra?.lockUpdatedAt,
             carDistanceHomeM = car?.distanceHomeM,
             chargeOverride = s.chargeOverride,
             senecConfigured = s.senecConfigured,

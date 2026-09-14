@@ -73,7 +73,11 @@ import com.jakober.energie.ui.charts.RingGauge
 import com.jakober.energie.ui.theme.EnergyColors
 import kotlinx.coroutines.delay
 import kotlinx.datetime.Clock
+import kotlin.time.Duration.Companion.hours
 import kotlin.math.abs
+
+/** Aelter als das darf die Verriegelungsmeldung nicht sein, sonst gilt sie als veraltet statt als "offen". */
+private val LockStaleAfter = 24.hours
 
 @Composable
 fun DashboardScreen(vm: EnergieViewModel, onOpenSettings: () -> Unit, contentPadding: PaddingValues) {
@@ -372,13 +376,25 @@ private fun CarCard(
         car.lockState?.let { lock ->
             val locked = lock == "LOCKED"
             val lockAt = car.extra?.lockUpdatedAt
+            // Meldet das Auto die Verriegelung tagelang nicht neu, ist "offen" kein Alarm, sondern ein alter Stand.
+            val stale = lockAt != null && car.at - lockAt > LockStaleAfter
+            val alarm = !locked && !stale
             ValueRow(
                 "Verriegelung",
-                when (lock) { "LOCKED" -> "abgeschlossen"; "PARTLY_LOCKED" -> "teilweise offen"; else -> "NICHT abgeschlossen" },
-                if (lockAt != null) "von Ford gemeldet ${Format.dateTime(lockAt)}" else "Stand ${Format.time(car.at)}",
-                color = if (locked) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error,
+                when {
+                    stale && !locked -> "keine aktuelle Meldung"
+                    lock == "LOCKED" -> "abgeschlossen"
+                    lock == "PARTLY_LOCKED" -> "teilweise offen"
+                    else -> "NICHT abgeschlossen"
+                },
+                when {
+                    stale -> "Ford meldet die Verriegelung seit ${Format.dateTime(lockAt!!)} nicht neu"
+                    lockAt != null -> "von Ford gemeldet ${Format.dateTime(lockAt)}"
+                    else -> "Stand ${Format.time(car.at)}"
+                },
+                color = if (alarm) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
                 icon = if (locked) Icons.Rounded.Lock else Icons.Rounded.LockOpen,
-                iconTint = if (locked) EnergyColors.battery else MaterialTheme.colorScheme.error,
+                iconTint = when { locked -> EnergyColors.battery; alarm -> MaterialTheme.colorScheme.error; else -> MaterialTheme.colorScheme.onSurfaceVariant },
             )
             if (settings.fordConnected) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -308,18 +308,20 @@ class FordPassClient(
 
     /**
      * Verriegelung aus `doorLockStatus`: Ein Eintrag ALL_DOORS = LOCKED reicht;
-     * sonst zaehlen, wie viele Tueren verriegelt sind. UNKNOWN wird ignoriert.
+     * sonst zaehlen, wie viele Tueren verriegelt sind. Nur LOCKED, DOUBLE_LOCKED und
+     * UNLOCKED zaehlen; alles andere (UNKNOWN, ERROR, NOT_AVAILABLE ...) wird ignoriert,
+     * sonst gaelte ein Fehlerwert als offen.
      */
-    private fun lockStateOf(doors: JsonArray?): String? {
+    internal fun lockStateOf(doors: JsonArray?): String? {
         if (doors == null || doors.isEmpty()) return null
         var required = 0
         var locked = 0
         for (d in doors.filterIsInstance<JsonObject>()) {
             val value = (d["value"] as? JsonPrimitive)?.contentOrNull?.uppercase() ?: continue
             val door = (d["vehicleDoor"] as? JsonPrimitive)?.contentOrNull?.uppercase()
-            if (value == "UNKNOWN") continue
+            if (value != "LOCKED" && value != "DOUBLE_LOCKED" && value != "UNLOCKED") continue
             required++
-            if (value == "LOCKED" || value == "DOUBLE_LOCKED") {
+            if (value != "UNLOCKED") {
                 if (door == "ALL_DOORS") return "LOCKED"
                 locked++
             }

@@ -34,8 +34,11 @@ pro Tag unter `files/verlauf/`. Alles Weitere rechnet sie daraus.
 - **Ladeautomatik:** Das Auto lädt nur, wenn der Hausspeicher voll genug ist
   oder PV-Überschuss da ist (Schwellen mit Hysterese, Reserve, optionale
   Nachtsperre, Handschalter "jetzt voll laden"). Befehle gehen über FordPass.
-- **Benachrichtigungen:** Auto steht zu Hause und ist nicht abgeschlossen;
-  Speicher voll und Einspeisung hoch, aber das Auto lädt nicht (mit Knopf
+- **Benachrichtigungen:** Auto steht zu Hause und ist nicht abgeschlossen
+  (zählt nur mit einer Verriegelungsmeldung von Ford, die nach der Ankunft
+  zu Hause liegt; nur "UNLOCKED" gilt als offen, Fehlerwerte werden ignoriert;
+  die Auto-Karte zeigt eine tagealte Meldung als "keine aktuelle Meldung"
+  statt rot als offen); Speicher voll und Einspeisung hoch, aber das Auto lädt nicht (mit Knopf
   "Jetzt laden"); Ladestart und Ladeende des Autos mit Akkustand; Rückmeldung
   der Automatik; Quelle ausgefallen; Sicherung fehlgeschlagen.
 - **Zentrale und Anzeige:** Ein Zweithandy zu Hause misst als Zentrale jede

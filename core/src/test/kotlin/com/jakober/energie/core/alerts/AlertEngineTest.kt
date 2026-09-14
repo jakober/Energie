@@ -5,6 +5,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 
 class AlertEngineTest {
@@ -18,13 +19,31 @@ class AlertEngineTest {
         lock: String? = "LOCKED", distance: Double? = 20.0,
         override: Boolean = false,
         senecOk: Instant? = now, fritzOk: Instant? = now,
-        line: String? = null, carSoc: Double? = null,
+        line: String? = null, carSoc: Double? = null, lockAt: Instant? = null,
     ) = AlertInput(
         now = now, batterySocPercent = soc, gridPowerW = grid, carPluggedIn = plugged, carCharging = charging,
         carLockState = lock, carDistanceHomeM = distance, chargeOverride = override,
         senecConfigured = true, fritzConfigured = true, lastSenecOkAt = senecOk, lastFritzOkAt = fritzOk, automationLine = line,
-        carSocPercent = carSoc,
+        carSocPercent = carSoc, carLockUpdatedAt = lockAt,
     )
+
+    @Test
+    fun `alte Verriegelungsmeldung von vor der Ankunft zaehlt nicht als offen`() {
+        // Unterwegs, dann zu Hause: Ford meldet "offen" mit einem Zeitstempel von vor der Ankunft.
+        var r = AlertEngine.evaluate(input(lock = "UNLOCKED", distance = 5000.0, lockAt = t0 - 3.hours), AlertState(), settings)
+        assertNull(r.state.homeSince)
+        val arrived = t0 + 10.minutes
+        r = AlertEngine.evaluate(input(now = arrived, lock = "UNLOCKED", distance = 20.0, lockAt = t0 - 3.hours), r.state, settings)
+        assertEquals(arrived.epochSeconds, r.state.homeSince)
+        assertNull(r.state.unlockedSince, "Meldung von vor der Ankunft sagt nichts ueber das Parken")
+        r = AlertEngine.evaluate(input(now = arrived + 30.minutes, lock = "UNLOCKED", distance = 20.0, lockAt = t0 - 3.hours), r.state, settings)
+        assertTrue(r.alerts.isEmpty())
+        // Frische Meldung nach der Ankunft: jetzt zaehlt es.
+        r = AlertEngine.evaluate(input(now = arrived + 31.minutes, lock = "UNLOCKED", distance = 20.0, lockAt = arrived + 1.minutes), r.state, settings)
+        assertEquals((arrived + 31.minutes).epochSeconds, r.state.unlockedSince)
+        r = AlertEngine.evaluate(input(now = arrived + 42.minutes, lock = "UNLOCKED", distance = 20.0, lockAt = arrived + 1.minutes), r.state, settings)
+        assertEquals(listOf(AlertKind.CAR_UNLOCKED_HOME), r.alerts.map { it.kind })
+    }
 
     @Test
     fun `ladestart und ladeende melden nur den Wechsel`() {
@@ -88,7 +107,7 @@ class AlertEngineTest {
     fun `unbekannter Schliesszustand aendert nichts`() {
         val state = AlertState(unlockedSince = t0.epochSeconds, unlockedReported = true, lastCharging = false)
         val r = AlertEngine.evaluate(input(now = t0 + 60.minutes, lock = null), state, settings)
-        assertEquals(state, r.state)
+        assertEquals(state.copy(homeSince = (t0 + 60.minutes).epochSeconds), r.state)
         assertTrue(r.alerts.isEmpty())
     }
 

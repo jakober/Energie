@@ -1,0 +1,4 @@
+Commit:  cd358647bdda67bd8daf8f4ba524b8300db299bf
+Lauf:    89
+Zeit:    2026-09-14 15:30 UTC
+Hinweis "Auto nicht abgeschlossen" nur mit frischer Verriegelungsmeldung

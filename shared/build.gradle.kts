@@ -78,3 +78,8 @@ if (!coreOnly) {
         }
     }
 }
+
+// Es gibt keine Compose-Ressourcen (Bilder, Strings) in diesem Modul. Der Abgleich der
+// Ressourcen in das iOS-Bundle braucht Xcode-Umgebungswerte, die nicht in jedem Aufruf
+// gesetzt sind, und bricht dann ab - also aus.
+tasks.matching { it.name == "syncComposeResourcesForIos" }.configureEach { enabled = false }

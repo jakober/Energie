@@ -41,6 +41,11 @@ pro Tag unter `files/verlauf/`. Alles Weitere rechnet sie daraus.
   statt rot als offen); Speicher voll und Einspeisung hoch, aber das Auto lädt nicht (mit Knopf
   "Jetzt laden"); Ladestart und Ladeende des Autos mit Akkustand; Rückmeldung
   der Automatik; Quelle ausgefallen; Sicherung fehlgeschlagen.
+- **Web-Anzeige (`web/`):** Dieselben Daten im Browser, für iPhone, Android und
+  PC. Statische Seite ohne Build, auf einen eigenen Webserver zu legen; auf dem
+  iPhone als Web-App auf den Home-Bildschirm. Lesend bis auf zwei Dinge:
+  „Jetzt voll laden" und die Laderegeln, beides als Auftrag an die Zentrale.
+  Die Zentrale meldet dafür den Handschalter im Status mit. Siehe `web/README.md`.
 - **Zentrale und Anzeige:** Ein Zweithandy zu Hause misst als Zentrale jede
   Minute (Vordergrund-Dienst) und schreibt Messpunkte, Autozustand und
   Hinweise nach Supabase; das Handy unterwegs holt alles von dort und schickt

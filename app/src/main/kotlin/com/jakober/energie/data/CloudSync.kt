@@ -122,6 +122,8 @@ class CloudSync(
             put("plugErrors", buildJsonObject { live.plugErrors.forEach { (k, v) -> put(k, v) } })
             live.pvPeakEstimateKw?.let { put("pvPeakEstimateKw", it) }
             live.lastUpdate?.let { put("lastUpdate", it.toString()) }
+            // Fuer die Web-Anzeige, die keine eigene Kopie der Einstellungen hat.
+            put("chargeOverride", s.chargeOverride)
         }
         c.putStatus(sess, obj)
     }

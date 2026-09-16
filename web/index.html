@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Energie</title>
+  <meta name="description" content="Anzeige für Hausspeicher, Photovoltaik und Auto">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Energie">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="icon" type="image/png" href="icon-180.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Anmeldung -->
+  <section id="login" class="login" hidden>
+    <div class="login-box">
+      <div class="brand"><img src="icon-180.png" alt="" width="48" height="48"><h1>Energie</h1></div>
+      <p class="muted">Anmeldung mit dem Konto der Zentrale.</p>
+      <form id="login-form">
+        <label>E-Mail<input type="email" id="login-email" autocomplete="username" required></label>
+        <label>Passwort<input type="password" id="login-password" autocomplete="current-password" required></label>
+        <button type="submit" class="primary" id="login-button">Anmelden</button>
+        <p id="login-error" class="error" hidden></p>
+      </form>
+    </div>
+  </section>
+
+  <!-- Anzeige -->
+  <main id="app" hidden>
+    <header class="top">
+      <div>
+        <div class="stamp" id="stamp">–</div>
+        <div class="muted small" id="hub-line">Zentrale –</div>
+      </div>
+      <button class="icon" id="refresh" title="Jetzt abgleichen" aria-label="Jetzt abgleichen">⟳</button>
+    </header>
+    <div id="banner" class="banner" hidden></div>
+
+    <!-- Übersicht -->
+    <section id="tab-overview" class="tab">
+      <article class="card">
+        <svg id="flow" viewBox="0 0 360 266" role="img" aria-label="Energiefluss"></svg>
+        <div class="flow-legend" id="flow-legend"></div>
+      </article>
+
+      <article class="card" id="car-card">
+        <h2>Auto</h2>
+        <div id="car-body"></div>
+        <div class="row-buttons">
+          <button class="primary" id="override-button">Jetzt voll laden</button>
+        </div>
+        <p class="muted small" id="override-hint"></p>
+        <p class="muted small" id="automation-line"></p>
+      </article>
+
+      <article class="card" id="today-card">
+        <h2>Heute</h2>
+        <div id="today-body" class="kv"></div>
+      </article>
+
+      <article class="card" id="alerts-card">
+        <h2>Hinweise</h2>
+        <ul id="alerts" class="list"></ul>
+      </article>
+    </section>
+
+    <!-- Statistik -->
+    <section id="tab-stats" class="tab" hidden>
+      <article class="card">
+        <div class="daynav">
+          <button class="icon" id="day-prev" aria-label="Vortag">‹</button>
+          <div id="day-label" class="daylabel">Heute</div>
+          <button class="icon" id="day-next" aria-label="Folgetag">›</button>
+        </div>
+        <svg id="chart" viewBox="0 0 360 180" role="img" aria-label="Verlauf des Tages"></svg>
+        <div class="flow-legend">
+          <span><i style="background:var(--sun)"></i>PV</span>
+          <span><i style="background:var(--house)"></i>Verbrauch</span>
+          <span><i style="background:var(--car)"></i>Auto</span>
+          <span><i style="background:var(--battery)"></i>Speicher %</span>
+        </div>
+      </article>
+      <article class="card">
+        <h2>Bilanz</h2>
+        <div id="stats-body" class="kv"></div>
+      </article>
+      <article class="card" id="plugs-card" hidden>
+        <h2>Verbraucher</h2>
+        <div id="plugs-body" class="kv"></div>
+      </article>
+    </section>
+
+    <!-- Automatik -->
+    <section id="tab-auto" class="tab" hidden>
+      <article class="card">
+        <h2>Ladeautomatik</h2>
+        <p id="auto-status" class="status"></p>
+        <form id="rules-form" class="rules">
+          <label class="check"><input type="checkbox" id="r-enabled"> Automatik eingeschaltet</label>
+          <label>Laden erlaubt ab Speicherstand
+            <div class="range"><input type="range" id="r-on" min="0" max="100" step="5"><output id="r-on-out"></output></div>
+          </label>
+          <label>Laden pausieren unter Speicherstand
+            <div class="range"><input type="range" id="r-off" min="0" max="100" step="5"><output id="r-off-out"></output></div>
+          </label>
+          <label>Laden auch bei Überschuss ab
+            <div class="range"><input type="range" id="r-surplus" min="0" max="8000" step="250"><output id="r-surplus-out"></output></div>
+          </label>
+          <label>Autoreserve: darunter immer laden
+            <div class="range"><input type="range" id="r-reserve" min="0" max="100" step="5"><output id="r-reserve-out"></output></div>
+          </label>
+          <label>Mindestabstand zwischen Befehlen
+            <div class="range"><input type="range" id="r-gap" min="1" max="60" step="1"><output id="r-gap-out"></output></div>
+          </label>
+          <p class="muted small">Nachtsperre, optional: In dieser Zeit lädt das Auto nicht aus dem Hausspeicher, außer es liegt unter der Reserve. Gleiche Zeiten = aus.</p>
+          <div class="two">
+            <label>Von<input type="time" id="r-night-start"></label>
+            <label>Bis<input type="time" id="r-night-end"></label>
+          </div>
+          <p id="rules-warning" class="error small" hidden>Die Pausier-Schwelle muss unter der Lade-Schwelle liegen. Wird beim Speichern angepasst.</p>
+          <button type="submit" class="primary" id="rules-save" disabled>Automatik speichern</button>
+          <p id="rules-message" class="muted small"></p>
+        </form>
+      </article>
+      <article class="card">
+        <h2>Aufträge an die Zentrale</h2>
+        <ul id="commands" class="list small"></ul>
+      </article>
+      <article class="card">
+        <h2>Protokoll</h2>
+        <pre id="charge-log" class="log"></pre>
+      </article>
+      <article class="card">
+        <button class="ghost" id="logout">Abmelden</button>
+        <p class="muted small">Web-Anzeige. Alle Werte kommen von der Zentrale über die Datenbank; Änderungen gehen als Auftrag an die Zentrale und greifen mit ihrem nächsten Lauf.</p>
+      </article>
+    </section>
+
+    <nav class="tabs">
+      <button data-tab="overview" class="active">Übersicht</button>
+      <button data-tab="stats">Statistik</button>
+      <button data-tab="auto">Automatik</button>
+    </nav>
+  </main>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

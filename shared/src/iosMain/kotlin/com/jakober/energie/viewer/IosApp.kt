@@ -71,20 +71,18 @@ fun MainViewController(): UIViewController {
 fun onAppActive() {
     store.start()
     if (store.state.value.loggedIn) askForPush()
+    store.syncPushToken()
 }
 
 fun onAppBackground() { store.stop() }
 
 /**
- * Meldet das Geraet bei Apple an und fragt nach der Erlaubnis fuer Hinweise. Das Token kommt
- * ueber den App-Delegaten zurueck; iOS fragt den Nutzer nur beim ersten Mal, spaeter
- * antwortet es sofort mit der frueheren Entscheidung.
+ * Fragt nach der Erlaubnis fuer Hinweise. iOS fragt den Nutzer nur beim ersten Mal, spaeter
+ * antwortet es sofort mit der frueheren Entscheidung. Die Anmeldung bei Apple selbst macht
+ * der App-Delegat in Swift, denn sie steckt in einer Objective-C-Kategorie, die Kotlin hier
+ * nicht sieht.
  */
 fun askForPush() {
-    // Die Anmeldung bei Apple geht unabhaengig von der Antwort des Nutzers und liefert das
-    // Token; die Erlaubnis entscheidet nur, ob die Meldung auch angezeigt wird. Beides laeuft
-    // hier auf dem Hauptthread, von dem die App uns ruft.
-    UIApplication.sharedApplication.registerForRemoteNotifications()
     val options = UNAuthorizationOptionAlert or UNAuthorizationOptionSound or UNAuthorizationOptionBadge
     UNUserNotificationCenter.currentNotificationCenter().requestAuthorizationWithOptions(options) { _, _ -> }
 }

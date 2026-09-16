@@ -11,6 +11,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        // Die Anmeldung bei Apple liefert das Geraetetoken auch ohne Erlaubnis des Nutzers;
+        // die Erlaubnis entscheidet nur, ob die Meldung angezeigt wird. Danach gefragt wird
+        // erst nach dem Anmelden, aus dem geteilten Modul heraus.
+        application.registerForRemoteNotifications()
         return true
     }
 

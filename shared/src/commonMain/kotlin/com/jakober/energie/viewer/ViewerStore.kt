@@ -139,6 +139,7 @@ class ViewerStore(
                 kv.put(KEY_EMAIL, email.trim())
                 _state.update { it.copy(loggedIn = true, email = email.trim(), settings = it.settings.copy(cloudEmail = email.trim()), busy = false) }
                 start()
+                syncPushToken()
             } catch (e: Exception) {
                 _state.update { it.copy(busy = false, loginError = e.message ?: "Anmeldung fehlgeschlagen") }
             }
@@ -149,23 +150,31 @@ class ViewerStore(
         stop()
         session = null
         kv.put(KEY_SESSION, null)
-        kv.put(KEY_PUSH_TOKEN, null)
+        kv.put(KEY_PUSH_REGISTERED, null)
         _state.update { ViewerState(email = it.email, selectedDate = today()) }
     }
 
     // ------------------------------------------------------------ Push
 
     /**
-     * Traegt das Geraetetoken von Apple in die Cloud ein, damit die Edge Function Hinweise
-     * direkt aufs Geraet schicken kann. Ein unveraendertes Token wird nicht erneut geschrieben.
+     * Merkt sich das Geraetetoken von Apple und traegt es in die Cloud ein. Apple liefert es
+     * schon vor der Anmeldung; darum wird es gespeichert und spaetestens nach dem Anmelden
+     * eingetragen. Ein bereits eingetragenes Token wird nicht erneut geschrieben.
      */
     fun registerPushToken(token: String, name: String) {
         if (token.isBlank()) return
+        kv.put(KEY_PUSH_TOKEN, token)
+        if (name.isNotBlank()) kv.put(KEY_PUSH_NAME, name)
+        syncPushToken()
+    }
+
+    /** Traegt ein gemerktes Token ein, sobald eine Sitzung besteht. */
+    fun syncPushToken() {
+        val token = kv.get(KEY_PUSH_TOKEN) ?: return
+        if (session == null || kv.get(KEY_PUSH_REGISTERED) == token) return
         scope.launch {
-            if (session == null) return@launch
-            if (kv.get(KEY_PUSH_TOKEN) == token) return@launch
-            runCatching { withSession { client.upsertDevice(it, token, name, platform = "ios") } }
-                .onSuccess { kv.put(KEY_PUSH_TOKEN, token) }
+            runCatching { withSession { client.upsertDevice(it, token, kv.get(KEY_PUSH_NAME) ?: "iPhone", platform = "ios") } }
+                .onSuccess { kv.put(KEY_PUSH_REGISTERED, token) }
         }
     }
 
@@ -475,6 +484,8 @@ class ViewerStore(
         const val KEY_FORECAST = "forecast"
         const val KEY_CRASH = "crash"
         const val KEY_PUSH_TOKEN = "push_token"
+        const val KEY_PUSH_NAME = "push_name"
+        const val KEY_PUSH_REGISTERED = "push_registered"
         const val CMD_FORD = "FORD"
         const val CMD_OVERRIDE = "CHARGE_OVERRIDE"
         const val CMD_SETTINGS = "SET_SETTINGS"

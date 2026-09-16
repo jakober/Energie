@@ -41,6 +41,14 @@ pro Tag unter `files/verlauf/`. Alles Weitere rechnet sie daraus.
   statt rot als offen); Speicher voll und Einspeisung hoch, aber das Auto lädt nicht (mit Knopf
   "Jetzt laden"); Ladestart und Ladeende des Autos mit Akkustand; Rückmeldung
   der Automatik; Quelle ausgefallen; Sicherung fehlgeschlagen.
+- **iOS-Anzeige (`shared/`, `iosApp/`):** Dieselbe Oberfläche wie auf Android als
+  iPhone-App über Compose Multiplatform. Reine Anzeige mit Handschalter und
+  Laderegeln; alles andere lesend. Liest den heutigen Tag als Messpunkte aus der
+  Cloud und ältere Tage als Tageszusammenfassungen, die die Zentrale in die Tabelle
+  `days` schreibt (vergangene Tage einmal nachgetragen, der heutige alle zehn
+  Minuten). Bau: GitHub-Lauf `ios.yml` als unsignierter Prüfbau, Codemagic
+  (`codemagic.yaml`) signiert und lädt zu TestFlight hoch; das Xcode-Projekt
+  entsteht aus `iosApp/project.yml` (XcodeGen).
 - **Web-Anzeige (`web/`):** Dieselben Daten im Browser, für iPhone, Android und
   PC. Statische Seite ohne Build, auf einen eigenen Webserver zu legen; auf dem
   iPhone als Web-App auf den Home-Bildschirm. Lesend bis auf zwei Dinge:
@@ -143,6 +151,7 @@ Der Kern lässt sich ohne Android-SDK bauen und testen:
 
 ```
 ./gradlew -PcoreOnly :core:jvmTest
+./gradlew -PcoreOnly -PwithLinux :core:compileCommonMainKotlinMetadata   # gemeinsamer Teil ohne JVM-Bezuege
 ```
 
 Die App selbst braucht das Android-SDK (Android Studio) oder läuft über die

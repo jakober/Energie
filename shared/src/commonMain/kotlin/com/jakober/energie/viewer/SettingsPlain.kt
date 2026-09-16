@@ -21,7 +21,7 @@ object SettingsPlain {
         fun dbl(k: String) = plain[k]?.toDoubleOrNull()
         fun int(k: String) = plain[k]?.toIntOrNull()
         fun lng(k: String) = plain[k]?.toLongOrNull()
-        inline fun <T> parse(k: String, block: (String) -> T): T? = plain[k]?.let { runCatching { block(it) }.getOrNull() }
+        fun <T> parse(k: String, block: (String) -> T): T? = plain[k]?.let { runCatching { block(it) }.getOrNull() }
         return base.copy(
             pollSeconds = int("pollSeconds") ?: base.pollSeconds,
             pricePerKwh = dbl("pricePerKwh") ?: base.pricePerKwh,

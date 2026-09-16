@@ -200,7 +200,10 @@ uebersprungen und Android laeuft unveraendert weiter.
 - **Android:** Jeder Push auf `main` baut ueber GitHub Actions eine APK und
   legt sie auf dem Zweig `apk` ab, zusammen mit `VERSION.txt` (Laufnummer und
   Commit).
-- **iOS:** Der TestFlight-Build laeuft bei Codemagic und startet nur, wenn die
+- **iOS:** Die App bleibt intern, deshalb laedt der Build nur nach App Store Connect
+  hoch; die interne Gruppe bekommt ihn ueber ihre automatische Verteilung. Eine
+  Anmeldung zur externen Beta-Pruefung findet nicht statt, sie verlangte Angaben,
+  die es hier nie geben wird. Der Build laeuft bei Codemagic und startet nur, wenn die
   Beschreibung des Commits `[ios]` enthaelt; den Anstoss gibt der Ablauf
   `.github/workflows/ios-release.yml` ueber die Codemagic-API. Ohne das
   Stichwort passiert nichts, und ohne die Geheimnisse `CODEMAGIC_API_TOKEN`

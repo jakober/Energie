@@ -40,7 +40,11 @@ workflows:
     publishing:
       app_store_connect:
         auth: integration
-        submit_to_testflight: true
+        # Die App bleibt fuer immer intern. Interne Tester bekommen jeden verarbeiteten
+        # Build ohnehin (automatische Verteilung der Gruppe); die Anmeldung zur externen
+        # Beta-Pruefung verlangt dagegen Angaben, die es hier nie geben wird, und liesse
+        # jeden Build rot enden, obwohl er einwandfrei hochgeladen wurde.
+        submit_to_testflight: false
       email:
         recipients:
           - mat.jakober@gmail.com

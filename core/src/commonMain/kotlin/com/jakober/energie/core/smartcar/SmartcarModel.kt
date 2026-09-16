@@ -1,5 +1,10 @@
 package com.jakober.energie.core.smartcar
 
+import kotlin.math.PI
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.math.sqrt
 import kotlinx.datetime.Instant
 import kotlinx.serialization.Serializable
 
@@ -48,13 +53,15 @@ data class ConnectionsResult(val connections: List<SmartcarConnection>, val raw:
 /** Luftlinie zwischen zwei Koordinaten in Metern (Haversine). */
 fun distanceMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
     val r = 6_371_000.0
-    val dLat = Math.toRadians(lat2 - lat1)
-    val dLon = Math.toRadians(lon2 - lon1)
-    val a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2)
-    return 2 * r * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+    val dLat = toRadians(lat2 - lat1)
+    val dLon = toRadians(lon2 - lon1)
+    val a = sin(dLat / 2) * sin(dLat / 2) +
+        cos(toRadians(lat1)) * cos(toRadians(lat2)) * sin(dLon / 2) * sin(dLon / 2)
+    return 2 * r * atan2(sqrt(a), sqrt(1 - a))
 }
 
 data class CommandResult(val status: Int, val body: String) {
     val ok: Boolean get() = status in 200..299
 }
+
+private fun toRadians(deg: Double): Double = deg / 180.0 * PI

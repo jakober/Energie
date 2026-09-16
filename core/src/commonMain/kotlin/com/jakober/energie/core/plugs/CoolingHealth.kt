@@ -113,5 +113,5 @@ object CoolingHealth {
         return if (s.size % 2 == 1) s[s.size / 2] else (s[s.size / 2 - 1] + s[s.size / 2]) / 2
     }
 
-    private fun fmt(kwh: Double) = String.format(java.util.Locale.GERMANY, "%.2f", kwh)
+    private fun fmt(kwh: Double): String { val c = (kwh * 100 + 0.5).toInt(); return "${c / 100},${(c % 100).toString().padStart(2, '0')}" }
 }

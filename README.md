@@ -142,7 +142,7 @@ app/    Android-App: Jetpack Compose, Material 3, Glance-Widget, WorkManager,
 Der Kern lässt sich ohne Android-SDK bauen und testen:
 
 ```
-./gradlew -PcoreOnly :core:test
+./gradlew -PcoreOnly :core:jvmTest
 ```
 
 Die App selbst braucht das Android-SDK (Android Studio) oder läuft über die

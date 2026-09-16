@@ -1,36 +1,45 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
-    id("org.jetbrains.kotlin.jvm")
+    id("org.jetbrains.kotlin.multiplatform")
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
-// Reiner Kotlin/JVM-Code ohne Android-Abhaengigkeiten: die Schnittstellen zu
-// FRITZ!Box und SENEC, die Datenmodelle, Statistik und deren Tests. Laeuft damit
-// auch auf einem Rechner ohne Android-SDK (./gradlew -PcoreOnly :core:test).
+// Gemeinsamer Kern ohne Android-Abhaengigkeiten: Datenmodelle, Regeln, Statistik,
+// Supabase- und Geraete-Schnittstellen. commonMain laeuft auf JVM/Android und iOS;
+// jvmMain enthaelt, was Java-Bibliotheken braucht (Dateien, XML, Verschluesselung)
+// und nur die Zentrale benutzt.
 //
-// Bytecode fuer Java 17 (Android-Vorgabe), gebaut mit dem JDK, das gerade da
-// ist - keine Toolchain-Pflicht, damit auch JDK 21 ohne Download reicht.
-java {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
-}
+//   ./gradlew -PcoreOnly :core:jvmTest                     Tests auf der JVM
+//   ./gradlew -PcoreOnly -PwithLinux :core:compileKotlinLinuxX64
+//                                                          prueft den gemeinsamen Teil nativ
+//   ./gradlew -PwithIos ...                                iOS-Ziele (nur auf macOS)
+val withIos = providers.gradleProperty("withIos").isPresent
+val withLinux = providers.gradleProperty("withLinux").isPresent
 
 kotlin {
-    compilerOptions {
-        jvmTarget.set(JvmTarget.JVM_17)
+    jvm {
+        compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
     }
-}
+    if (withIos) {
+        iosArm64()
+        iosSimulatorArm64()
+    }
+    if (withLinux) linuxX64()
 
-dependencies {
-    api(libs.kotlinx.coroutines.core)
-    api(libs.kotlinx.datetime)
-    api(libs.kotlinx.serialization.json)
-    api(libs.ktor.client.core)
-    implementation(libs.ktor.client.content.negotiation)
-    implementation(libs.ktor.serialization.json)
-
-    testImplementation(kotlin("test"))
-    testImplementation(libs.kotlinx.coroutines.test)
-    testImplementation(libs.ktor.client.mock)
+    sourceSets {
+        commonMain.dependencies {
+            api(libs.kotlinx.coroutines.core)
+            api(libs.kotlinx.datetime)
+            api(libs.kotlinx.serialization.json)
+            api(libs.ktor.client.core)
+            implementation(libs.ktor.client.content.negotiation)
+            implementation(libs.ktor.serialization.json)
+        }
+        jvmTest.dependencies {
+            implementation(kotlin("test"))
+            implementation(libs.kotlinx.coroutines.test)
+            implementation(libs.ktor.client.mock)
+        }
+    }
 }

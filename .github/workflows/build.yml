@@ -31,7 +31,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Kern-Tests (Schnittstellen, Statistik)
-        run: ./gradlew :core:test --stacktrace
+        run: ./gradlew :core:jvmTest --stacktrace
 
       - name: Debug-APK bauen
         # Optional: Repository-Secrets CLOUD_EMAIL und CLOUD_PASSWORD fuellen die

@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.BatteryChargingFull
 import androidx.compose.material.icons.rounded.Bolt
@@ -61,7 +60,9 @@ import com.jakober.energie.ui.LocalPlatformHooks
 import kotlinx.datetime.LocalDate
 import com.jakober.energie.data.LiveState
 import com.jakober.energie.data.Settings
+import androidx.compose.foundation.lazy.LazyListScope
 import com.jakober.energie.ui.BigValue
+import com.jakober.energie.ui.TwoPane
 import com.jakober.energie.ui.EnergieCard
 import com.jakober.energie.ui.Format
 import com.jakober.energie.ui.ShareBar
@@ -119,15 +120,10 @@ fun DashboardContent(data: DashboardData, actions: DashboardActions, onOpenSetti
     var now by remember { mutableStateOf(Clock.System.now()) }
     LaunchedEffect(Unit) { while (true) { delay(1000); now = Clock.System.now() } }
 
-    LazyColumn(
-        Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            start = 16.dp, end = 16.dp,
-            top = contentPadding.calculateTopPadding() + 8.dp,
-            bottom = contentPadding.calculateBottomPadding() + 24.dp,
-        ),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
+    val carActive = settings.carConnected || settings.fordConnected || live.car != null
+
+    // Links das Bewegte: Kopfzeile, Energiefluss und die Karte des angetippten Knotens.
+    val left: LazyListScope.() -> Unit = {
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -153,7 +149,6 @@ fun DashboardContent(data: DashboardData, actions: DashboardActions, onOpenSetti
         live.fritzError?.let { item { ErrorCard("FRITZ!Box", it) } }
         live.cloudError?.let { item { ErrorCard("Cloud", it) } }
 
-        val carActive = settings.carConnected || settings.fordConnected || live.car != null
         item {
             FlowDiagram(
                 live.sample, showCar = carActive,
@@ -181,7 +176,10 @@ fun DashboardContent(data: DashboardData, actions: DashboardActions, onOpenSetti
             FlowNodeKind.GRID -> item { GridDetailCard(live, today, yesterday, settings, onClose = { selectedNode = null }) }
             null -> {}
         }
+    }
 
+    // Rechts die Zahlen.
+    val right: LazyListScope.() -> Unit = {
         // Erst die aufgeklappte Detailkarte, dann der Wochenstreifen, sonst sieht man nicht, dass etwas aufging.
         item { WeatherStrip(live, settings, data.todayDate, onClick = { selectedNode = if (selectedNode == FlowNodeKind.PV) null else FlowNodeKind.PV }) }
 
@@ -218,6 +216,8 @@ fun DashboardContent(data: DashboardData, actions: DashboardActions, onOpenSetti
             }
         }
     }
+
+    TwoPane(contentPadding, left, right)
 }
 
 @Composable

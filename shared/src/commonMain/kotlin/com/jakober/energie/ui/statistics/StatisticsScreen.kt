@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.BatteryChargingFull
 import androidx.compose.material.icons.rounded.Bolt
@@ -53,6 +53,7 @@ import com.jakober.energie.ui.Range
 import com.jakober.energie.ui.RangeStatistics
 import com.jakober.energie.ui.ShareBar
 import com.jakober.energie.ui.ValueRow
+import com.jakober.energie.ui.TwoPane
 import com.jakober.energie.ui.charts.BarSeries
 import com.jakober.energie.ui.charts.GroupedBarChart
 import com.jakober.energie.ui.charts.LineChart
@@ -112,15 +113,8 @@ fun StatisticsContent(data: StatisticsData, actions: StatisticsActions, contentP
     val gridMonths = data.gridMonths
     var showSamples by rememberSaveable { mutableStateOf(false) }
 
-    LazyColumn(
-        Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            start = 16.dp, end = 16.dp,
-            top = contentPadding.calculateTopPadding() + 8.dp,
-            bottom = contentPadding.calculateBottomPadding() + 24.dp,
-        ),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
+    // Links die Auswahl und die Verlaufsdiagramme des Zeitraums.
+    val left: LazyListScope.() -> Unit = {
         item { Text("Statistik", style = MaterialTheme.typography.displaySmall) }
 
         item {
@@ -160,7 +154,10 @@ fun StatisticsContent(data: StatisticsData, actions: StatisticsActions, contentP
             }
             else -> rangeItems(rangeStats, settings, range)
         }
+    }
 
+    // Rechts die Auswertungen, die zum Zeitraum gehoeren, aber nichts zeichnen.
+    val right: LazyListScope.() -> Unit = {
         val periodTotals = if (range == Range.DAY) day?.totals else rangeStats?.totals
         val hasData = if (range == Range.DAY) (day?.sampleCount ?: 0) > 0 else rangeStats?.daysWithData?.isNotEmpty() == true
 
@@ -207,6 +204,8 @@ fun StatisticsContent(data: StatisticsData, actions: StatisticsActions, contentP
             item { DrivingCard(driving.filter { it.date in from..to }, driving, settings, range) }
         }
     }
+
+    TwoPane(contentPadding, left, right)
 }
 
 @Composable

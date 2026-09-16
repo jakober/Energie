@@ -1,0 +1,626 @@
+package com.jakober.energie.ui.dashboard
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.jakober.energie.data.CloudRole
+import com.jakober.energie.data.FordCommand
+import com.jakober.energie.core.places.NamedPlace
+import com.jakober.energie.core.places.Places
+import androidx.compose.material.icons.rounded.AddLocationAlt
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.BatteryChargingFull
+import androidx.compose.material.icons.rounded.Bolt
+import androidx.compose.material.icons.rounded.ElectricCar
+import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.LockOpen
+import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Speed
+import androidx.compose.material.icons.rounded.WbSunny
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Switch
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.produceState
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.jakober.energie.core.history.CarBatteryHealth
+import com.jakober.energie.core.history.DayStatistics
+import com.jakober.energie.core.history.GridMonth
+import com.jakober.energie.core.plugs.CoolingReport
+import com.jakober.energie.ui.LocalPlatformHooks
+import kotlinx.datetime.LocalDate
+import com.jakober.energie.data.LiveState
+import com.jakober.energie.data.Settings
+import com.jakober.energie.ui.BigValue
+import com.jakober.energie.ui.EnergieCard
+import com.jakober.energie.ui.Format
+import com.jakober.energie.ui.ShareBar
+import com.jakober.energie.ui.ValueRow
+import com.jakober.energie.ui.charts.RingGauge
+import com.jakober.energie.ui.theme.EnergyColors
+import kotlinx.coroutines.delay
+import kotlinx.datetime.Clock
+import kotlin.time.Duration.Companion.hours
+import kotlin.math.abs
+
+/** Aelter als das darf die Verriegelungsmeldung nicht sein, sonst gilt sie als veraltet statt als "offen". */
+private val LockStaleAfter = 24.hours
+
+/** Alles, was die Uebersicht zeigt; die Plattform sammelt es aus ihren Datenfluessen. */
+data class DashboardData(
+    val live: LiveState,
+    val settings: Settings,
+    val today: DayStatistics?,
+    val yesterday: DayStatistics?,
+    val cooling: Map<String, CoolingReport>,
+    val carHealth: CarBatteryHealth?,
+    val gridMonths: List<GridMonth>,
+    val fordResult: String?,
+    val todayDate: LocalDate,
+)
+
+/** Was die Uebersicht ausloesen kann. Als Klasse, damit die Plattform sie einmal baut und merkt. */
+class DashboardActions(
+    val refresh: () -> Unit = {},
+    val setChargeOverride: (Boolean) -> Unit = {},
+    val fordCommand: (FordCommand) -> Unit = {},
+    val savePlaces: (List<NamedPlace>) -> Unit = {},
+)
+
+@Composable
+fun DashboardContent(data: DashboardData, actions: DashboardActions, onOpenSettings: () -> Unit, contentPadding: PaddingValues) {
+    val live = data.live
+    val settings = data.settings
+    val today = data.today
+    val fordResult = data.fordResult
+    val yesterday = data.yesterday
+    val cooling = data.cooling
+    val carHealth = data.carHealth
+    val gridMonths = data.gridMonths
+    // Welcher Knoten des Diagramms gerade seine Detailkarte zeigt; nochmal Tippen schliesst.
+    var selectedNode by rememberSaveable { mutableStateOf<FlowNodeKind?>(null) }
+
+    // "vor 12 s" soll mitlaufen, ohne dass sich sonst etwas aendert.
+    var now by remember { mutableStateOf(Clock.System.now()) }
+    LaunchedEffect(Unit) { while (true) { delay(1000); now = Clock.System.now() } }
+
+    LazyColumn(
+        Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            start = 16.dp, end = 16.dp,
+            top = contentPadding.calculateTopPadding() + 8.dp,
+            bottom = contentPadding.calculateBottomPadding() + 24.dp,
+        ),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Energie", style = MaterialTheme.typography.displaySmall)
+                    // Anzeige: nicht "vor 12 s", sondern der genaue Zeitpunkt des Standes aus der Cloud.
+                    Text(
+                        if (settings.cloudRole == CloudRole.VIEWER) "Stand ${Format.stamp(live.sample?.at, now)}"
+                        else "Aktualisiert ${Format.ago(live.lastUpdate, now)}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (live.refreshing) CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+                else IconButton(onClick = actions.refresh) { Icon(Icons.Rounded.Refresh, "Aktualisieren") }
+            }
+        }
+
+        if (!settings.anythingConfigured) {
+            item { SetupHint(onOpenSettings) }
+        }
+
+        live.senecError?.let { item { ErrorCard("SENEC", it) } }
+        live.fritzError?.let { item { ErrorCard("FRITZ!Box", it) } }
+        live.cloudError?.let { item { ErrorCard("Cloud", it) } }
+
+        val carActive = settings.carConnected || settings.fordConnected || live.car != null
+        item {
+            FlowDiagram(
+                live.sample, showCar = carActive,
+                onNodeClick = { kind -> selectedNode = if (selectedNode == kind) null else kind },
+                forecast = pvForecastBadge(settings, live.pvPeakEstimateKw, data.todayDate, today?.totals?.productionWh),
+                batteryCapacityWh = live.senec?.bessNameplate?.designCapacityWh,
+            )
+        }
+
+        when (selectedNode) {
+            FlowNodeKind.CAR -> if (carActive) item {
+                CarCard(
+                    live, settings,
+                    onOverride = actions.setChargeOverride,
+                    onCommand = actions.fordCommand,
+                    commandResult = fordResult,
+                    onClose = { selectedNode = null },
+                    onSavePlaces = actions.savePlaces,
+                    health = carHealth,
+                )
+            }
+            FlowNodeKind.BATTERY -> item { BatteryDetailCard(live, today, onClose = { selectedNode = null }) }
+            FlowNodeKind.PV -> item { PvDetailCard(live, today, yesterday, settings, data.todayDate, onClose = { selectedNode = null }) }
+            FlowNodeKind.HOUSE -> item { HouseDetailCard(live, today, yesterday, settings, cooling, onClose = { selectedNode = null }) }
+            FlowNodeKind.GRID -> item { GridDetailCard(live, today, yesterday, settings, onClose = { selectedNode = null }) }
+            null -> {}
+        }
+
+        // Erst die aufgeklappte Detailkarte, dann der Wochenstreifen, sonst sieht man nicht, dass etwas aufging.
+        item { WeatherStrip(live, settings, data.todayDate, onClick = { selectedNode = if (selectedNode == FlowNodeKind.PV) null else FlowNodeKind.PV }) }
+
+        if (gridMonths.isNotEmpty()) {
+            item { GridBillStrip(gridMonths, settings) }
+        }
+
+        item { BatteryAndGridRow(live) }
+
+        item { TodayCard(today, settings) }
+
+        if (live.meter != null || live.sample?.meterImportWh != null) {
+            item { MeterCard(live) }
+        }
+
+        live.senec?.evse?.firstOrNull()?.let { evse ->
+            item {
+                EnergieCard(title = "Wallbox", accent = EnergyColors.car) {
+                    ValueRow(
+                        if (evse.evCharging == true) "Auto lädt" else if (evse.evConnected == true) "Auto angesteckt" else "Kein Auto",
+                        Format.power(evse.chargingPower), icon = Icons.Rounded.ElectricCar, iconTint = EnergyColors.car,
+                    )
+                }
+            }
+        }
+
+        live.senec?.bessNameplate?.let { np ->
+            item {
+                EnergieCard(title = "Anlage") {
+                    ValueRow("Modell", np.model ?: "–")
+                    ValueRow("Kapazität", Format.energy(np.designCapacityWh))
+                    ValueRow("Max. Laden / Entladen", "${Format.power(np.activeChargePowerW)} / ${Format.power(np.activeDischargePowerW)}")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SetupHint(onOpenSettings: () -> Unit) {
+    EnergieCard(title = "Einrichtung") {
+        Text("Noch keine Quelle eingerichtet. Trage den SENEC-Schlüssel und die FRITZ!Box-Zugangsdaten ein, dann geht es los.")
+        Button(onClick = onOpenSettings) { Text("Zu den Einstellungen") }
+    }
+}
+
+@Composable
+private fun ErrorCard(source: String, message: String) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+        shape = MaterialTheme.shapes.large,
+    ) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Icon(Icons.Rounded.ErrorOutline, null, tint = MaterialTheme.colorScheme.onErrorContainer)
+            Column {
+                Text(source, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onErrorContainer)
+                Text(message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
+            }
+        }
+    }
+}
+
+@Composable
+private fun BatteryAndGridRow(live: LiveState) {
+    val s = live.sample
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        EnergieCard(Modifier.weight(1f), title = "Speicher", accent = EnergyColors.battery) {
+            val soc = s?.batterySocPercent
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                RingGauge(((soc ?: 0.0) / 100).toFloat(), EnergyColors.battery, Modifier.size(84.dp), strokeWidth = 10.dp) {
+                    Text(Format.percentValue(soc), style = MaterialTheme.typography.titleMedium)
+                }
+                Column {
+                    val p = s?.batteryPowerW
+                    Text(
+                        when {
+                            p == null -> "–"
+                            p > 15 -> "lädt"
+                            p < -15 -> "gibt ab"
+                            else -> "ruht"
+                        },
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    Text(Format.power(p?.let { abs(it) }), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    // SENEC liefert den Zustand als Zahlencode; nur Klartext anzeigen.
+                    s?.batteryState?.takeIf { st -> st.any { ch -> ch.isLetter() } }?.let {
+                        Text(it.lowercase().replaceFirstChar { c -> c.uppercase() }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        }
+        EnergieCard(Modifier.weight(1f), title = "Netz", accent = EnergyColors.grid) {
+            val meter = s?.meterGridPowerW
+            val senec = s?.senecGridPowerW
+            val grid = meter ?: senec
+            BigValue(
+                Format.power(grid?.let { abs(it) }),
+                when {
+                    grid == null -> "keine Daten"
+                    grid < -15 -> "Einspeisung"
+                    grid > 15 -> "Bezug"
+                    else -> "ausgeglichen"
+                },
+                color = if ((grid ?: 0.0) < -15) EnergyColors.export else EnergyColors.grid,
+            )
+            if (meter != null && senec != null) {
+                Text(
+                    "Zähler ${Format.power(meter, signed = true)} · SENEC ${Format.power(senec, signed = true)}",
+                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else if (meter != null) {
+                Text("vom Stromzähler", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+@Composable
+private fun TodayCard(stats: DayStatistics?, settings: Settings) {
+    EnergieCard(title = "Heute") {
+        if (stats == null || stats.sampleCount == 0) {
+            Text("Noch keine Messpunkte für heute.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            return@EnergieCard
+        }
+        val t = stats.totals
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            BigValue(Format.energy(t.productionWh), "Erzeugt", EnergyColors.sun, Modifier.weight(1f))
+            BigValue(Format.energy(t.consumptionWh), "Verbraucht", EnergyColors.house, Modifier.weight(1f))
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            BigValue(Format.energy(t.gridImportWh), "Bezogen", EnergyColors.grid, Modifier.weight(1f))
+            BigValue(Format.energy(t.gridExportWh), "Eingespeist", EnergyColors.export, Modifier.weight(1f))
+        }
+        Spacer(Modifier.height(4.dp))
+        ShareBar("Autarkie", t.selfSufficiency, EnergyColors.battery)
+        ShareBar("Eigenverbrauch", t.selfConsumptionShare, EnergyColors.sun)
+        Spacer(Modifier.height(4.dp))
+        stats.peakConsumption?.let {
+            ValueRow("Höchster Verbrauch", Format.power(it.value), "um ${Format.time(it.at)}", icon = Icons.Rounded.Home, iconTint = EnergyColors.house)
+        }
+        stats.peakProduction?.let {
+            ValueRow("Höchste Erzeugung", Format.power(it.value), "um ${Format.time(it.at)}", icon = Icons.Rounded.WbSunny, iconTint = EnergyColors.sun)
+        }
+        if (t.carChargeWh > 50) {
+            ValueRow("Ins Auto geladen", Format.energy(t.carChargeWh), icon = Icons.Rounded.ElectricCar, iconTint = EnergyColors.car)
+        }
+        stats.baseLoadW?.let {
+            ValueRow("Grundlast", Format.power(it), "kleinstes 15-min-Mittel", icon = Icons.Rounded.Bolt, iconTint = EnergyColors.neutral)
+        }
+        stats.socMin?.let { mn ->
+            stats.socMax?.let { mx ->
+                ValueRow("Speicher", "${Format.percentValue(mn.value)} – ${Format.percentValue(mx.value)}", "Tief um ${Format.time(mn.at)}, Hoch um ${Format.time(mx.at)}", icon = Icons.Rounded.BatteryChargingFull, iconTint = EnergyColors.battery)
+            }
+        }
+        val cost = t.gridImportWh / 1000 * settings.pricePerKwh
+        val income = t.gridExportWh / 1000 * settings.feedInPerKwh
+        val saved = t.selfConsumptionWh / 1000 * settings.pricePerKwh
+        ValueRow("Stromkosten heute", Format.euro(cost), "Einspeisung ${Format.euro(income)} · gespart ${Format.euro(saved)}")
+    }
+}
+
+@Composable
+private fun CarCard(
+    live: LiveState,
+    settings: Settings,
+    onOverride: (Boolean) -> Unit = {},
+    onCommand: (FordCommand) -> Unit = {},
+    commandResult: String? = null,
+    onClose: () -> Unit = {},
+    onSavePlaces: (List<NamedPlace>) -> Unit = {},
+    health: com.jakober.energie.core.history.CarBatteryHealth? = null,
+) {
+    val car = live.car
+    var confirmUnlock by rememberSaveable { mutableStateOf(false) }
+    EnergieCard(title = "Auto im Detail", accent = EnergyColors.car, border = EnergyColors.car, onClose = onClose) {
+        if (car == null) {
+            Text(
+                live.carError ?: "Noch keine Daten vom Auto. Unter Einstellungen → FordPass „Status lesen“.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            return@EnergieCard
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            RingGauge(((car.socPercent ?: 0.0) / 100).toFloat(), EnergyColors.car, Modifier.size(84.dp), strokeWidth = 10.dp) {
+                Text(Format.percentValue(car.socPercent), style = MaterialTheme.typography.titleMedium)
+            }
+            Column(Modifier.weight(1f)) {
+                Text(
+                    when {
+                        car.isCharging == true -> "lädt"
+                        car.isPluggedIn == true -> "steckt, lädt nicht"
+                        car.isPluggedIn == false -> "nicht angeschlossen"
+                        else -> "Status unbekannt"
+                    },
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                car.rangeKm?.let { Text("Reichweite ${it.toInt()} km", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                val p = live.sample?.carChargePowerW ?: car.chargePowerW
+                if (car.isCharging == true) {
+                    Text(
+                        "Ladeleistung ${Format.power(p ?: settings.carFallbackPowerW.toDouble())}" + if (car.chargePowerW == null) " (angenommen)" else "",
+                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                car.chargeLimitPercent?.let { Text("Ladeziel ${Format.percentValue(it)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                // Abgerufen ist nicht gleich gemessen: Ford liefert oft einen aelteren Ladestatus.
+                Text(
+                    "Abgerufen ${Format.time(car.at)}" +
+                        (car.chargeStatusAt?.let { " · Ladestatus von ${Format.time(it)}" } ?: ""),
+                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        car.lockState?.let { lock ->
+            val locked = lock == "LOCKED"
+            val lockAt = car.extra?.lockUpdatedAt
+            // Meldet das Auto die Verriegelung tagelang nicht neu, ist "offen" kein Alarm, sondern ein alter Stand.
+            val stale = lockAt != null && car.at - lockAt > LockStaleAfter
+            val alarm = !locked && !stale
+            ValueRow(
+                "Verriegelung",
+                when {
+                    stale && !locked -> "keine aktuelle Meldung"
+                    lock == "LOCKED" -> "abgeschlossen"
+                    lock == "PARTLY_LOCKED" -> "teilweise offen"
+                    else -> "NICHT abgeschlossen"
+                },
+                when {
+                    stale -> "Ford meldet die Verriegelung seit ${Format.dateTime(lockAt!!)} nicht neu"
+                    lockAt != null -> "von Ford gemeldet ${Format.dateTime(lockAt)}"
+                    else -> "Stand ${Format.time(car.at)}"
+                },
+                color = if (alarm) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                icon = if (locked) Icons.Rounded.Lock else Icons.Rounded.LockOpen,
+                iconTint = when { locked -> EnergyColors.battery; alarm -> MaterialTheme.colorScheme.error; else -> MaterialTheme.colorScheme.onSurfaceVariant },
+            )
+            if (settings.fordConnected) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { onCommand(FordCommand.STATUS_REFRESH) }, modifier = Modifier.weight(1f)) {
+                        Icon(Icons.Rounded.Refresh, null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Auto wecken")
+                    }
+                    if (!locked) {
+                        Button(onClick = { onCommand(FordCommand.LOCK) }, modifier = Modifier.weight(1f)) {
+                            Icon(Icons.Rounded.Lock, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Abschließen")
+                        }
+                    } else {
+                        OutlinedButton(onClick = { confirmUnlock = true }, modifier = Modifier.weight(1f)) {
+                            Icon(Icons.Rounded.LockOpen, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Aufschließen")
+                        }
+                    }
+                }
+            }
+        }
+        commandResult?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        CarBatteryHealthRows(health)
+        if (confirmUnlock) {
+            AlertDialog(
+                onDismissRequest = { confirmUnlock = false },
+                title = { Text("Auto aufschließen?") },
+                text = { Text("Das Auto wird über FordPass entriegelt, auch wenn niemand daneben steht.") },
+                confirmButton = { TextButton(onClick = { confirmUnlock = false; onCommand(FordCommand.UNLOCK) }) { Text("Aufschließen") } },
+                dismissButton = { TextButton(onClick = { confirmUnlock = false }) { Text("Abbrechen") } },
+            )
+        }
+        val carLat = car.latitude
+        val carLon = car.longitude
+        if (carLat != null && carLon != null) {
+            CarLocation(carLat, carLon, car.distanceHomeM, settings.places, onSavePlaces)
+        }
+        car.extra?.let { CarExtrasSection(it) }
+        live.carError?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
+        if (settings.fordConnected) {
+            // Warum das Auto gerade laedt oder nicht: der wichtigste Satz der Karte, deshalb
+            // gross und mit dem Handschalter als Warnung, denn der setzt die Automatik aus.
+            ValueRow(
+                "Ladeautomatik",
+                when {
+                    !settings.chargeRules.enabled -> "aus"
+                    settings.chargeOverride -> "ausgesetzt"
+                    else -> "an"
+                },
+                live.automationStatus ?: if (settings.chargeRules.enabled) "wartet auf erste Messung" else null,
+                color = when {
+                    !settings.chargeRules.enabled -> MaterialTheme.colorScheme.onSurfaceVariant
+                    settings.chargeOverride -> MaterialTheme.colorScheme.error
+                    else -> EnergyColors.battery
+                },
+                icon = Icons.Rounded.Bolt,
+                iconTint = if (settings.chargeOverride) MaterialTheme.colorScheme.error else EnergyColors.car,
+            )
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Jetzt voll laden", style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        if (settings.chargeOverride) "Handschalter an: die Automatik pausiert nicht, bis du absteckst oder hier ausschaltest."
+                        else "Automatik aussetzen, bis das Auto abgesteckt wird",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (settings.chargeOverride) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = settings.chargeOverride, onCheckedChange = onOverride)
+            }
+        }
+    }
+}
+
+/**
+ * Standort des Autos: zu Hause, ein gemerkter Ort (Plus-Knopf zum Anlegen,
+ * Stift zum Umbenennen oder Loeschen) oder Adresse, plus Sprung in die Karten-App.
+ */
+@Composable
+private fun CarLocation(lat: Double, lon: Double, distanceHomeM: Double?, places: List<NamedPlace>, onSavePlaces: (List<NamedPlace>) -> Unit) {
+    val hooks = LocalPlatformHooks.current
+    val matched = remember(places, lat, lon) { Places.match(places, lat, lon) }
+    var editing by rememberSaveable { mutableStateOf(false) }
+    // Adresse ueber die Plattform nachschlagen; schlaegt das fehl, bleiben die Koordinaten.
+    val address by produceState<String?>(initialValue = null, lat, lon) {
+        value = runCatching { hooks.reverseGeocode(lat, lon) }.getOrNull()
+    }
+    val atHome = distanceHomeM != null && distanceHomeM < 300
+    val where = when {
+        atHome -> "zu Hause"
+        matched != null -> "bei ${matched.name}"
+        distanceHomeM != null && distanceHomeM < 10_000 -> "unterwegs, ${(distanceHomeM / 100).toInt() / 10.0} km von zu Hause"
+        distanceHomeM != null -> "unterwegs, ${(distanceHomeM / 1000).toInt()} km von zu Hause"
+        else -> "Standort"
+    }
+    val coords = "${Format.number(lat, 5)}, ${Format.number(lon, 5)}"
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(where, style = MaterialTheme.typography.titleSmall)
+            Text(address ?: coords, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (!atHome) {
+            IconButton(onClick = { editing = true }) {
+                Icon(if (matched != null) Icons.Rounded.Edit else Icons.Rounded.AddLocationAlt, if (matched != null) "Ort bearbeiten" else "Ort merken")
+            }
+        }
+        if (hooks.canOpenMap) TextButton(onClick = { hooks.openMap(lat, lon) }) { Text("Karte") }
+    }
+    if (editing) {
+        var name by rememberSaveable { mutableStateOf(matched?.name ?: address?.substringBefore(",") ?: "") }
+        AlertDialog(
+            onDismissRequest = { editing = false },
+            title = { Text(if (matched != null) "Ort bearbeiten" else "Ort merken") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Steht das Auto künftig im Umkreis von 200 m um diese Stelle, zeigt die App den Namen statt der Adresse.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Name, z. B. Arbeit") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Text(address ?: coords, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = name.isNotBlank(),
+                    onClick = {
+                        // Beim Umbenennen bleibt die gemerkte Position, sonst die aktuelle.
+                        val base = matched?.let { Places.remove(places, it) } ?: places
+                        onSavePlaces(Places.upsert(base, NamedPlace(name.trim(), matched?.latitude ?: lat, matched?.longitude ?: lon)))
+                        editing = false
+                    },
+                ) { Text("Speichern") }
+            },
+            dismissButton = {
+                Row {
+                    if (matched != null) {
+                        TextButton(onClick = { onSavePlaces(Places.remove(places, matched)); editing = false }) { Text("Löschen", color = MaterialTheme.colorScheme.error) }
+                    }
+                    TextButton(onClick = { editing = false }) { Text("Abbrechen") }
+                }
+            },
+        )
+    }
+}
+
+@Composable
+private fun MeterCard(live: LiveState) {
+    val s = live.sample
+    EnergieCard(title = "Stromzähler", accent = EnergyColors.grid) {
+        ValueRow("Bezug (1.8.0)", Format.meterReading(s?.meterImportWh), icon = Icons.Rounded.Speed, iconTint = EnergyColors.grid)
+        ValueRow("Einspeisung (2.8.0)", Format.meterReading(s?.meterExportWh), icon = Icons.Rounded.Speed, iconTint = EnergyColors.export)
+        live.meter?.let {
+            Text(
+                "Lesekopf ${it.importAin}" + (it.exportAin?.let { e -> " / $e" } ?: ""),
+                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+
+/** Geschaetzte Akkukapazitaet des Autos mit Wochenverlauf. */
+@Composable
+private fun CarBatteryHealthRows(h: com.jakober.energie.core.history.CarBatteryHealth?) {
+    if (h == null) return
+    val cur = h.currentKwh
+    if (cur == null) {
+        Text(
+            "Akkuzustand: noch zu wenig Daten. Braucht Tage mit Ladestand ab 20 % und Restenergie vom Auto.",
+            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        return
+    }
+    val ref = h.referenceKwh
+    val detail = buildString {
+        if (h.healthPercent != null && ref != null) {
+            append("≈ ${h.healthPercent} % von ${Format.number((ref).toDouble(), 1)} kWh ")
+            append(if (h.referenceFromSetting) "neu" else "Bestwert")
+            append(" · ")
+        }
+        append("Median aus ${h.currentDays} Tagen")
+    }
+    ValueRow(
+        "Geschätzte Akkukapazität",
+        "${Format.number((cur).toDouble(), 1)} kWh",
+        detail,
+        icon = Icons.Rounded.BatteryChargingFull, iconTint = EnergyColors.car,
+    )
+    if (h.weekly.size >= 2) {
+        val ws = h.weekly.takeLast(26)
+        val lo = ws.minOf { it.capacityKwh }
+        val hi = ws.maxOf { it.capacityKwh }
+        val pad = ((hi - lo) * 0.5).coerceAtLeast(1.0)
+        Column {
+            Text("Verlauf je Woche", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            com.jakober.energie.ui.charts.LineChart(
+                series = listOf(com.jakober.energie.ui.charts.LineSeries("Kapazität", EnergyColors.car, ws.map { it.capacityKwh }, fill = true)),
+                modifier = Modifier.fillMaxWidth().height(100.dp),
+                min = lo - pad, max = hi + pad,
+                xLabels = listOf(0f to Format.dateNum(ws.first().date), 1f to Format.dateNum(ws.last().date)),
+            )
+        }
+    }
+    Text(
+        "Restenergie ÷ Ladestand, wie das Auto sie meldet. Der Wert schwankt mit Temperatur und Ladestand um einige Prozent; aussagekräftig ist der Trend über Monate.",
+        style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}

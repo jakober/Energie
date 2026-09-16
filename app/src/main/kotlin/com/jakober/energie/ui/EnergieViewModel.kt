@@ -47,33 +47,6 @@ import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 import kotlin.time.Duration.Companion.seconds
 
-enum class Range { DAY, WEEK, MONTH, YEAR }
-
-/** Zusammenfassung mehrerer Tage (Woche, Monat). */
-data class RangeStatistics(
-    val from: LocalDate,
-    val to: LocalDate,
-    val days: List<DayStatistics>,
-) {
-    val totals: EnergyTotals = EnergyTotals(
-        productionWh = days.sumOf { it.totals.productionWh },
-        consumptionWh = days.sumOf { it.totals.consumptionWh },
-        gridImportWh = days.sumOf { it.totals.gridImportWh },
-        gridExportWh = days.sumOf { it.totals.gridExportWh },
-        batteryChargeWh = days.sumOf { it.totals.batteryChargeWh },
-        batteryDischargeWh = days.sumOf { it.totals.batteryDischargeWh },
-        carChargeWh = days.sumOf { it.totals.carChargeWh },
-        carFromGridWh = days.sumOf { it.totals.carFromGridWh },
-        meterImportWh = days.mapNotNull { it.totals.meterImportWh }.takeIf { it.isNotEmpty() }?.sum(),
-        meterExportWh = days.mapNotNull { it.totals.meterExportWh }.takeIf { it.isNotEmpty() }?.sum(),
-    )
-    val daysWithData: List<DayStatistics> get() = days.filter { it.sampleCount > 0 }
-    val bestProductionDay: DayStatistics? get() = daysWithData.maxByOrNull { it.totals.productionWh }?.takeIf { it.totals.productionWh > 0 }
-    val heaviestConsumptionDay: DayStatistics? get() = daysWithData.maxByOrNull { it.totals.consumptionWh }?.takeIf { it.totals.consumptionWh > 0 }
-    val averageConsumptionWh: Double? get() = daysWithData.takeIf { it.isNotEmpty() }?.let { d -> d.sumOf { it.totals.consumptionWh } / d.size }
-    val peakConsumption: com.jakober.energie.core.history.Peak? get() = daysWithData.mapNotNull { it.peakConsumption }.maxByOrNull { it.value }
-}
-
 @OptIn(ExperimentalCoroutinesApi::class)
 class EnergieViewModel(private val container: AppContainer) : ViewModel() {
     private val repo = container.repository
@@ -122,7 +95,7 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
     val rangeStats: StateFlow<RangeStatistics?> = combine(_selectedDate, _range, updates) { d, r, _ -> d to r }
         .mapLatest { (d, r) ->
             if (r == Range.DAY) return@mapLatest null
-            val (from, to0) = bounds(d, r)
+            val (from, to0) = Range.bounds(d, r)
             // Jahr: keine Tage in der Zukunft durchgehen.
             val to = if (r == Range.YEAR) minOf(to0, repo.today()) else to0
             withContext(Dispatchers.IO) {
@@ -157,7 +130,7 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
     /** Ladevorgaenge des gewaehlten Tags bzw. Zeitraums. */
     val chargeSessions: StateFlow<List<ChargeSession>> = combine(_selectedDate, _range, updates) { d, r, _ -> d to r }
         .mapLatest { (d, r) ->
-            val (from, to) = bounds(d, r)
+            val (from, to) = Range.bounds(d, r)
             withContext(Dispatchers.IO) {
                 val zone = TimeZone.currentSystemDefault()
                 if (r == Range.YEAR) {
@@ -183,7 +156,7 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
     /** Der laufende Monat, fuer die Hochrechnung. */
     val currentMonth: StateFlow<RangeStatistics?> = updates
         .mapLatest {
-            val (from, to) = bounds(repo.today(), Range.MONTH)
+            val (from, to) = Range.bounds(repo.today(), Range.MONTH)
             withContext(Dispatchers.IO) {
                 val list = ArrayList<DayStatistics>()
                 var day = from
@@ -753,18 +726,4 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    companion object {
-        fun bounds(d: LocalDate, r: Range): Pair<LocalDate, LocalDate> = when (r) {
-            Range.DAY -> d to d
-            Range.WEEK -> {
-                val monday = d.minus(d.dayOfWeek.isoDayNumber - DayOfWeek.MONDAY.isoDayNumber, DateTimeUnit.DAY)
-                monday to monday.plus(6, DateTimeUnit.DAY)
-            }
-            Range.MONTH -> {
-                val first = LocalDate(d.year, d.month, 1)
-                first to first.plus(1, DateTimeUnit.MONTH).minus(1, DateTimeUnit.DAY)
-            }
-            Range.YEAR -> LocalDate(d.year, 1, 1) to LocalDate(d.year, 12, 31)
-        }
-    }
 }

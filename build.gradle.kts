@@ -24,6 +24,7 @@ buildscript {
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.21")
         classpath("org.jetbrains.kotlin:kotlin-serialization:2.1.21")
         classpath("org.jetbrains.kotlin:compose-compiler-gradle-plugin:2.1.21")
+        classpath("org.jetbrains.compose:compose-gradle-plugin:1.8.2")
         if (!providers.gradleProperty("coreOnly").isPresent) {
             classpath("com.android.tools.build:gradle:8.7.3")
         }

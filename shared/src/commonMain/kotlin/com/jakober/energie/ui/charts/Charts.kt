@@ -1,5 +1,6 @@
 package com.jakober.energie.ui.charts
 
+import kotlin.math.roundToInt
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -38,7 +39,7 @@ fun GroupedBarChart(
     modifier: Modifier = Modifier,
     labelEvery: Int = 1,
     highlightIndex: Int? = null,
-    valueFormatter: (Double) -> String = { "%.0f".format(it) },
+    valueFormatter: (Double) -> String = { it.roundToInt().toString() },
 ) {
     val textMeasurer = rememberTextMeasurer()
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant

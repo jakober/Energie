@@ -28,11 +28,10 @@ import com.jakober.energie.ui.LegendItem
 import com.jakober.energie.ui.Range
 import com.jakober.energie.ui.ValueRow
 import com.jakober.energie.ui.theme.EnergyColors
-import java.util.Locale
 
-private fun km(v: Double): String = String.format(Locale.GERMANY, if (v < 100) "%.1f km" else "%,.0f km", v)
-private fun kwh100(v: Double?): String = if (v == null) "–" else String.format(Locale.GERMANY, "%.1f kWh/100 km", v)
-private fun eur100(v: Double?): String = if (v == null) "–" else String.format(Locale.GERMANY, "%.2f €/100 km", v)
+private fun km(v: Double): String = if (v < 100) "${Format.number(v, 1)} km" else "${Format.number(v, 0, grouping = true)} km"
+private fun kwh100(v: Double?): String = if (v == null) "–" else "${Format.number((v).toDouble(), 1)} kWh/100 km"
+private fun eur100(v: Double?): String = if (v == null) "–" else "${Format.number((v).toDouble(), 2)} €/100 km"
 
 /**
  * Fahrten des Autos: Strecke aus dem Kilometerstand, Energie aus dem Akkuinhalt,
@@ -63,7 +62,7 @@ fun DrivingCard(period: List<DriveDay>, all: List<DriveDay>, settings: Settings,
             if (sum.used.publicWh > 50) ValueRow("Unterwegs geladen", Format.energy(sum.used.publicWh), detail = Format.euro(sum.used.publicWh / 1000 * pub), color = EnergyColors.house)
             if (sum.used.unknownWh > 50) ValueRow("Herkunft unbekannt", Format.energy(sum.used.unknownWh), detail = "war schon im Akku, bevor die App mitzählte", color = EnergyColors.neutral)
             if (sum.startKm != null && sum.endKm != null) {
-                ValueRow("Kilometerstand", String.format(Locale.GERMANY, "%,.0f → %,.0f km", sum.startKm, sum.endKm))
+                ValueRow("Kilometerstand", "${Format.number((sum.startKm, sum.endKm).toDouble(), 0, grouping = true)} → %,.0f km")
             }
         }
 

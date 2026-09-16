@@ -94,7 +94,7 @@ private fun SampleRow(s: EnergySample) {
                 s.batterySocPercent?.let { soc -> "Speicher ${Format.percentValue(soc)}" + (s.batteryPowerW?.let { " ${Format.power(it, signed = true)}" } ?: "") },
                 s.senecGridPowerW?.let { "SENEC-Netz ${Format.power(it, signed = true)}" },
                 s.carSocPercent?.let { "Auto ${Format.percentValue(it)}" + (s.carChargePowerW?.takeIf { p -> p > 0 }?.let { " lädt ${Format.power(it)}" } ?: "") },
-                s.carOdometerKm?.let { "${String.format(java.util.Locale.GERMANY, "%,.0f", it)} km" },
+                s.carOdometerKm?.let { "${Format.number((it).toDouble(), 0, grouping = true)} km" },
             ).joinToString(" · ").ifBlank { "keine weiteren Werte" },
             style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

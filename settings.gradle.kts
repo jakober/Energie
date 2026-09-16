@@ -28,6 +28,7 @@ dependencyResolutionManagement {
 rootProject.name = "Energie"
 
 include(":core")
+include(":shared")
 
 // Das Android-Modul braucht das Android-SDK und das Android-Gradle-Plugin.
 // Mit -PcoreOnly laesst sich der reine Kotlin-Teil (Schnittstellen, Parser,

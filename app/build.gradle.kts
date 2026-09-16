@@ -93,6 +93,7 @@ kotlin {
 
 dependencies {
     implementation(project(":core"))
+    implementation(project(":shared"))
 
     val composeBom = platform(libs.compose.bom)
     implementation(composeBom)

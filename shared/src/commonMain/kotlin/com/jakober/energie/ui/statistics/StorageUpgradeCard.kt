@@ -82,7 +82,7 @@ fun StorageUpgradeCard(
             BigValue(Format.energy(result.dischargedWh), "zusätzlich genutzt", EnergyColors.battery, Modifier.weight(1f))
             BigValue(Format.euro(saved), "gespart in ${days.size} Tagen", EnergyColors.sun, Modifier.weight(1f))
             BigValue(
-                payback?.let { if (it > 99) "> 99 J." else String.format(java.util.Locale.GERMANY, "%.0f Jahre", it) } ?: "nie",
+                payback?.let { if (it > 99) "> 99 J." else "${Format.number((it).toDouble(), 0)} Jahre" } ?: "nie",
                 "Amortisation", if (payback != null && payback <= 12) EnergyColors.battery else EnergyColors.grid, Modifier.weight(1f),
             )
         }

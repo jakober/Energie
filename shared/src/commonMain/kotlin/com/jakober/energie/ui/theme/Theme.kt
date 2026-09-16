@@ -1,15 +1,13 @@
 package com.jakober.energie.ui.theme
 
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
@@ -91,16 +89,12 @@ private val EnergieTypography = Typography().let { t ->
 }
 
 /**
- * Dunkel ist die Hausfarbe: tiefes Nachtblau mit leuchtenden Akzenten. Wer
- * das System hell laesst, bekommt auf Android 12+ die Systemfarben, sonst
- * ein helles Gegenstueck.
+ * Dunkel ist die Hausfarbe: tiefes Nachtblau mit leuchtenden Akzenten. Hell gibt es
+ * ein passendes Gegenstueck; Android reicht ab Version 12 optional die Systemfarben
+ * als [lightScheme] herein, iOS nimmt das eingebaute helle Schema.
  */
 @Composable
-fun EnergieTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
-    val scheme = when {
-        dark -> DarkScheme
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> dynamicLightColorScheme(LocalContext.current)
-        else -> LightScheme
-    }
+fun EnergieTheme(dark: Boolean = isSystemInDarkTheme(), lightScheme: ColorScheme? = null, content: @Composable () -> Unit) {
+    val scheme = if (dark) DarkScheme else lightScheme ?: LightScheme
     MaterialTheme(colorScheme = scheme, typography = EnergieTypography, content = content)
 }

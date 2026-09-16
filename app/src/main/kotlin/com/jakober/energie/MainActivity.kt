@@ -39,6 +39,7 @@ import com.jakober.energie.ui.EnergieViewModel
 import com.jakober.energie.ui.dashboard.DashboardScreen
 import com.jakober.energie.ui.settings.SettingsScreen
 import com.jakober.energie.ui.statistics.StatisticsScreen
+import androidx.compose.material3.dynamicLightColorScheme
 import com.jakober.energie.ui.theme.EnergieTheme
 
 private enum class Tab(val route: String, val label: String, val icon: ImageVector) {
@@ -57,7 +58,9 @@ class MainActivity : ComponentActivity() {
         noteConnectReturn(intent)
         val container = (application as EnergieApp).container
         setContent {
-            EnergieTheme {
+            // Android 12+: Systemfarben fuer das helle Schema, wie bisher.
+            val dynamicLight = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) dynamicLightColorScheme(this) else null
+            EnergieTheme(lightScheme = dynamicLight) {
                 EnergieRoot(container, connectReturns.intValue)
             }
         }

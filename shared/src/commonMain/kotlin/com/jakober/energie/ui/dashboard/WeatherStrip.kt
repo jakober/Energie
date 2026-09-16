@@ -38,12 +38,8 @@ import com.jakober.energie.ui.EnergieCard
 import com.jakober.energie.ui.Format
 import com.jakober.energie.ui.theme.EnergyColors
 import kotlinx.datetime.LocalDate
-import kotlinx.datetime.toJavaLocalDate
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 import kotlin.math.roundToInt
 
-private val weekday = DateTimeFormatter.ofPattern("EE", Locale.GERMANY)
 
 /**
  * Wochenstreifen unter dem Flussdiagramm: je Tag Wettersymbol, Hoechsttemperatur
@@ -82,7 +78,7 @@ fun WeatherStrip(live: LiveState, settings: Settings, today: LocalDate, onClick:
 @Composable
 private fun DayCell(d: PvForecastDay, today: LocalDate, kwh: Double?, maxKwh: Double, modifier: Modifier) {
     val offset = d.date.toEpochDays() - today.toEpochDays()
-    val name = when (offset) { 0 -> "Heute"; 1 -> "Morgen"; else -> weekday.format(d.date.toJavaLocalDate()).trimEnd('.') }
+    val name = when (offset) { 0 -> "Heute"; 1 -> "Morgen"; else -> Format.dateShort(d.date).substringBefore(",") }
     val cls = d.weatherCode?.let { PvForecastDay.weatherClass(it) }
     val (icon, tint) = weatherIcon(cls)
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -97,7 +93,7 @@ private fun DayCell(d: PvForecastDay, today: LocalDate, kwh: Double?, maxKwh: Do
             style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(
-            kwh?.let { String.format(Locale.GERMANY, "%.0f", it) } ?: "–",
+            kwh?.let { Format.number((it).toDouble(), 0) } ?: "–",
             style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface,
         )
         Text("kWh", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

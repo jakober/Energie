@@ -45,7 +45,6 @@ import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
-import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -128,7 +127,7 @@ fun BatteryDetailCard(live: LiveState, today: DayStatistics?, onClose: () -> Uni
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 BigValue(Format.energy(t.batteryChargeWh), "Heute geladen", EnergyColors.battery, Modifier.weight(1f))
                 BigValue(Format.energy(t.batteryDischargeWh), "Heute entladen", EnergyColors.battery, Modifier.weight(1f))
-                if (capacity != null && capacity > 0) BigValue(String.format(Locale.GERMANY, "%.2f", t.batteryChargeWh / capacity), "Vollzyklen heute", modifier = Modifier.weight(1f))
+                if (capacity != null && capacity > 0) BigValue(Format.number((t.batteryChargeWh / capacity).toDouble(), 2), "Vollzyklen heute", modifier = Modifier.weight(1f))
             }
             if (today.socStart != null) {
                 LineChart(
@@ -154,7 +153,7 @@ fun BatteryDetailCard(live: LiveState, today: DayStatistics?, onClose: () -> Uni
             ValueRow("Nennkapazität", Format.energy(capacity))
             ValueRow("Max. Laden / Entladen", "${Format.power(np.activeChargePowerW)} / ${Format.power(np.activeDischargePowerW)}")
             val bat = live.senec?.battery
-            bat?.voltage?.let { v -> ValueRow("Spannung / Strom", "${String.format(Locale.GERMANY, "%.1f V", v)} / ${bat.current?.let { String.format(Locale.GERMANY, "%.1f A", it) } ?: "–"}") }
+            bat?.voltage?.let { v -> ValueRow("Spannung / Strom", "${"${Format.number((v).toDouble(), 1)} V"} / ${bat.current?.let { "${Format.number((it).toDouble(), 1)} A" } ?: "–"}") }
         }
     }
 }
@@ -199,14 +198,14 @@ fun PvDetailCard(live: LiveState, today: DayStatistics?, yesterday: DayStatistic
                     val offset = d.date.toEpochDays() - todayDate.toEpochDays()
                     if (offset < 0) return@forEach
                     val name = when (offset) { 0 -> "Heute"; 1 -> "Morgen"; 2 -> "Übermorgen"; else -> Format.dateShort(d.date) }
-                    val detail = listOfNotNull(d.weatherLabel, d.sunshineHours?.let { "${String.format(Locale.GERMANY, "%.1f", it)} h Sonne" }, "${(d.irradianceWhPerM2 / 1000).let { String.format(Locale.GERMANY, "%.1f", it) }} kWh/m²")
+                    val detail = listOfNotNull(d.weatherLabel, d.sunshineHours?.let { "${Format.number((it).toDouble(), 1)} h Sonne" }, "${(d.irradianceWhPerM2 / 1000).let { Format.number((it).toDouble(), 1) }} kWh/m²")
                         .joinToString(" · ")
                     val actual = if (offset == 0) today?.totals?.productionWh else null
                     ValueRow(name, "≈ ${Format.energy(d.energyFor(settings, peak) * 1000)}", detail + (actual?.takeIf { it > 100 }?.let { " · bisher ${Format.energy(it)}" } ?: ""), color = EnergyColors.sun)
                 }
                 Text(
-                    "Mit ${String.format(Locale.GERMANY, "%.2f", peak + pvPeakKw2(settings))} kWp" + (if (settings.pvPeakKw <= 0) " (geschätzt)" else if (pvPeakKw2(settings) > 0) " auf zwei Dachseiten" else "") +
-                        ", Faktor ${String.format(Locale.GERMANY, "%.2f", settings.pvCalibration)} aus den echten Erträgen. Quelle Open-Meteo.",
+                    "Mit ${Format.number((peak + pvPeakKw2(settings)).toDouble(), 2)} kWp" + (if (settings.pvPeakKw <= 0) " (geschätzt)" else if (pvPeakKw2(settings) > 0) " auf zwei Dachseiten" else "") +
+                        ", Faktor ${Format.number((settings.pvCalibration).toDouble(), 2)} aus den echten Erträgen. Quelle Open-Meteo.",
                     style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -366,15 +365,15 @@ fun GridDetailCard(live: LiveState, today: DayStatistics?, yesterday: DayStatist
 fun CarExtrasSection(x: CarExtras) {
     var showAll by rememberSaveable { mutableStateOf(false) }
     Text("Fahrzeug", style = MaterialTheme.typography.titleSmall)
-    x.energyRemainingKwh?.let { ValueRow("Energie im Akku", String.format(Locale.GERMANY, "%.1f kWh", it)) }
+    x.energyRemainingKwh?.let { ValueRow("Energie im Akku", "${Format.number((it).toDouble(), 1)} kWh") }
     x.timeToFullMinutes?.takeIf { it > 0 }?.let { ValueRow("Voll in", Format.duration(it.toLong())) }
-    x.batteryTempC?.let { ValueRow("Akkutemperatur", String.format(Locale.GERMANY, "%.0f °C", it)) }
-    x.outsideTempC?.let { ValueRow("Außentemperatur", String.format(Locale.GERMANY, "%.0f °C", it)) }
-    x.odometerKm?.let { ValueRow("Kilometerstand", String.format(Locale.GERMANY, "%,.0f km", it)) }
+    x.batteryTempC?.let { ValueRow("Akkutemperatur", "${Format.number((it).toDouble(), 0)} °C") }
+    x.outsideTempC?.let { ValueRow("Außentemperatur", "${Format.number((it).toDouble(), 0)} °C") }
+    x.odometerKm?.let { ValueRow("Kilometerstand", "${Format.number((it).toDouble(), 0, grouping = true)} km") }
     if (x.battery12V != null || x.battery12SocPercent != null) {
         ValueRow(
             "12-V-Batterie",
-            listOfNotNull(x.battery12V?.let { String.format(Locale.GERMANY, "%.1f V", it) }, x.battery12SocPercent?.let { Format.percentValue(it) }).joinToString(" · "),
+            listOfNotNull(x.battery12V?.let { "${Format.number((it).toDouble(), 1)} V" }, x.battery12SocPercent?.let { Format.percentValue(it) }).joinToString(" · "),
             color = if ((x.battery12V ?: 13.0) < 11.8) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
         )
     }
@@ -395,7 +394,7 @@ fun CarExtrasSection(x: CarExtras) {
                     val status = x.tireStatus[wheel]?.uppercase()
                     val bad = status != null && status != "NORMAL" && status != "UNKNOWN"
                     BigValue(
-                        String.format(Locale.GERMANY, "%.2f bar", kpa / 100),
+                        "${Format.number((kpa / 100).toDouble(), 2)} bar",
                         wheelLabel(wheel) + (if (bad) " · ${status!!.lowercase()}" else ""),
                         if (bad) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
                         Modifier.weight(1f),

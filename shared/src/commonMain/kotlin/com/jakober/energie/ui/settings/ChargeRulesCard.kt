@@ -101,7 +101,7 @@ private fun SliderRow(label: String, value: String, current: Float, range: Close
 /** Uhrzeit als HH:MM, gespeichert in Minuten seit Mitternacht. */
 @Composable
 private fun TimeField(label: String, minutes: Int, modifier: Modifier, onChange: (Int) -> Unit) {
-    var text by rememberSaveable(minutes) { mutableStateOf("%02d:%02d".format(minutes / 60, minutes % 60)) }
+    var text by rememberSaveable(minutes) { mutableStateOf((minutes / 60).toString().padStart(2, '0') + ":" + (minutes % 60).toString().padStart(2, '0')) }
     OutlinedTextField(
         value = text,
         onValueChange = { t ->

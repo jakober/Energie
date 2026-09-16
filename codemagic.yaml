@@ -16,7 +16,6 @@ workflows:
         BUNDLE_ID: de.jakober.energie
         XCODE_PROJECT: iosApp/Energie.xcodeproj
         XCODE_SCHEME: Energie
-        APP_STORE_APPLE_ID: "0" # wird von Codemagic aus der Bundle-ID ermittelt, wenn 0
       ios_signing:
         distribution_type: app_store
         bundle_identifier: de.jakober.energie
@@ -30,9 +29,8 @@ workflows:
           xcode-project use-profiles --project "$XCODE_PROJECT"
       - name: Build-Nummer setzen
         script: |
-          cd iosApp
-          BUILD_NUMBER=$(($(app-store-connect get-latest-testflight-build-number "$BUNDLE_ID" 2>/dev/null || echo 0) + 1))
-          agvtool new-version -all "$BUILD_NUMBER"
+          # Codemagics fortlaufende Build-Nummer als CFBundleVersion, damit TestFlight jede Version annimmt.
+          cd iosApp && agvtool new-version -all "$BUILD_NUMBER"
       - name: Kotlin-Framework und IPA bauen
         script: |
           xcode-project build-ipa --project "$XCODE_PROJECT" --scheme "$XCODE_SCHEME"
@@ -43,7 +41,6 @@ workflows:
       app_store_connect:
         auth: integration
         submit_to_testflight: true
-        beta_groups: []
       email:
         recipients:
           - mat.jakober@gmail.com

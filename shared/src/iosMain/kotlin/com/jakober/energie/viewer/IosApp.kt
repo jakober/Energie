@@ -17,8 +17,6 @@ import platform.UserNotifications.UNAuthorizationOptionAlert
 import platform.UserNotifications.UNAuthorizationOptionBadge
 import platform.UserNotifications.UNAuthorizationOptionSound
 import platform.UserNotifications.UNUserNotificationCenter
-import platform.darwin.dispatch_async
-import platform.darwin.dispatch_get_main_queue
 
 /** NSUserDefaults als Schluessel-Wert-Speicher. */
 class UserDefaultsStore : KeyValueStore {
@@ -78,20 +76,17 @@ fun onAppActive() {
 fun onAppBackground() { store.stop() }
 
 /**
- * Fragt einmal nach der Erlaubnis fuer Hinweise und meldet das Geraet danach bei Apple an.
- * Das Token kommt ueber den App-Delegaten zurueck; iOS fragt den Nutzer nur beim ersten Mal,
- * spaeter antwortet es sofort mit der frueheren Entscheidung.
+ * Meldet das Geraet bei Apple an und fragt nach der Erlaubnis fuer Hinweise. Das Token kommt
+ * ueber den App-Delegaten zurueck; iOS fragt den Nutzer nur beim ersten Mal, spaeter
+ * antwortet es sofort mit der frueheren Entscheidung.
  */
 fun askForPush() {
-    val center = UNUserNotificationCenter.currentNotificationCenter()
+    // Die Anmeldung bei Apple geht unabhaengig von der Antwort des Nutzers und liefert das
+    // Token; die Erlaubnis entscheidet nur, ob die Meldung auch angezeigt wird. Beides laeuft
+    // hier auf dem Hauptthread, von dem die App uns ruft.
+    UIApplication.sharedApplication.registerForRemoteNotifications()
     val options = UNAuthorizationOptionAlert or UNAuthorizationOptionSound or UNAuthorizationOptionBadge
-    center.requestAuthorizationWithOptions(options) { granted, _ ->
-        if (granted) {
-            dispatch_async(dispatch_get_main_queue()) {
-                UIApplication.sharedApplication.registerForRemoteNotifications()
-            }
-        }
-    }
+    UNUserNotificationCenter.currentNotificationCenter().requestAuthorizationWithOptions(options) { _, _ -> }
 }
 
 /** Von Swift gerufen, sobald Apple das Geraetetoken geliefert hat. */

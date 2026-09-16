@@ -157,7 +157,11 @@ fun DashboardContent(data: DashboardData, actions: DashboardActions, onOpenSetti
                 batteryCapacityWh = live.senec?.bessNameplate?.designCapacityWh,
             )
         }
+    }
 
+    // Die Karte zum angetippten Knoten: untereinander direkt unter dem Diagramm,
+    // nebeneinander oben rechts.
+    val detail: LazyListScope.() -> Unit = {
         when (selectedNode) {
             FlowNodeKind.CAR -> if (carActive) item {
                 CarCard(
@@ -180,7 +184,6 @@ fun DashboardContent(data: DashboardData, actions: DashboardActions, onOpenSetti
 
     // Rechts die Zahlen.
     val right: LazyListScope.() -> Unit = {
-        // Erst die aufgeklappte Detailkarte, dann der Wochenstreifen, sonst sieht man nicht, dass etwas aufging.
         item { WeatherStrip(live, settings, data.todayDate, onClick = { selectedNode = if (selectedNode == FlowNodeKind.PV) null else FlowNodeKind.PV }) }
 
         if (gridMonths.isNotEmpty()) {
@@ -217,7 +220,7 @@ fun DashboardContent(data: DashboardData, actions: DashboardActions, onOpenSetti
         }
     }
 
-    TwoPane(contentPadding, left, right)
+    TwoPane(contentPadding, left, right, detail, detailKey = selectedNode)
 }
 
 @Composable

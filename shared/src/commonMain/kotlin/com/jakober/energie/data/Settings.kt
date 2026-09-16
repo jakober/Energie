@@ -90,6 +90,9 @@ data class Settings(
     val cloudSyncedAt: Long = 0,
     /** Wann die Anzeige zuletzt Einstellungen der Zentrale uebernommen hat (Unix-Sekunden). */
     val cloudSettingsAppliedAt: Long = 0,
+    /** Zentrale: bis zu welchem Tag (ISO) die Tageszusammenfassungen in der Cloud liegen, und wann heute zuletzt geschrieben wurde. */
+    val cloudDaysUploadedThrough: String = "",
+    val cloudTodayUploadedAt: Long = 0,
     /** Firebase-Token dieses Geraets und das zuletzt in der Cloud eingetragene. */
     val pushToken: String = "",
     val pushRegisteredToken: String = "",

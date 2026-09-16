@@ -7,6 +7,7 @@ import com.jakober.energie.core.cloud.CloudCommand
 import com.jakober.energie.core.cloud.CloudException
 import com.jakober.energie.core.cloud.CloudSession
 import com.jakober.energie.core.cloud.SupabaseClient
+import com.jakober.energie.core.history.DaySummary
 import com.jakober.energie.core.history.HistoryStore
 import com.jakober.energie.core.model.EnergySample
 import com.jakober.energie.core.senec.SenecSystem
@@ -14,6 +15,7 @@ import com.jakober.energie.core.smartcar.CarState
 import io.ktor.client.HttpClient
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
+import kotlinx.datetime.LocalDate
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -107,6 +109,29 @@ class CloudSync(
             c.upsertSamples(sess, batch)
             sent += batch.size
             settings.saveCloudUploadedAt(batch.last().at.epochSeconds)
+        }
+        sent
+    }
+
+    /**
+     * Tageszusammenfassungen fuer die Anzeigen: vergangene Tage einmal (in Paketen, bis alles
+     * nachgetragen ist), den heutigen alle [TODAY_DAYS_INTERVAL]. `summaryOf` liefert die
+     * Zusammenfassung eines Tages aus dem lokalen Verlauf.
+     */
+    suspend fun uploadDays(s: Settings, today: LocalDate, summaryOf: (LocalDate) -> DaySummary): Int = withSession(s) { c, sess ->
+        var sent = 0
+        val through = s.cloudDaysUploadedThrough.takeIf { it.isNotBlank() }?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+        val pending = history.days().filter { it < today && (through == null || it > through) }.sorted().take(DAYS_BATCH)
+        if (pending.isNotEmpty()) {
+            c.upsertDays(sess, pending.map(summaryOf))
+            settings.saveCloudDaysUploadedThrough(pending.last().toString())
+            sent += pending.size
+        }
+        val now = Clock.System.now()
+        if (now.epochSeconds - s.cloudTodayUploadedAt >= TODAY_DAYS_INTERVAL.inWholeSeconds && history.day(today).isNotEmpty()) {
+            c.upsertDays(sess, listOf(summaryOf(today)))
+            settings.saveCloudTodayUploadedAt(now.epochSeconds)
+            sent += 1
         }
         sent
     }
@@ -288,6 +313,10 @@ class CloudSync(
     companion object {
         val GAP = 30.minutes
         const val BATCH = 500
+        /** So viele vergangene Tage je Lauf nachtragen, damit ein Lauf nicht zu lange dauert. */
+        const val DAYS_BATCH = 15
+        /** So oft bekommt der heutige Tag eine neue Zusammenfassung in der Cloud. */
+        val TODAY_DAYS_INTERVAL = 10.minutes
         const val PAGE = 2000
         /** Beim ersten Upload bzw. Abgleich: so weit zurueck. */
         val BACKFILL = 60.days

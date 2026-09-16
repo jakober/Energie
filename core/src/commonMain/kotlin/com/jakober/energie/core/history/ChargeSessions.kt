@@ -1,10 +1,12 @@
 package com.jakober.energie.core.history
 
+import kotlinx.serialization.Serializable
 import com.jakober.energie.core.model.EnergySample
 import kotlinx.datetime.Instant
 import kotlin.math.max
 
 /** Ein Ladevorgang des Autos zu Hause, aus den Messpunkten rekonstruiert. */
+@Serializable
 data class ChargeSession(
     val start: Instant,
     val end: Instant,

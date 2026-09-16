@@ -61,8 +61,10 @@ fun DrivingCard(period: List<DriveDay>, all: List<DriveDay>, settings: Settings,
             if (sum.used.gridWh > 50) ValueRow("Netzstrom von zu Hause", Format.energy(sum.used.gridWh), detail = Format.euro(sum.used.gridWh / 1000 * price), color = EnergyColors.grid)
             if (sum.used.publicWh > 50) ValueRow("Unterwegs geladen", Format.energy(sum.used.publicWh), detail = Format.euro(sum.used.publicWh / 1000 * pub), color = EnergyColors.house)
             if (sum.used.unknownWh > 50) ValueRow("Herkunft unbekannt", Format.energy(sum.used.unknownWh), detail = "war schon im Akku, bevor die App mitzählte", color = EnergyColors.neutral)
-            if (sum.startKm != null && sum.endKm != null) {
-                ValueRow("Kilometerstand", "${Format.number((sum.startKm, sum.endKm).toDouble(), 0, grouping = true)} → %,.0f km")
+            val startKm = sum.startKm
+            val endKm = sum.endKm
+            if (startKm != null && endKm != null) {
+                ValueRow("Kilometerstand", "${Format.number(startKm, 0, grouping = true)} → ${Format.number(endKm, 0, grouping = true)} km")
             }
         }
 

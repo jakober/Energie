@@ -14,6 +14,9 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import kotlinx.datetime.Instant
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.datetime.LocalDate
+import com.jakober.energie.core.history.DaySummary
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -129,6 +132,89 @@ class SupabaseClient(
         val text = check(res, "Messpunkte lesen")
         return json.parseToJsonElement(text).jsonArray.mapNotNull { row ->
             runCatching { json.decodeFromJsonElement(EnergySample.serializer(), row.jsonObject["data"]!!) }.getOrNull()
+        }
+    }
+
+    /** Messpunkte im Zeitraum [from, to), aufsteigend, seitenweise geholt. */
+    suspend fun samplesBetween(session: CloudSession, from: Instant, to: Instant, pageSize: Int = 1000): List<EnergySample> {
+        val out = ArrayList<EnergySample>()
+        var offset = 0
+        while (true) {
+            val res = http.get("$base/rest/v1/samples") {
+                auth(session)
+                parameter("select", "data")
+                parameter("and", "(at.gte.$from,at.lt.$to)")
+                parameter("order", "at.asc")
+                parameter("limit", pageSize)
+                parameter("offset", offset)
+            }
+            val page = json.parseToJsonElement(check(res, "Messpunkte lesen")).jsonArray
+            page.forEach { row -> runCatching { json.decodeFromJsonElement(EnergySample.serializer(), row.jsonObject["data"]!!) }.getOrNull()?.let(out::add) }
+            if (page.size < pageSize) break
+            offset += pageSize
+        }
+        return out
+    }
+
+    // ---------- Tageszusammenfassungen ----------
+
+    /** Schreibt Tageszusammenfassungen; gleicher Tag ueberschreibt. */
+    suspend fun upsertDays(session: CloudSession, days: List<DaySummary>) {
+        if (days.isEmpty()) return
+        val body = buildJsonArray {
+            days.forEach { d ->
+                add(buildJsonObject {
+                    put("day", d.date.toString())
+                    put("data", json.encodeToJsonElement(DaySummary.serializer(), d))
+                    put("updated_at", kotlinx.datetime.Clock.System.now().toString())
+                })
+            }
+        }
+        val res = http.post("$base/rest/v1/days") {
+            auth(session)
+            header("Prefer", "resolution=merge-duplicates,return=minimal")
+            contentType(ContentType.Application.Json)
+            setBody(body.toString())
+        }
+        check(res, "Tageswerte schreiben")
+    }
+
+    /** Tageszusammenfassungen von `from` bis `to` (einschliesslich), aufsteigend. */
+    suspend fun days(session: CloudSession, from: LocalDate, to: LocalDate): List<DaySummary> {
+        val res = http.get("$base/rest/v1/days") {
+            auth(session)
+            parameter("select", "data")
+            parameter("and", "(day.gte.$from,day.lte.$to)")
+            parameter("order", "day.asc")
+            parameter("limit", 1000)
+        }
+        return json.parseToJsonElement(check(res, "Tageswerte lesen")).jsonArray.mapNotNull { row ->
+            runCatching { json.decodeFromJsonElement(DaySummary.serializer(), row.jsonObject["data"]!!) }.getOrNull()
+        }
+    }
+
+    /** Welche Tage schon in der Cloud liegen (nur die Daten, ohne Inhalt). */
+    suspend fun dayList(session: CloudSession): List<LocalDate> {
+        val res = http.get("$base/rest/v1/days") {
+            auth(session)
+            parameter("select", "day")
+            parameter("order", "day.asc")
+            parameter("limit", 5000)
+        }
+        return json.parseToJsonElement(check(res, "Tagesliste lesen")).jsonArray.mapNotNull { row ->
+            row.jsonObject["day"]?.jsonPrimitive?.contentOrNull?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+        }
+    }
+
+    /** Letzte Hinweise, neueste zuerst, auch schon zugestellte (fuer die Liste in der Anzeige). */
+    suspend fun recentAlerts(session: CloudSession, limit: Int = 20): List<Pair<CloudAlert, Instant?>> {
+        val text = check(http.get("$base/rest/v1/alerts") {
+            auth(session); parameter("select", "id,kind,title,body,offer_charge,created_at"); parameter("order", "created_at.desc"); parameter("limit", limit)
+        }, "Hinweise lesen")
+        return json.parseToJsonElement(text).jsonArray.map { e ->
+            val o = e.jsonObject
+            CloudAlert(o["id"]!!.jsonPrimitive.long, o["kind"]!!.jsonPrimitive.content, o["title"]!!.jsonPrimitive.content, o["body"]!!.jsonPrimitive.content, o["offer_charge"]?.jsonPrimitive?.booleanOrNull ?: false) to
+                o["created_at"]?.jsonPrimitive?.contentOrNull?.let { runCatching { Instant.parse(it) }.getOrNull() }
         }
     }
 

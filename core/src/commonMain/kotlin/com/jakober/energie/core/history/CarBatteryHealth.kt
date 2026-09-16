@@ -1,5 +1,6 @@
 package com.jakober.energie.core.history
 
+import kotlinx.serialization.Serializable
 import com.jakober.energie.core.model.EnergySample
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
@@ -8,6 +9,7 @@ import kotlinx.datetime.minus
 import kotlin.math.roundToInt
 
 /** Geschaetzte Vollkapazitaet des Fahrakkus an einem Tag (Median der Messpunkte). */
+@Serializable
 data class CapacityPoint(val date: LocalDate, val capacityKwh: Double, val samples: Int)
 
 /** Zustand des Fahrakkus aus Restenergie und Ladestand, wie das Auto sie meldet. */

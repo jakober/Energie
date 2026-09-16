@@ -25,6 +25,16 @@ create table if not exists public.status (
   updated_at timestamptz not null default now()
 );
 
+-- Tageszusammenfassungen der Zentrale (Statistik, Ladevorgaenge, Fahrtage, Zaehlerstand je Tag),
+-- damit eine Anzeige Wochen, Monate und Jahre zeigen kann, ohne alle Messpunkte zu laden.
+create table if not exists public.days (
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  day date not null,
+  data jsonb not null,
+  updated_at timestamptz not null default now(),
+  primary key (user_id, day)
+);
+
 -- Auftraege der Anzeige an die Zentrale (Laden pausieren, Auto abschliessen ...).
 create table if not exists public.commands (
   id bigint generated always as identity primary key,
@@ -56,6 +66,7 @@ alter table public.settings enable row level security;
 alter table public.status   enable row level security;
 alter table public.commands enable row level security;
 alter table public.alerts   enable row level security;
+alter table public.days     enable row level security;
 
 drop policy if exists "eigene Zeilen" on public.samples;
 create policy "eigene Zeilen" on public.samples  for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
@@ -65,6 +76,8 @@ drop policy if exists "eigene Zeilen" on public.status;
 create policy "eigene Zeilen" on public.status   for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
 drop policy if exists "eigene Zeilen" on public.commands;
 create policy "eigene Zeilen" on public.commands for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
+drop policy if exists "eigene Zeilen" on public.days;
+create policy "eigene Zeilen" on public.days     for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
 drop policy if exists "eigene Zeilen" on public.alerts;
 create policy "eigene Zeilen" on public.alerts   for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
 

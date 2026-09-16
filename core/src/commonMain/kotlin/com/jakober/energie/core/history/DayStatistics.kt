@@ -1,5 +1,6 @@
 package com.jakober.energie.core.history
 
+import kotlinx.serialization.Serializable
 import com.jakober.energie.core.model.EnergySample
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
@@ -8,9 +9,11 @@ import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.toLocalDateTime
 
 /** Ein Extremwert mit dem Zeitpunkt, an dem er auftrat. */
+@Serializable
 data class Peak(val at: Instant, val value: Double)
 
 /** Energiemengen einer Stunde (0..23) in Wh. */
+@Serializable
 data class HourBucket(
     val hour: Int,
     val productionWh: Double,
@@ -29,6 +32,7 @@ data class HourBucket(
  * Uhrzeit, Stundenprofil, Zaehlerstaende. Rechnet ausschliesslich auf den
  * lokal gesammelten Messpunkten.
  */
+@Serializable
 data class DayStatistics(
     val date: LocalDate,
     val sampleCount: Int,

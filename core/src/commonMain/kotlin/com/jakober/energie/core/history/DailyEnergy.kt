@@ -1,5 +1,6 @@
 package com.jakober.energie.core.history
 
+import kotlinx.serialization.Serializable
 import com.jakober.energie.core.model.EnergySample
 import kotlin.math.max
 
@@ -9,6 +10,7 @@ import kotlin.math.max
  * Grob, aber ehrlich: Die SENEC-API liefert keine Zaehlerstaende, nur die
  * Netzwerte des Lesekopfs sind echte Zaehlerstaende.
  */
+@Serializable
 data class EnergyTotals(
     val productionWh: Double,
     val consumptionWh: Double,

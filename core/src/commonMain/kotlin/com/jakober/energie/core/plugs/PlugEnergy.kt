@@ -1,9 +1,11 @@
 package com.jakober.energie.core.plugs
 
+import kotlinx.serialization.Serializable
 import com.jakober.energie.core.history.EnergyTotals
 import com.jakober.energie.core.model.EnergySample
 
 /** Energie eines Steckers in einem Zeitraum. */
+@Serializable
 data class PlugTotals(
     val energyWh: Double,
     val maxPowerW: Double?,

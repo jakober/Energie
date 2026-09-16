@@ -53,6 +53,7 @@ data class BatteryMix(
 }
 
 /** Ein Tag Fahren: Strecke, verbrauchte Energie und deren Herkunft. */
+@Serializable
 data class DriveDay(
     val date: LocalDate,
     val startKm: Double?,

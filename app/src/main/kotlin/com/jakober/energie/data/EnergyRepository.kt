@@ -239,7 +239,8 @@ class EnergyRepository(
                 val sent = cs.uploadPending(s)
                 cs.putStatus(s, live)
                 cs.uploadSettingsIfChanged(settings.current())
-                _state.update { it.copy(cloudError = null, cloudInfo = "Cloud: ${clockLabel(clock.now())} · $sent Messpunkte hochgeladen" + (if (done > 0) " · $done Aufträge" else "")) }
+                val days = runCatching { cs.uploadDays(s, today()) { d -> daySummary(d) } }.getOrElse { 0 }
+                _state.update { it.copy(cloudError = null, cloudInfo = "Cloud: ${clockLabel(clock.now())} · $sent Messpunkte hochgeladen" + (if (done > 0) " · $done Aufträge" else "") + (if (days > 0) " · $days Tage" else "")) }
             }.onFailure { e -> _state.update { it.copy(cloudError = "Cloud: ${e.message ?: e}") } }
         }
         // Nie auf dem Hauptthread: die Tagesauswertungen lesen Verlaufsdateien.
@@ -869,6 +870,22 @@ class EnergyRepository(
         val result = com.jakober.energie.core.history.GridMonths.of(all.map { dayStatistics(it, zone) }, today)
         gridMonthsCache = last to result
         return result
+    }
+
+    /** Zusammenfassung eines Tages fuer die Cloud: Statistik, Ladevorgaenge, Fahrtag, Akkukapazitaet, Zaehlerstand. */
+    fun daySummary(date: LocalDate, zone: TimeZone = TimeZone.currentSystemDefault()): com.jakober.energie.core.history.DaySummary {
+        val samples = history.day(date)
+        val drive = driving(zone).filter { it.date == date }
+        return com.jakober.energie.core.history.DaySummary(
+            date = date,
+            stats = dayStatistics(date, zone),
+            sessions = com.jakober.energie.core.history.ChargeSessions.of(samples),
+            drive = drive,
+            capacity = com.jakober.energie.core.history.CarBatteryHealth.dayPoint(date, samples),
+            lastMeterAt = lastMeterSampleOf(date)?.at,
+            lastMeterImportWh = lastMeterSampleOf(date)?.meterImportWh,
+            lastMeterExportWh = lastMeterSampleOf(date)?.meterExportWh,
+        )
     }
 
     /** Summe ueber alle gespeicherten Tage. */

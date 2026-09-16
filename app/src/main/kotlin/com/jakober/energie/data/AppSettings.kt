@@ -83,6 +83,8 @@ class AppSettings(private val context: Context) {
             cloudUploadedAt = p[CLOUD_UPLOADED_AT] ?: 0L,
             cloudSyncedAt = p[CLOUD_SYNCED_AT] ?: 0L,
             cloudSettingsAppliedAt = p[CLOUD_SETTINGS_APPLIED_AT] ?: 0L,
+            cloudDaysUploadedThrough = p[CLOUD_DAYS_THROUGH] ?: "",
+            cloudTodayUploadedAt = p[CLOUD_TODAY_UPLOADED_AT] ?: 0L,
             pushToken = p[PUSH_TOKEN] ?: "",
             pushRegisteredToken = p[PUSH_REGISTERED] ?: "",
             pvPeakKw = p[PV_PEAK_KW] ?: 0.0,
@@ -109,6 +111,8 @@ class AppSettings(private val context: Context) {
     suspend fun saveCloudUploadedAt(epochSeconds: Long) { context.dataStore.edit { it[CLOUD_UPLOADED_AT] = epochSeconds } }
     suspend fun saveCloudSyncedAt(epochSeconds: Long) { context.dataStore.edit { it[CLOUD_SYNCED_AT] = epochSeconds } }
     suspend fun saveCloudSettingsAppliedAt(epochSeconds: Long) { context.dataStore.edit { it[CLOUD_SETTINGS_APPLIED_AT] = epochSeconds } }
+    suspend fun saveCloudDaysUploadedThrough(isoDate: String) { context.dataStore.edit { it[CLOUD_DAYS_THROUGH] = isoDate } }
+    suspend fun saveCloudTodayUploadedAt(epochSeconds: Long) { context.dataStore.edit { it[CLOUD_TODAY_UPLOADED_AT] = epochSeconds } }
     suspend fun saveCloudRole(role: CloudRole) { context.dataStore.edit { it[CLOUD_ROLE] = role.name } }
     suspend fun savePushToken(token: String) { context.dataStore.edit { it[PUSH_TOKEN] = token } }
     suspend fun savePushRegistered(token: String) { context.dataStore.edit { it[PUSH_REGISTERED] = token } }
@@ -305,6 +309,8 @@ class AppSettings(private val context: Context) {
         val CLOUD_UPLOADED_AT = longPreferencesKey("cloud_uploaded_at")
         val CLOUD_SYNCED_AT = longPreferencesKey("cloud_synced_at")
         val CLOUD_SETTINGS_APPLIED_AT = longPreferencesKey("cloud_settings_applied_at")
+        val CLOUD_DAYS_THROUGH = stringPreferencesKey("cloud_days_through")
+        val CLOUD_TODAY_UPLOADED_AT = longPreferencesKey("cloud_today_uploaded_at")
         val PUSH_TOKEN = stringPreferencesKey("push_token")
         val PUSH_REGISTERED = stringPreferencesKey("push_registered")
         val PV_PEAK_KW = doublePreferencesKey("pv_peak_kw")

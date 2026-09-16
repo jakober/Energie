@@ -1,0 +1,55 @@
+# XcodeGen-Beschreibung der iOS-Huelle. Das Xcode-Projekt wird daraus im Build erzeugt:
+#   brew install xcodegen && cd iosApp && xcodegen generate
+# Die Oberflaeche steckt komplett im Kotlin-Modul shared (Compose Multiplatform);
+# Swift liefert nur Start, Lebenszyklus und die Einbettung des Frameworks.
+name: Energie
+options:
+  bundleIdPrefix: de.jakober
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    DEVELOPMENT_TEAM: BP4K6M9N3N
+    SWIFT_VERSION: "5.9"
+    ENABLE_USER_SCRIPT_SANDBOXING: "NO"
+targets:
+  Energie:
+    type: application
+    platform: iOS
+    sources:
+      - path: Energie
+    info:
+      path: Energie/Info.plist
+      properties:
+        CFBundleDisplayName: Energie Zuhause
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "1"
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+        UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+        ITSAppUsesNonExemptEncryption: false
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: false
+        UIUserInterfaceStyle: Automatic
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.jakober.energie
+        PRODUCT_NAME: Energie
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "1,2"
+        FRAMEWORK_SEARCH_PATHS:
+          - "$(inherited)"
+          - "$(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)"
+        OTHER_LDFLAGS:
+          - "$(inherited)"
+          - "-framework"
+          - "Shared"
+    preBuildScripts:
+      - name: Kotlin-Framework bauen
+        basedOnDependencyAnalysis: false
+        script: |
+          cd "$SRCROOT/.."
+          ./gradlew :shared:embedAndSignAppleFrameworkForXcode -PwithIos --no-daemon

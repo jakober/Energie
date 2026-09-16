@@ -27,3 +27,8 @@ secrets.properties
 # macOS / Windows
 .DS_Store
 Thumbs.db
+
+# iOS: erzeugtes Xcode-Projekt und Build-Ausgaben
+iosApp/*.xcodeproj
+iosApp/build/
+shared/build/xcode-frameworks/

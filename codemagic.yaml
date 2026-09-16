@@ -1,0 +1,69 @@
+# Codemagic: signierter iOS-Build und Upload zu TestFlight.
+# Der Build wird von Hand gestartet (kein Trigger), damit nicht jeder Push Minuten kostet.
+# Voraussetzungen im Codemagic-Konto: App-Store-Connect-Integration "energie-asc"
+# (Issuer-ID, Key-ID, .p8) - nichts davon liegt im Repository.
+workflows:
+  ios-testflight:
+    name: iOS TestFlight
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    integrations:
+      app_store_connect: energie-asc
+    environment:
+      xcode: latest
+      java: 17
+      vars:
+        BUNDLE_ID: de.jakober.energie
+        XCODE_PROJECT: iosApp/Energie.xcodeproj
+        XCODE_SCHEME: Energie
+        APP_STORE_APPLE_ID: "0" # wird von Codemagic aus der Bundle-ID ermittelt, wenn 0
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: de.jakober.energie
+    scripts:
+      - name: Xcode-Projekt erzeugen
+        script: |
+          brew install xcodegen
+          cd iosApp && xcodegen generate
+      - name: Signierprofile eintragen
+        script: |
+          xcode-project use-profiles --project "$XCODE_PROJECT"
+      - name: Build-Nummer setzen
+        script: |
+          cd iosApp
+          BUILD_NUMBER=$(($(app-store-connect get-latest-testflight-build-number "$BUNDLE_ID" 2>/dev/null || echo 0) + 1))
+          agvtool new-version -all "$BUILD_NUMBER"
+      - name: Kotlin-Framework und IPA bauen
+        script: |
+          xcode-project build-ipa --project "$XCODE_PROJECT" --scheme "$XCODE_SCHEME"
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        beta_groups: []
+      email:
+        recipients:
+          - mat.jakober@gmail.com
+        notify:
+          success: true
+          failure: true
+
+  ios-check:
+    name: iOS Simulator-Pruefbau
+    max_build_duration: 45
+    instance_type: mac_mini_m2
+    environment:
+      xcode: latest
+      java: 17
+    scripts:
+      - name: Framework fuer den Simulator
+        script: ./gradlew -PwithIos :shared:linkDebugFrameworkIosSimulatorArm64
+      - name: Xcode-Projekt erzeugen und bauen
+        script: |
+          brew install xcodegen
+          cd iosApp && xcodegen generate
+          xcodebuild -project Energie.xcodeproj -scheme Energie -configuration Debug -sdk iphonesimulator \
+            -destination "generic/platform=iOS Simulator" CODE_SIGNING_ALLOWED=NO build

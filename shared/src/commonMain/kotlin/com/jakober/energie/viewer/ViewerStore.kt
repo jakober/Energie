@@ -418,6 +418,7 @@ class ViewerStore(
         return DashboardData(
             live = s.live, settings = s.settings, today = todayStats, yesterday = dayStatistics(yesterday, s),
             cooling = cooling, carHealth = health, gridMonths = gridMonths, fordResult = s.message, todayDate = today,
+            canConfigure = false,
         )
     }
 

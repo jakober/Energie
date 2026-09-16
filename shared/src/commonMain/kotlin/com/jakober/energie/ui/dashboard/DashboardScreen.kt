@@ -87,6 +87,11 @@ data class DashboardData(
     val gridMonths: List<GridMonth>,
     val fordResult: String?,
     val todayDate: LocalDate,
+    /**
+     * Ob dieses Geraet die Quellen (SENEC, FRITZ!Box) ueberhaupt einrichten kann. Die reine
+     * Anzeige auf dem iPhone kann das nicht; dort waere der Einrichtungshinweis nur verwirrend.
+     */
+    val canConfigure: Boolean = true,
 )
 
 /** Was die Uebersicht ausloesen kann. Als Klasse, damit die Plattform sie einmal baut und merkt. */
@@ -140,7 +145,7 @@ fun DashboardContent(data: DashboardData, actions: DashboardActions, onOpenSetti
             }
         }
 
-        if (!settings.anythingConfigured) {
+        if (data.canConfigure && !settings.anythingConfigured) {
             item { SetupHint(onOpenSettings) }
         }
 

@@ -263,11 +263,13 @@ class EnergyRepository(
         val cs = cloud
         if (cs != null && s.cloudRole == CloudRole.HUB && s.cloudConfigured) {
             runCatching {
+                // Auftraege zuerst: dann tragen Status und Einstellungen in diesem Lauf schon
+                // die neuen Werte, und die Anzeige holt sich nicht den alten Stand zurueck.
+                val done = cs.processCommands(s) { cmd -> executeCommand(cmd) }
                 val live = _state.value
                 val sent = cs.uploadPending(s)
                 cs.putStatus(s, live)
                 cs.uploadSettingsIfChanged(settings.current())
-                val done = cs.processCommands(s) { cmd -> executeCommand(cmd) }
                 _state.update { it.copy(cloudError = null, cloudInfo = "Cloud: ${clockLabel(clock.now())} · $sent Messpunkte hochgeladen" + (if (done > 0) " · $done Aufträge" else "")) }
             }.onFailure { e -> _state.update { it.copy(cloudError = "Cloud: ${e.message ?: e}") } }
         }

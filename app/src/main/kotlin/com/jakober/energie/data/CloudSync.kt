@@ -55,6 +55,8 @@ class CloudSync(
     private var client: SupabaseClient? = null
     private var clientKey: String = ""
     private var lastSettingsHash: Int = 0
+    /** Bis dahin nimmt die Anzeige keine Einstellungen der Zentrale an: sie hat gerade eigene geschickt. */
+    private var settingsHoldUntil: Instant? = null
 
     private fun client(s: Settings): SupabaseClient {
         val key = s.cloudUrl + "|" + s.cloudAnonKey
@@ -189,8 +191,25 @@ class CloudSync(
         open.map { a -> Alert(runCatching { AlertKind.valueOf(a.kind) }.getOrDefault(AlertKind.AUTOMATION_ACTED), a.title, a.body, a.offerCharge) }
     }
 
+    /**
+     * Anzeige: geaenderte Einstellungen als Auftrag an die Zentrale. Die Zentrale uebernimmt
+     * sie und laedt danach ihren Stand hoch. Betriebswerte der Zentrale (letzter Ladebefehl,
+     * Protokoll, gelernte Ladeleistung) bleiben aussen vor, sonst ueberschreibt die Anzeige
+     * den laufenden Zustand der Automatik mit ihrer alten Kopie.
+     */
+    suspend fun sendSettingsToHub(s: Settings) {
+        val plain = settings.plainForBackup(s).filterKeys { it !in CLOUD_KEYS && it !in HUB_STATE_KEYS }
+        withSession(s) { c, sess ->
+            c.addCommand(sess, CMD_SETTINGS, buildJsonObject { put("plain", buildJsonObject { plain.forEach { (k, v) -> put(k, v) } }) })
+        }
+        // Bis die Zentrale den Auftrag verarbeitet und neu hochgeladen hat, wuerde ein Abgleich
+        // die eben gemachte Aenderung mit dem alten Stand der Zentrale ueberschreiben.
+        settingsHoldUntil = Clock.System.now() + SETTINGS_HOLD
+    }
+
     /** Einstellungen der Zentrale uebernehmen, wenn sie neuer sind als die zuletzt uebernommenen. */
     suspend fun pullSettings(s: Settings): Boolean = withSession(s) { c, sess ->
+        settingsHoldUntil?.let { until -> if (Clock.System.now() < until) return@withSession false else settingsHoldUntil = null }
         val (plain, updated) = c.getSettings(sess) ?: return@withSession false
         val stamp = updated?.epochSeconds ?: return@withSession false
         if (stamp <= s.cloudSettingsAppliedAt) return@withSession false
@@ -277,6 +296,10 @@ class CloudSync(
         const val CMD_FORD = "FORD"            // payload: {"command": "PAUSE"}
         const val CMD_OVERRIDE = "CHARGE_OVERRIDE" // payload: {"on": true}
         const val CMD_SETTINGS = "SET_SETTINGS"    // payload: {"plain": {...}}
+        /** Betriebswerte, die nur die Zentrale schreibt; die Anzeige schickt sie nicht mit. */
+        val HUB_STATE_KEYS = setOf("chargeLastCommandAt", "chargeLog", "carLearnedPowerW")
+        /** So lange nach dem Senden eigener Einstellungen nimmt die Anzeige keine von der Zentrale an. */
+        val SETTINGS_HOLD = 3.minutes
         const val CMD_REFRESH = "REFRESH"
 
         fun payloadString(o: JsonObject, key: String): String? = (o[key] as? JsonPrimitive)?.contentOrNull

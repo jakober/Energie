@@ -44,7 +44,13 @@ pro Tag unter `files/verlauf/`. Alles Weitere rechnet sie daraus.
 - **Zentrale und Anzeige:** Ein Zweithandy zu Hause misst als Zentrale jede
   Minute (Vordergrund-Dienst) und schreibt Messpunkte, Autozustand und
   Hinweise nach Supabase; das Handy unterwegs holt alles von dort und schickt
-  Befehle als Aufträge zurück. Schema unter `supabase/schema.sql`.
+  Befehle als Aufträge zurück. Einstellungen, die auf der Anzeige gespeichert
+  werden (Preise, Laderegeln, Orte, Stecker, Hinweise), gehen als Auftrag an die
+  Zentrale; die Zentrale arbeitet Aufträge vor dem Hochladen ab, und die Anzeige
+  nimmt drei Minuten lang keine Einstellungen von ihr an, damit der alte Stand
+  die eben gemachte Änderung nicht zurückdreht. Betriebswerte der Zentrale
+  (letzter Ladebefehl, Protokoll, gelernte Ladeleistung) schickt die Anzeige
+  nie mit. Schema unter `supabase/schema.sql`.
 - **Steckdosen und Zähler:** Shelly- und Tasmota-Messstecker im Heimnetz
   (lokal, ohne Cloud), je Stecker ein Verbraucher; dazu Impulszähler über
   Shelly Plus Uni am S0-Ausgang eines Zwischenzählers (Wärmepumpe). Statistik zeigt, wer wie viel

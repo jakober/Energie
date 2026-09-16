@@ -262,15 +262,18 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             container.settings.save(s)
             // Anzeige: Preise, Regeln, Stecker, Hinweise auch der Zentrale mitteilen.
-            val saved = container.settings.current()
-            if (saved.cloudRole == CloudRole.VIEWER && saved.cloudConfigured) {
-                runCatching {
-                    val plain = container.settings.plainForBackup(saved).filterKeys { it !in CloudSync.CLOUD_KEYS }
-                    container.cloud.sendCommand(saved, CloudSync.CMD_SETTINGS, buildJsonObject { put("plain", buildJsonObject { plain.forEach { (k, v) -> put(k, v) } }) })
-                }.onFailure { _cloudMessage.value = "Einstellungen konnten nicht an die Zentrale gehen: ${it.message}" }
-            }
+            pushSettingsToHub()
             runCatching { repo.refresh() }
         }
+    }
+
+    /** Anzeige: den gespeicherten Stand an die Zentrale uebergeben, sonst holt sie sich beim naechsten Abgleich den alten zurueck. */
+    private suspend fun pushSettingsToHub(): Boolean {
+        val saved = container.settings.current()
+        if (saved.cloudRole != CloudRole.VIEWER || !saved.cloudConfigured) return false
+        return runCatching { container.cloud.sendSettingsToHub(saved) }
+            .onFailure { _cloudMessage.value = "Einstellungen konnten nicht an die Zentrale gehen: ${it.message}" }
+            .isSuccess
     }
 
     // ---- Cloud ----
@@ -559,12 +562,17 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
             // Aus-Schwelle muss unter der Ein-Schwelle liegen.
             val fixed = if (rules.batteryOffPercent >= rules.batteryOnPercent) rules.copy(batteryOffPercent = (rules.batteryOnPercent - 10).coerceAtLeast(0)) else rules
             container.settings.saveRules(fixed)
+            // Anzeige: die Regeln gelten auf der Zentrale, also muss sie sie bekommen.
+            pushSettingsToHub()
             runCatching { repo.refresh() }
         }
     }
 
     fun savePlaces(places: List<NamedPlace>) {
-        viewModelScope.launch { container.settings.savePlaces(places) }
+        viewModelScope.launch {
+            container.settings.savePlaces(places)
+            pushSettingsToHub()
+        }
     }
 
     // ---- Messstecker ----
@@ -580,14 +588,7 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             container.settings.savePlugs(plugs)
             // Anzeige: die Zentrale fragt die Stecker ab, also muss sie die Liste bekommen.
-            val s = container.settings.current()
-            if (s.cloudRole == CloudRole.VIEWER && s.cloudConfigured) {
-                runCatching {
-                    val plain = container.settings.plainForBackup(s).filterKeys { it !in CloudSync.CLOUD_KEYS }
-                    container.cloud.sendCommand(s, CloudSync.CMD_SETTINGS, buildJsonObject { put("plain", buildJsonObject { plain.forEach { (k, v) -> put(k, v) } }) })
-                    _plugMessage.value = (_plugMessage.value ?: "") + " Steckerliste an die Zentrale übergeben."
-                }.onFailure { _plugMessage.value = "Steckerliste nicht an die Zentrale übergeben: ${it.message}" }
-            }
+            if (pushSettingsToHub()) _plugMessage.value = (_plugMessage.value ?: "") + " Steckerliste an die Zentrale übergeben."
             refreshNow()
         }
     }

@@ -50,10 +50,16 @@ private fun installCrashHook() {
 }
 
 /** Einstieg fuer Swift: der ganze Bildschirm als UIViewController. */
-fun MainViewController(): UIViewController = ComposeUIViewController {
+fun MainViewController(): UIViewController {
     installCrashHook()
-    CompositionLocalProvider(LocalPlatformHooks provides IosHooks) {
-        ViewerApp(store)
+    return ComposeUIViewController(configure = {
+        // Die Info.plist traegt den verlangten Eintrag; die strenge Pruefung bleibt trotzdem
+        // aus, denn ein fehlender Hinweis zur Bildrate darf die App nicht beenden.
+        enforceStrictPlistSanityCheck = false
+    }) {
+        CompositionLocalProvider(LocalPlatformHooks provides IosHooks) {
+            ViewerApp(store)
+        }
     }
 }
 

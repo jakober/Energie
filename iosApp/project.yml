@@ -29,6 +29,9 @@ targets:
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         ITSAppUsesNonExemptEncryption: false
+        # Compose Multiplatform verlangt diesen Eintrag und beendet sonst beim Start die App.
+        # Inhaltlich erlaubt er die volle Bildrate auf iPhones mit 120-Hz-Anzeige.
+        CADisableMinimumFrameDurationOnPhone: true
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: false
         UIUserInterfaceStyle: Automatic

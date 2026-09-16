@@ -66,4 +66,4 @@ workflows:
           brew install xcodegen
           cd iosApp && xcodegen generate
           xcodebuild -project Energie.xcodeproj -scheme Energie -configuration Debug -sdk iphonesimulator \
-            -destination "generic/platform=iOS Simulator" CODE_SIGNING_ALLOWED=NO build
+            -destination "generic/platform=iOS Simulator" ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO build

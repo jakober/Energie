@@ -124,6 +124,10 @@ class ViewerStore(
 
     fun today(): LocalDate = clock.now().toLocalDateTime(zone).date
 
+    /** Letzter Absturz, vom Fehler-Haken der Plattform abgelegt; null = keiner. */
+    fun lastCrash(): String? = kv.get(KEY_CRASH)
+    fun clearCrash() = kv.put(KEY_CRASH, null)
+
     // ------------------------------------------------------------ Anmeldung
 
     fun login(email: String, password: String) {
@@ -451,6 +455,7 @@ class ViewerStore(
         const val KEY_SESSION = "session"
         const val KEY_EMAIL = "email"
         const val KEY_FORECAST = "forecast"
+        const val KEY_CRASH = "crash"
         const val CMD_FORD = "FORD"
         const val CMD_OVERRIDE = "CHARGE_OVERRIDE"
         const val CMD_SETTINGS = "SET_SETTINGS"

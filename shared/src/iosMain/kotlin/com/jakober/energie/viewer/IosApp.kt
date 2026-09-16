@@ -33,10 +33,25 @@ private object IosHooks : PlatformHooks {
 }
 
 private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-private val store: ViewerStore by lazy { ViewerStore(HttpClient(Darwin), UserDefaultsStore(), appScope) }
+private val defaults = UserDefaultsStore()
+private val store: ViewerStore by lazy { ViewerStore(HttpClient(Darwin), defaults, appScope) }
+
+/**
+ * Ein nicht abgefangener Fehler beendet auf iOS sofort die ganze App. Der Haken schreibt
+ * ihn vorher weg, damit er beim naechsten Start auf dem Bildschirm steht.
+ */
+@OptIn(kotlin.experimental.ExperimentalNativeApi::class)
+private fun installCrashHook() {
+    kotlin.native.setUnhandledExceptionHook { e ->
+        runCatching {
+            defaults.put(ViewerStore.KEY_CRASH, (e.stackTraceToString()).take(4000))
+        }
+    }
+}
 
 /** Einstieg fuer Swift: der ganze Bildschirm als UIViewController. */
 fun MainViewController(): UIViewController = ComposeUIViewController {
+    installCrashHook()
     CompositionLocalProvider(LocalPlatformHooks provides IosHooks) {
         ViewerApp(store)
     }

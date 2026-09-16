@@ -7,6 +7,23 @@ import android.os.Build
 import android.os.Bundle
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.activity.ComponentActivity
@@ -56,12 +73,22 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         noteConnectReturn(intent)
-        val container = (application as EnergieApp).container
+        // Erst den Absturzbericht lesen, dann den Container holen: scheitert der Start selbst,
+        // ist die Meldung trotzdem zu sehen.
+        val crashFile = java.io.File(filesDir, EnergieApp.CRASH_FILE)
+        val crashText = runCatching { crashFile.takeIf { it.exists() }?.readText() }.getOrNull()
+        val container = runCatching { (application as EnergieApp).container }.getOrNull()
         setContent {
             // Android 12+: Systemfarben fuer das helle Schema, wie bisher.
             val dynamicLight = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) dynamicLightColorScheme(this) else null
             EnergieTheme(lightScheme = dynamicLight) {
-                EnergieRoot(container, connectReturns.intValue)
+                var crash by remember { mutableStateOf(crashText) }
+                val text = crash
+                when {
+                    text != null -> CrashScreen(text) { crashFile.delete(); crash = null }
+                    container == null -> CrashScreen("Der Start der App ist fehlgeschlagen, es liegt aber kein Bericht vor.") {}
+                    else -> EnergieRoot(container, connectReturns.intValue)
+                }
             }
         }
     }
@@ -129,5 +156,27 @@ private fun EnergieRoot(container: AppContainer, connectReturns: Int) {
             composable(Tab.STATISTICS.route) { StatisticsScreen(vm, contentPadding = padding) }
             composable(Tab.SETTINGS.route) { SettingsScreen(vm, contentPadding = padding) }
         }
+    }
+}
+
+/** Letzter Absturz in voller Laenge, zum Abfotografieren. Erste Ansicht nach einem Absturz. */
+@Composable
+private fun CrashScreen(text: String, onDismiss: () -> Unit) {
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Spacer(Modifier.height(32.dp))
+        Text("Letzter Absturz", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.error)
+        Text(
+            "Bitte abfotografieren und schicken. Danach unten weiter.",
+            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text.lines().take(45).joinToString("\n"),
+            style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontSize = 10.sp),
+        )
+        Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Verstanden, App starten") }
+        Spacer(Modifier.height(32.dp))
     }
 }

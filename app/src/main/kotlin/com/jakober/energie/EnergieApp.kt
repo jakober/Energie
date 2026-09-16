@@ -24,14 +24,25 @@ class EnergieApp : Application(), Configuration.Provider {
             }
             previous?.uncaughtException(thread, e)
         }
-        container = AppContainer(this)
-        com.jakober.energie.notify.Push.init(this)
-        PollWorker.schedule(this)
-        BackupWorker.schedule(this) // prueft selbst, ob eine Sicherung eingerichtet ist
-        HubWatchWorker.schedule(this) // Anzeige: meldet, wenn die Zentrale schweigt
-        // Zentrale: Vordergrund-Dienst, damit jede Minute gemessen wird.
-        if (kotlinx.coroutines.runBlocking { container.settings.current().cloudRole } == com.jakober.energie.data.CloudRole.HUB) {
-            com.jakober.energie.hub.HubService.start(this)
+        // Jeder Schritt einzeln abgesichert: faellt einer aus, startet die App trotzdem,
+        // und der Fehler steht beim naechsten Start auf dem Bildschirm.
+        val problems = StringBuilder()
+        fun step(name: String, block: () -> Unit) {
+            runCatching(block).onFailure { problems.append("$name: ${it.stackTraceToString()}\n\n") }
+        }
+        step("AppContainer") { container = AppContainer(this) }
+        step("Push") { com.jakober.energie.notify.Push.init(this) }
+        step("PollWorker") { PollWorker.schedule(this) }
+        step("BackupWorker") { BackupWorker.schedule(this) }
+        step("HubWatchWorker") { HubWatchWorker.schedule(this) }
+        step("HubService") {
+            // Zentrale: Vordergrund-Dienst, damit jede Minute gemessen wird.
+            if (kotlinx.coroutines.runBlocking { container.settings.current().cloudRole } == com.jakober.energie.data.CloudRole.HUB) {
+                com.jakober.energie.hub.HubService.start(this)
+            }
+        }
+        if (problems.isNotEmpty()) {
+            runCatching { java.io.File(filesDir, CRASH_FILE).writeText("Start-Fehler\n$problems".take(12_000)) }
         }
     }
 

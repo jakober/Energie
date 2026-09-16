@@ -1,5 +1,7 @@
 package com.jakober.energie.viewer
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -59,8 +61,14 @@ private enum class ViewerTab(val label: String) { OVERVIEW("Übersicht"), STATIS
 fun ViewerApp(store: ViewerStore) {
     EnergieTheme {
         val state by store.state.collectAsState()
-        if (!state.loggedIn) LoginScreen(state, store::login)
-        else ViewerScaffold(store, state)
+        // Ein Absturz aus dem letzten Start kommt zuerst: sonst ist er nicht zu sehen.
+        var crash by remember { mutableStateOf(store.lastCrash()) }
+        val text = crash
+        when {
+            text != null -> CrashScreen(text) { store.clearCrash(); crash = null }
+            !state.loggedIn -> LoginScreen(state, store::login)
+            else -> ViewerScaffold(store, state)
+        }
     }
 }
 
@@ -218,4 +226,23 @@ private fun commandLabel(kind: String, payload: String): String = when (kind) {
     "FORD" -> "Ford-Befehl"
     "REFRESH" -> "Auto neu abfragen"
     else -> kind
+}
+
+/** Letzter Absturz in voller Laenge, zum Abfotografieren. */
+@Composable
+private fun CrashScreen(text: String, onDismiss: () -> Unit) {
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Spacer(Modifier.height(48.dp))
+        Text("Letzter Absturz", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.error)
+        Text(
+            "Bitte abfotografieren und schicken. Danach unten weiter.",
+            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(text.lines().take(45).joinToString("\n"), style = MaterialTheme.typography.bodySmall)
+        Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Verstanden, App starten") }
+        Spacer(Modifier.height(32.dp))
+    }
 }

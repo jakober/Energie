@@ -35,6 +35,11 @@ targets:
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: false
         UIUserInterfaceStyle: Automatic
+    entitlements:
+      path: Energie/Energie.entitlements
+      properties:
+        # Hinweise kommen direkt von Apple; "production" gilt auch fuer TestFlight.
+        aps-environment: production
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: de.jakober.energie

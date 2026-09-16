@@ -4,8 +4,11 @@ create table if not exists public.devices (
   token text primary key,
   user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   name text,
+  platform text not null default 'android',
   updated_at timestamptz not null default now()
 );
+-- "android" laeuft ueber Firebase, "ios" direkt ueber Apple.
+alter table public.devices add column if not exists platform text not null default 'android';
 create index if not exists devices_user on public.devices (user_id);
 alter table public.devices enable row level security;
 drop policy if exists "eigene Zeilen" on public.devices;

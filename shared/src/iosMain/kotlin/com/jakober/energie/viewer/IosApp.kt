@@ -13,6 +13,12 @@ import platform.Foundation.NSURL
 import platform.Foundation.NSUserDefaults
 import platform.UIKit.UIApplication
 import platform.UIKit.UIViewController
+import platform.UserNotifications.UNAuthorizationOptionAlert
+import platform.UserNotifications.UNAuthorizationOptionBadge
+import platform.UserNotifications.UNAuthorizationOptionSound
+import platform.UserNotifications.UNUserNotificationCenter
+import platform.darwin.dispatch_async
+import platform.darwin.dispatch_get_main_queue
 
 /** NSUserDefaults als Schluessel-Wert-Speicher. */
 class UserDefaultsStore : KeyValueStore {
@@ -64,5 +70,29 @@ fun MainViewController(): UIViewController {
 }
 
 /** Von Swift beim Wechsel in den Vorder-/Hintergrund gerufen: Abgleich anhalten und fortsetzen. */
-fun onAppActive() { store.start() }
+fun onAppActive() {
+    store.start()
+    if (store.state.value.loggedIn) askForPush()
+}
+
 fun onAppBackground() { store.stop() }
+
+/**
+ * Fragt einmal nach der Erlaubnis fuer Hinweise und meldet das Geraet danach bei Apple an.
+ * Das Token kommt ueber den App-Delegaten zurueck; iOS fragt den Nutzer nur beim ersten Mal,
+ * spaeter antwortet es sofort mit der frueheren Entscheidung.
+ */
+fun askForPush() {
+    val center = UNUserNotificationCenter.currentNotificationCenter()
+    val options = UNAuthorizationOptionAlert or UNAuthorizationOptionSound or UNAuthorizationOptionBadge
+    center.requestAuthorizationWithOptions(options) { granted, _ ->
+        if (granted) {
+            dispatch_async(dispatch_get_main_queue()) {
+                UIApplication.sharedApplication.registerForRemoteNotifications()
+            }
+        }
+    }
+}
+
+/** Von Swift gerufen, sobald Apple das Geraetetoken geliefert hat. */
+fun onPushToken(token: String, name: String) = store.registerPushToken(token, name)

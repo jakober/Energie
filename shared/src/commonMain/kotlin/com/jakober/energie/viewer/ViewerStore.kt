@@ -149,7 +149,24 @@ class ViewerStore(
         stop()
         session = null
         kv.put(KEY_SESSION, null)
+        kv.put(KEY_PUSH_TOKEN, null)
         _state.update { ViewerState(email = it.email, selectedDate = today()) }
+    }
+
+    // ------------------------------------------------------------ Push
+
+    /**
+     * Traegt das Geraetetoken von Apple in die Cloud ein, damit die Edge Function Hinweise
+     * direkt aufs Geraet schicken kann. Ein unveraendertes Token wird nicht erneut geschrieben.
+     */
+    fun registerPushToken(token: String, name: String) {
+        if (token.isBlank()) return
+        scope.launch {
+            if (session == null) return@launch
+            if (kv.get(KEY_PUSH_TOKEN) == token) return@launch
+            runCatching { withSession { client.upsertDevice(it, token, name, platform = "ios") } }
+                .onSuccess { kv.put(KEY_PUSH_TOKEN, token) }
+        }
     }
 
     private fun saveSession(s: CloudSession) {
@@ -457,6 +474,7 @@ class ViewerStore(
         const val KEY_EMAIL = "email"
         const val KEY_FORECAST = "forecast"
         const val KEY_CRASH = "crash"
+        const val KEY_PUSH_TOKEN = "push_token"
         const val CMD_FORD = "FORD"
         const val CMD_OVERRIDE = "CHARGE_OVERRIDE"
         const val CMD_SETTINGS = "SET_SETTINGS"

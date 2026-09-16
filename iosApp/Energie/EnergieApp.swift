@@ -3,6 +3,7 @@ import Shared
 
 @main
 struct EnergieApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {

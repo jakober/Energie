@@ -381,11 +381,13 @@ class SupabaseClient(
 
     // ---------- Geraete fuer Push ----------
 
-    suspend fun upsertDevice(session: CloudSession, token: String, name: String) {
+    /** `platform` entscheidet, wie die Edge Function sendet: "android" ueber Firebase, "ios" ueber Apple. */
+    suspend fun upsertDevice(session: CloudSession, token: String, name: String, platform: String = "android") {
         upsertRow(session, "devices", buildJsonObject {
             put("token", token)
             put("user_id", session.userId)
             put("name", name)
+            put("platform", platform)
             put("updated_at", kotlinx.datetime.Clock.System.now().toString())
         })
     }

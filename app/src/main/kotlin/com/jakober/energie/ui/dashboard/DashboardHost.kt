@@ -11,6 +11,12 @@ import com.jakober.energie.ui.AndroidPlatformHooks
 import com.jakober.energie.ui.EnergieViewModel
 import com.jakober.energie.ui.LocalPlatformHooks
 
+/*
+ * Die Datei heisst bewusst nicht wie die gemeinsame Oberflaeche: gleicher Dateiname im
+ * gleichen Paket ergaebe zwei Klassen namens ...ScreenKt, und zur Laufzeit gewaenne die
+ * falsche (NoSuchMethodError).
+ */
+
 /** Android-Huelle: sammelt die Datenfluesse des ViewModels und reicht sie an die gemeinsame Uebersicht. */
 @Composable
 fun DashboardScreen(vm: EnergieViewModel, onOpenSettings: () -> Unit, contentPadding: PaddingValues) {

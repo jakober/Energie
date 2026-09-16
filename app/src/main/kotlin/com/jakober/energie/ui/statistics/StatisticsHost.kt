@@ -7,6 +7,12 @@ import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jakober.energie.ui.EnergieViewModel
 
+/*
+ * Die Datei heisst bewusst nicht wie die gemeinsame Oberflaeche: gleicher Dateiname im
+ * gleichen Paket ergaebe zwei Klassen namens ...ScreenKt, und zur Laufzeit gewaenne die
+ * falsche (NoSuchMethodError).
+ */
+
 /** Android-Huelle: sammelt die Datenfluesse des ViewModels und reicht sie an die gemeinsame Statistik. */
 @Composable
 fun StatisticsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {

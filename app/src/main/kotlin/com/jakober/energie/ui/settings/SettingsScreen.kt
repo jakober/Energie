@@ -1,5 +1,7 @@
 package com.jakober.energie.ui.settings
 
+import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.remember
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -100,6 +102,22 @@ fun SettingsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item { Text("Einstellungen", style = MaterialTheme.typography.displaySmall) }
+
+        // Letzter Absturz, falls einer aufgezeichnet wurde: als Text zum Abfotografieren.
+        item {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val crashFile = remember { java.io.File(context.filesDir, com.jakober.energie.EnergieApp.CRASH_FILE) }
+            var crash by remember { mutableStateOf(crashFile.takeIf { it.exists() }?.readText()) }
+            crash?.let { text ->
+                EnergieCard(title = "Letzter Absturz", accent = MaterialTheme.colorScheme.error) {
+                    Text(
+                        text.lines().take(40).joinToString("\n"),
+                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontSize = 10.sp),
+                    )
+                    TextButton(onClick = { crashFile.delete(); crash = null }) { Text("Verwerfen") }
+                }
+            }
+        }
 
         item {
             EnergieCard(title = "SENEC.Connect", accent = EnergyColors.sun) {

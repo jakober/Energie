@@ -35,6 +35,8 @@ object Format {
      * Tausendertrenner: 1234.5 -> "1.234,5". Entspricht String.format(Locale.GERMANY).
      */
     fun number(v: Double, decimals: Int, grouping: Boolean = false): String {
+        // NaN und Unendlich duerfen nie zum Absturz fuehren (roundToLong wirft bei NaN).
+        if (v.isNaN() || v.isInfinite()) return "–"
         val factor = 10.0.pow(decimals)
         val scaled = (abs(v) * factor).roundToLong()
         val intPart = scaled / factor.toLong()
@@ -58,14 +60,14 @@ object Format {
 
     /** 850 W, 1,25 kW, -3,4 kW */
     fun power(w: Double?, signed: Boolean = false): String {
-        if (w == null) return "–"
+        if (w == null || w.isNaN() || w.isInfinite()) return "–"
         val sign = if (signed && w > 0) "+" else ""
         return if (abs(w) < 1000) "$sign${w.roundToInt()} W" else "$sign${number(w / 1000, 2)} kW"
     }
 
     /** 0,8 kWh, 12,3 kWh, 1.234 kWh */
     fun energy(wh: Double?): String {
-        if (wh == null) return "–"
+        if (wh == null || wh.isNaN() || wh.isInfinite()) return "–"
         val kwh = wh / 1000
         return when {
             abs(kwh) < 10 -> "${number(kwh, 2)} kWh"
@@ -79,9 +81,9 @@ object Format {
     /** Zaehlerstand mit drei Nachkommastellen: 12.345,678 kWh */
     fun meterReading(wh: Long?): String = if (wh == null) "–" else "${number(wh / 1000.0, 3, grouping = true)} kWh"
 
-    fun percent(fraction: Double?): String = if (fraction == null) "–" else "${(fraction * 100).roundToInt()} %"
+    fun percent(fraction: Double?): String = if (fraction == null || fraction.isNaN() || fraction.isInfinite()) "–" else "${(fraction * 100).roundToInt()} %"
 
-    fun percentValue(percent: Double?): String = if (percent == null) "–" else "${percent.roundToInt()} %"
+    fun percentValue(percent: Double?): String = if (percent == null || percent.isNaN() || percent.isInfinite()) "–" else "${percent.roundToInt()} %"
 
     fun euro(amount: Double?): String = if (amount == null) "–" else "${number(amount, 2)} €"
 
@@ -143,7 +145,7 @@ object Format {
     }
 
     /** Zahl fuer ein Eingabefeld: ganzzahlig ohne Nachkommastellen, sonst mit Komma. */
-    fun plain(v: Double): String = if (v == v.roundToLong().toDouble()) v.toLong().toString() else number(v, 1)
+    fun plain(v: Double): String = if (v.isNaN() || v.isInfinite()) "0" else if (v == v.roundToLong().toDouble()) v.toLong().toString() else number(v, 1)
 
     fun hourLabel(h: Int): String = two(h)
 

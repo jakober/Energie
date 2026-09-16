@@ -57,6 +57,7 @@ import kotlin.math.roundToInt
 private fun compare(today: Double, yesterday: Double?): String? {
     if (yesterday == null || yesterday <= 0) return null
     val diff = (today - yesterday) / yesterday * 100
+    if (diff.isNaN() || diff.isInfinite()) return "gestern ${Format.energy(yesterday)}"
     val sign = if (diff >= 0) "+" else ""
     return "gestern ${Format.energy(yesterday)} ($sign${diff.roundToInt()} %)"
 }

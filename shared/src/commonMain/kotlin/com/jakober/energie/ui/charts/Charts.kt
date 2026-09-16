@@ -39,7 +39,7 @@ fun GroupedBarChart(
     modifier: Modifier = Modifier,
     labelEvery: Int = 1,
     highlightIndex: Int? = null,
-    valueFormatter: (Double) -> String = { it.roundToInt().toString() },
+    valueFormatter: (Double) -> String = { if (it.isNaN()) "" else it.roundToInt().toString() },
 ) {
     val textMeasurer = rememberTextMeasurer()
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant

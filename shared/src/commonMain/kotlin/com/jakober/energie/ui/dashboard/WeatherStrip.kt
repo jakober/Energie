@@ -89,7 +89,7 @@ private fun DayCell(d: PvForecastDay, today: LocalDate, kwh: Double?, maxKwh: Do
         )
         Icon(icon, contentDescription = d.weatherLabel, tint = tint, modifier = Modifier.size(26.dp))
         Text(
-            d.tempMaxC?.let { "${it.roundToInt()}°" } ?: "–",
+            d.tempMaxC?.takeIf { !it.isNaN() }?.let { "${it.roundToInt()}°" } ?: "–",
             style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(

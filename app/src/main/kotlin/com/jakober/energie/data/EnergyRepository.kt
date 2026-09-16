@@ -239,7 +239,8 @@ class EnergyRepository(
                 val sent = cs.uploadPending(s)
                 cs.putStatus(s, live)
                 cs.uploadSettingsIfChanged(settings.current())
-                val days = runCatching { cs.uploadDays(s, today()) { d -> daySummary(d) } }.getOrElse { 0 }
+                // Tageszusammenfassungen rechnen ist teuer (Verlaufsdateien lesen): nie auf dem Hauptthread.
+                val days = runCatching { withContext(Dispatchers.Default) { cs.uploadDays(s, today()) { d -> daySummary(d) } } }.getOrElse { 0 }
                 _state.update { it.copy(cloudError = null, cloudInfo = "Cloud: ${clockLabel(clock.now())} · $sent Messpunkte hochgeladen" + (if (done > 0) " · $done Aufträge" else "") + (if (days > 0) " · $days Tage" else "")) }
             }.onFailure { e -> _state.update { it.copy(cloudError = "Cloud: ${e.message ?: e}") } }
         }

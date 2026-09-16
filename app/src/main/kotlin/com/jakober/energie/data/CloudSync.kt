@@ -314,7 +314,7 @@ class CloudSync(
         val GAP = 30.minutes
         const val BATCH = 500
         /** So viele vergangene Tage je Lauf nachtragen, damit ein Lauf nicht zu lange dauert. */
-        const val DAYS_BATCH = 15
+        const val DAYS_BATCH = 5
         /** So oft bekommt der heutige Tag eine neue Zusammenfassung in der Cloud. */
         val TODAY_DAYS_INTERVAL = 10.minutes
         const val PAGE = 2000

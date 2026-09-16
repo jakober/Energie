@@ -169,4 +169,54 @@ class AlertEngineTest {
         val r = AlertEngine.evaluate(input(now = t0 + 600.minutes, senecOk = null, fritzOk = null), AlertState(), settings)
         assertTrue(r.alerts.isEmpty())
     }
+
+    @Test
+    fun `leeres Auto zu Hause ohne Stecker meldet einmal je Parkvorgang`() {
+        var r = AlertEngine.evaluate(input(carSoc = 40.0), AlertState(), settings)
+        assertEquals(listOf(AlertKind.CAR_LOW_UNPLUGGED), r.alerts.map { it.kind })
+        assertTrue(r.alerts[0].text.contains("40 %"))
+        // Gleiche Lage eine Stunde spaeter: nicht noch einmal.
+        r = AlertEngine.evaluate(input(now = t0 + 1.hours, carSoc = 40.0), r.state, settings)
+        assertTrue(r.alerts.isEmpty())
+        // Angesteckt: Parkvorgang gilt als erledigt.
+        r = AlertEngine.evaluate(input(now = t0 + 2.hours, plugged = true, carSoc = 40.0), r.state, settings)
+        assertEquals(false, r.state.carLowReported)
+        // Wieder abgezogen: darf erneut melden.
+        r = AlertEngine.evaluate(input(now = t0 + 3.hours, carSoc = 40.0), r.state, settings)
+        assertEquals(listOf(AlertKind.CAR_LOW_UNPLUGGED), r.alerts.map { it.kind })
+    }
+
+    @Test
+    fun `volles Auto, unterwegs oder unbekannter Stecker melden nicht`() {
+        assertTrue(AlertEngine.evaluate(input(carSoc = 80.0), AlertState(), settings).alerts.isEmpty())
+        assertTrue(AlertEngine.evaluate(input(carSoc = 40.0, distance = 5000.0), AlertState(), settings).alerts.isEmpty())
+        assertTrue(AlertEngine.evaluate(input(carSoc = 40.0, plugged = null), AlertState(), settings).alerts.isEmpty())
+        assertTrue(AlertEngine.evaluate(input(carSoc = 40.0, distance = null), AlertState(), settings).alerts.isEmpty())
+    }
+
+    @Test
+    fun `Strom da und Auto steckt nicht meldet hoechstens stuendlich`() {
+        // Einspeisung ueber der Schwelle.
+        var r = AlertEngine.evaluate(input(grid = -2000.0, carSoc = 70.0), AlertState(), settings)
+        assertEquals(listOf(AlertKind.CAR_SURPLUS_UNPLUGGED), r.alerts.map { it.kind })
+        assertTrue(r.alerts[0].text.contains("2000 W"))
+        r = AlertEngine.evaluate(input(now = t0 + 30.minutes, grid = -2000.0, carSoc = 70.0), r.state, settings)
+        assertTrue(r.alerts.isEmpty())
+        r = AlertEngine.evaluate(input(now = t0 + 61.minutes, grid = -2000.0, carSoc = 70.0), r.state, settings)
+        assertEquals(listOf(AlertKind.CAR_SURPLUS_UNPLUGGED), r.alerts.map { it.kind })
+        // Voller Hausspeicher allein reicht auch.
+        val s2 = AlertEngine.evaluate(input(soc = 85.0, carSoc = 70.0), AlertState(), settings)
+        assertEquals(listOf(AlertKind.CAR_SURPLUS_UNPLUGGED), s2.alerts.map { it.kind })
+        assertTrue(s2.alerts[0].text.contains("85 %"))
+        // Weder Sonne noch voller Speicher: nichts.
+        assertTrue(AlertEngine.evaluate(input(soc = 40.0, grid = 300.0, carSoc = 70.0), AlertState(), settings).alerts.isEmpty())
+    }
+
+    @Test
+    fun `beide Hinweise lassen sich einzeln abschalten`() {
+        val ohneLeer = settings.copy(carLowUnplugged = false)
+        assertTrue(AlertEngine.evaluate(input(carSoc = 30.0), AlertState(), ohneLeer).alerts.isEmpty())
+        val ohneStrom = settings.copy(carSurplusUnplugged = false)
+        assertTrue(AlertEngine.evaluate(input(grid = -3000.0, carSoc = 70.0), AlertState(), ohneStrom).alerts.isEmpty())
+    }
 }

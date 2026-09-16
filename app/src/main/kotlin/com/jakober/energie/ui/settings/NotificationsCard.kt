@@ -56,6 +56,22 @@ fun NotificationsCard(saved: AlertSettings, onSave: (AlertSettings) -> Unit) {
             SliderRow("Einspeisung ab", "${draft.surplusW} W", draft.surplusW.toFloat(), 500f..5000f, 17) { draft = draft.copy(surplusW = (it / 250).roundToInt() * 250) }
             SliderRow("Speicher ab", "${draft.batteryFullPercent} %", draft.batteryFullPercent.toFloat(), 70f..100f, 5) { draft = draft.copy(batteryFullPercent = it.roundToInt().let { v -> v - v % 5 }) }
         }
+        ToggleRow(
+            "Auto steckt nicht, obwohl es leer ist",
+            "Wenn das Auto zu Hause steht, nicht angesteckt ist und unter ${draft.carLowPercent} % hat. Einmal je Parkvorgang.",
+            draft.carLowUnplugged,
+        ) { draft = draft.copy(carLowUnplugged = it) }
+        if (draft.carLowUnplugged) {
+            SliderRow("Ladung unter", "${draft.carLowPercent} %", draft.carLowPercent.toFloat(), 20f..90f, 13) { draft = draft.copy(carLowPercent = (it / 5).roundToInt() * 5) }
+        }
+        ToggleRow(
+            "Strom da, Auto steckt nicht",
+            "Wenn das Auto zu Hause steht, nicht angesteckt ist und gleichzeitig mindestens ${draft.surplusW} W ins Netz gehen oder der Speicher über ${draft.carSurplusBatteryPercent} % steht. Höchstens stündlich.",
+            draft.carSurplusUnplugged,
+        ) { draft = draft.copy(carSurplusUnplugged = it) }
+        if (draft.carSurplusUnplugged) {
+            SliderRow("Speicher über", "${draft.carSurplusBatteryPercent} %", draft.carSurplusBatteryPercent.toFloat(), 40f..100f, 11) { draft = draft.copy(carSurplusBatteryPercent = (it / 5).roundToInt() * 5) }
+        }
         ToggleRow("Ladeautomatik", "Wenn die Automatik das Laden pausiert oder fortsetzt.", draft.automation) { draft = draft.copy(automation = it) }
         ToggleRow("Ladestart und Ladeende", "Wenn das Auto laut Ford zu laden beginnt oder aufhört, mit Akkustand.", draft.chargeStartStop) { draft = draft.copy(chargeStartStop = it) }
         ToggleRow("Quelle ausgefallen", "SENEC oder FRITZ!Box antworten seit ${draft.sourceDownMinutes} min nicht, und wenn sie wieder da sind.", draft.sourceDown) { draft = draft.copy(sourceDown = it) }
@@ -104,17 +120,13 @@ private fun SliderRow(label: String, value: String, current: Float, range: Close
     }
 }
 
-private val AlertSaver = androidx.compose.runtime.saveable.Saver<AlertSettings, List<String>>(
-    save = {
-        listOf(
-            it.carUnlocked.toString(), it.unlockedMinutes.toString(), it.surplusUnused.toString(), it.surplusW.toString(),
-            it.batteryFullPercent.toString(), it.automation.toString(), it.sourceDown.toString(), it.sourceDownMinutes.toString(), it.backupFailed.toString(),
-        )
-    },
-    restore = {
-        AlertSettings(
-            carUnlocked = it[0].toBoolean(), unlockedMinutes = it[1].toInt(), surplusUnused = it[2].toBoolean(), surplusW = it[3].toInt(),
-            batteryFullPercent = it[4].toInt(), automation = it[5].toBoolean(), sourceDown = it[6].toBoolean(), sourceDownMinutes = it[7].toInt(), backupFailed = it[8].toBoolean(),
-        )
-    },
+private val alertJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; encodeDefaults = true }
+
+/**
+ * Haelt den Entwurf ueber eine Drehung. Bewusst vollstaendig als JSON: eine Aufzaehlung
+ * einzelner Felder verliert die uebrigen, und Speichern wuerde sie auf Standard zuruecksetzen.
+ */
+private val AlertSaver = androidx.compose.runtime.saveable.Saver<AlertSettings, String>(
+    save = { alertJson.encodeToString(AlertSettings.serializer(), it) },
+    restore = { runCatching { alertJson.decodeFromString(AlertSettings.serializer(), it) }.getOrNull() },
 )

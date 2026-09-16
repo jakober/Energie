@@ -14,6 +14,13 @@ data class AlertSettings(
     val surplusUnused: Boolean = true,
     val surplusW: Int = 1500,
     val batteryFullPercent: Int = 95,
+    /** Auto steht zu Hause mit wenig Ladung und steckt nicht. */
+    val carLowUnplugged: Boolean = true,
+    val carLowPercent: Int = 50,
+    /** Auto steht zu Hause und steckt nicht, obwohl Sonne oder Hausspeicher Strom haetten. */
+    val carSurplusUnplugged: Boolean = true,
+    /** Ab diesem Speicherstand gilt der Hausspeicher als Quelle fuers Auto. */
+    val carSurplusBatteryPercent: Int = 80,
     /** Rueckmeldung, wenn die Ladeautomatik pausiert oder fortsetzt. */
     val automation: Boolean = true,
     /** Das Auto hat zu laden begonnen oder aufgehoert (laut Fahrzeug). */
@@ -33,7 +40,7 @@ data class AlertSettings(
 )
 
 enum class AlertKind {
-    CAR_UNLOCKED_HOME, SURPLUS_UNUSED, AUTOMATION_ACTED, SOURCE_DOWN, SOURCE_BACK, BACKUP_FAILED, CHARGE_STARTED, CHARGE_STOPPED,
+    CAR_UNLOCKED_HOME, CAR_LOW_UNPLUGGED, CAR_SURPLUS_UNPLUGGED, SURPLUS_UNUSED, AUTOMATION_ACTED, SOURCE_DOWN, SOURCE_BACK, BACKUP_FAILED, CHARGE_STARTED, CHARGE_STOPPED,
     COOLING_STUCK_ON, COOLING_SILENT, COOLING_BACK, COOLING_OVERLOAD, COOLING_TREND,
     HUB_SILENT, HUB_BACK,
 }
@@ -57,6 +64,10 @@ data class AlertState(
     val homeSince: Long? = null,
     /** Letzter Ueberschuss-Hinweis (Unix-Sekunden). */
     val lastSurplusAt: Long = 0,
+    /** Ob fuer dieses Parken schon gemeldet wurde, dass das Auto leer ist und nicht steckt. */
+    val carLowReported: Boolean = false,
+    /** Letzter Hinweis "Strom da, Auto steckt nicht" (Unix-Sekunden). */
+    val lastCarUnpluggedAt: Long = 0,
     val senecDownReported: Boolean = false,
     val fritzDownReported: Boolean = false,
     /** Ladestatus beim letzten Durchlauf, null = noch nie gesehen. */
@@ -173,9 +184,45 @@ object AlertEngine {
             // Unbekannt: nichts aendern, sonst kaeme der Hinweis nach jeder Luecke erneut.
         }
 
-        // --- Ueberschuss ungenutzt ---
         val soc = input.batterySocPercent
         val grid = input.gridPowerW
+
+        // --- Auto steht zu Hause und steckt nicht ---
+        // Nur mit sicherer Auskunft: "steckt nicht" muss gemeldet sein, nicht bloss unbekannt.
+        val unplugged = atHome == true && input.carPluggedIn == false
+        val carSoc = input.carSocPercent
+        if (unplugged && settings.carLowUnplugged && !s.carLowReported &&
+            carSoc != null && carSoc < settings.carLowPercent
+        ) {
+            alerts += Alert(
+                AlertKind.CAR_LOW_UNPLUGGED, "Auto steckt nicht",
+                "Das Auto steht zu Hause mit ${carSoc.toInt()} % und ist nicht angesteckt.",
+            )
+            s = s.copy(carLowReported = true)
+        }
+        // Weggefahren oder angesteckt: der naechste Parkvorgang darf wieder melden.
+        if (atHome != true || input.carPluggedIn == true) s = s.copy(carLowReported = false)
+
+        val sunFree = grid != null && -grid >= settings.surplusW
+        val storeFree = soc != null && soc >= settings.carSurplusBatteryPercent
+        if (unplugged && settings.carSurplusUnplugged && (sunFree || storeFree) &&
+            nowSec - s.lastCarUnpluggedAt >= SURPLUS_REPEAT.inWholeSeconds
+        ) {
+            alerts += Alert(
+                AlertKind.CAR_SURPLUS_UNPLUGGED, "Strom da, Auto steckt nicht",
+                buildString {
+                    if (sunFree && grid != null) append("${(-grid).toInt()} W gehen ins Netz")
+                    if (sunFree && storeFree) append(", ")
+                    if (storeFree && soc != null) append("der Speicher ist zu ${soc.toInt()} % voll")
+                    append(". Das Auto steht zu Hause und ist nicht angesteckt")
+                    if (carSoc != null) append(", Akku ${carSoc.toInt()} %")
+                    append(".")
+                },
+            )
+            s = s.copy(lastCarUnpluggedAt = nowSec)
+        }
+
+        // --- Ueberschuss ungenutzt ---
         if (settings.surplusUnused && soc != null && grid != null &&
             soc >= settings.batteryFullPercent && -grid >= settings.surplusW &&
             input.carPluggedIn == true && input.carCharging == false && !input.chargeOverride &&

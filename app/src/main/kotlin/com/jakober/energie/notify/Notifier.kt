@@ -38,6 +38,8 @@ class Notifier(private val context: Context) {
         if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return
         val channel = when (alert.kind) {
             AlertKind.CAR_UNLOCKED_HOME, AlertKind.SURPLUS_UNUSED, AlertKind.CHARGE_STARTED, AlertKind.CHARGE_STOPPED -> CHANNEL_CAR
+            // Das Auto steht ungeladen da: soll auffallen, sonst faellt es erst morgens auf.
+            AlertKind.CAR_LOW_UNPLUGGED, AlertKind.CAR_SURPLUS_UNPLUGGED -> CHANNEL_CAR
             // Gefriertruhe steht still: das soll auffallen wie ein Auto-Hinweis.
             AlertKind.COOLING_SILENT, AlertKind.COOLING_STUCK_ON, AlertKind.COOLING_OVERLOAD -> CHANNEL_CAR
             // Schweigt die Zentrale, sammelt niemand mehr Daten: das soll auffallen.

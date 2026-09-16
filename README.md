@@ -176,6 +176,36 @@ verschlüsselt ins Google-Konto und stellt ihn bei einer Neuinstallation
 wieder her. Für längere Verläufe und Geräte ohne Google-Konto gibt es die
 ZIP-Sicherung in einen Ordner deiner Wahl (siehe oben).
 
+## Hinweise auf die Geraete
+
+Die Zentrale schreibt jeden Hinweis in die Tabelle `alerts`. Ein
+Database-Webhook ruft damit die Edge Function `push` auf, die ihn an alle
+Geraete des Kontos schickt (Tabelle `devices`). Die Spalte `platform`
+entscheidet den Weg:
+
+- `android`: Firebase schickt eine reine Datennachricht, die App baut die
+  Benachrichtigung selbst (Kanal, Knopf "Jetzt laden").
+- `ios`: Apple schickt die fertige Meldung; das iPhone traegt sein
+  Geraetetoken beim ersten Start ein, nachdem der Nutzer Mitteilungen
+  erlaubt hat.
+
+Die Geheimnisse liegen ausschliesslich bei Supabase (Edge Functions →
+Secrets), nichts davon im Repository: `FCM_SERVICE_ACCOUNT` und
+`WEBHOOK_SECRET` fuer Android, `APNS_KEY`, `APNS_KEY_ID`, `APNS_TEAM_ID`
+und `APNS_TOPIC` fuer Apple. Fehlt ein Apple-Geheimnis, werden iPhones
+uebersprungen und Android laeuft unveraendert weiter.
+
+## Bauen und Ausliefern
+
+- **Android:** Jeder Push auf `main` baut ueber GitHub Actions eine APK und
+  legt sie auf dem Zweig `apk` ab, zusammen mit `VERSION.txt` (Laufnummer und
+  Commit).
+- **iOS:** Der TestFlight-Build laeuft bei Codemagic und startet nur, wenn die
+  Beschreibung des Commits `[ios]` enthaelt; den Anstoss gibt der Ablauf
+  `.github/workflows/ios-release.yml` ueber die Codemagic-API. Ohne das
+  Stichwort passiert nichts, und ohne die Geheimnisse `CODEMAGIC_API_TOKEN`
+  und `CODEMAGIC_APP_ID` bleibt der Ablauf still stehen, statt zu scheitern.
+
 ## Ausblick
 
 - **Prognosebasiertes Laden:** PV-Vorhersage (Open-Meteo) als Eingang für die

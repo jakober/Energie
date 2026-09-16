@@ -362,7 +362,10 @@ private fun CarCard(
     EnergieCard(title = "Auto im Detail", accent = EnergyColors.car, border = EnergyColors.car, onClose = onClose) {
         if (car == null) {
             Text(
-                live.carError ?: "Noch keine Daten vom Auto. Unter Einstellungen → FordPass „Status lesen“.",
+                live.carError
+                    // Die Anzeige hat keine FordPass-Einstellungen; dort waere der Hinweis irrefuehrend.
+                    ?: if (settings.cloudRole == CloudRole.VIEWER) "Die Zentrale hat noch keine Autodaten gemeldet."
+                    else "Noch keine Daten vom Auto. Unter Einstellungen → FordPass „Status lesen“.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             return@EnergieCard

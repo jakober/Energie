@@ -17,6 +17,7 @@ import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import com.jakober.energie.core.rules.ChargeRules
 import com.jakober.energie.core.senec.SenecConnectClient
+import com.jakober.energie.core.smartcar.CarState
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import kotlinx.serialization.json.Json
@@ -122,6 +123,18 @@ class AppSettings(private val context: Context) {
     suspend fun saveHubSilentReported(v: Boolean) { context.dataStore.edit { it[HUB_SILENT_REPORTED] = v } }
 
     suspend fun saveAlertState(s: AlertState) { context.dataStore.edit { it[ALERT_STATE] = rulesJson.encodeToString(AlertState.serializer(), s) } }
+
+    /**
+     * Letzter bekannter Autozustand. Er liegt sonst nur im Arbeitsspeicher und waere nach
+     * jedem Neustart der Zentrale weg; die Anzeigegeraete haetten dann bis zur naechsten
+     * FordPass-Abfrage nichts vom Auto zu zeigen.
+     */
+    suspend fun lastCarState(): CarState? = context.dataStore.data.first()[CAR_STATE]
+        ?.let { runCatching { rulesJson.decodeFromString(CarState.serializer(), it) }.getOrNull() }
+
+    suspend fun saveCarState(c: CarState) {
+        context.dataStore.edit { it[CAR_STATE] = rulesJson.encodeToString(CarState.serializer(), c) }
+    }
 
     suspend fun current(): Settings = settings.first()
 
@@ -297,6 +310,7 @@ class AppSettings(private val context: Context) {
         val BACKUP_LAST_RESULT = stringPreferencesKey("backup_last_result")
         val ALERTS = stringPreferencesKey("alerts")
         val ALERT_STATE = stringPreferencesKey("alert_state")
+        val CAR_STATE = stringPreferencesKey("car_state")
         val HUB_SILENT_REPORTED = booleanPreferencesKey("hub_silent_reported")
         val PLACES = stringPreferencesKey("places")
         val PLUGS = stringPreferencesKey("plugs")

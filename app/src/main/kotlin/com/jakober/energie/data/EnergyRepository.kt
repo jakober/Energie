@@ -87,6 +87,11 @@ class EnergyRepository(
     suspend fun refresh(background: Boolean = false): LiveState = lock.withLock {
         val s = settings.current()
         if (s.cloudRole == CloudRole.VIEWER) return viewerRefresh(s)
+        // Nach einem Neustart der Zentrale den gemerkten Autozustand zurueckholen, damit die
+        // Anzeigegeraete nicht bis zur naechsten FordPass-Abfrage ohne Auto dastehen.
+        if (_state.value.car == null) {
+            settings.lastCarState()?.let { saved -> _state.update { if (it.car == null) it.copy(car = saved) else it } }
+        }
         _state.update { it.copy(refreshing = true) }
         val startedAt = clock.now()
         val senecPaused = senecBackoffUntil?.let { startedAt < it } == true
@@ -119,6 +124,7 @@ class EnergyRepository(
         val now = clock.now()
         val car = carResult?.getOrNull()
         if (carResult != null) lastCarFetch = now
+        if (car != null) runCatching { settings.saveCarState(car) }
         val carForSample = car ?: _state.value.car?.takeIf { now - it.at < 30.minutes }
         val senec = senecResult?.getOrNull()
         val fritzData = fritzResult?.getOrNull()
@@ -723,6 +729,7 @@ class EnergyRepository(
         val state = fetchCar(s)
         lastCarFetch = clock.now()
         _state.update { it.copy(car = state, carError = null) }
+        runCatching { settings.saveCarState(state) }
         state
     }
 
@@ -801,6 +808,7 @@ class EnergyRepository(
         val state = fetchCar(s)
         lastCarFetch = clock.now()
         _state.update { it.copy(car = state, carError = null) }
+        runCatching { settings.saveCarState(state) }
         state
     }
 

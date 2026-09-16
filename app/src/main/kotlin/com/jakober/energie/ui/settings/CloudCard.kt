@@ -112,7 +112,8 @@ fun CloudCard(
                 ValueRow("Hochgeladen bis", stamp(saved.cloudUploadedAt, now))
             } else {
                 ValueRow("Abgeglichen bis", stamp(saved.cloudSyncedAt, now))
-                ValueRow("Zentrale zuletzt gesehen", live.hubSeenAt?.let { Format.ago(it, now) } ?: "noch nie", color = if (live.hubSeenAt != null && now - live.hubSeenAt > com.jakober.energie.data.EnergyRepository.HUB_SILENT) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
+                val hubSeen = live.hubSeenAt
+                ValueRow("Zentrale zuletzt gesehen", hubSeen?.let { Format.ago(it, now) } ?: "noch nie", color = if (hubSeen != null && now - hubSeen > com.jakober.energie.data.EnergyRepository.HUB_SILENT) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
             }
             if (saved.cloudRole == CloudRole.VIEWER) {
                 TextButton(onClick = onTestPush) { Text("Push testen") }

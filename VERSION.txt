@@ -1,0 +1,4 @@
+Commit:  1c0873e71df9052b4bc0ee0f489f3feaf6490ace
+Lauf:    117
+Zeit:    2026-09-16 19:36 UTC
+Keine Anmeldung zur externen Beta-Pruefung mehr

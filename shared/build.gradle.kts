@@ -14,11 +14,19 @@ plugins {
 //
 //   ./gradlew -PcoreOnly :shared:compileKotlinDesktop
 //
-// Android-Teile stecken in android.gradle.kts, damit der Kern ohne Android-Plugin baut.
+// Der Android-Anteil wird nur ohne -PcoreOnly angewendet und ueber withGroovyBuilder
+// konfiguriert, damit dieses Skript auch ohne Android-Plugin auf dem Klassenpfad uebersetzt.
 val coreOnly = providers.gradleProperty("coreOnly").isPresent
 val withIos = providers.gradleProperty("withIos").isPresent
 
+if (!coreOnly) apply(plugin = "com.android.library")
+
 kotlin {
+    if (!coreOnly) {
+        androidTarget {
+            compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
+        }
+    }
     jvm("desktop") {
         compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
     }
@@ -48,10 +56,25 @@ kotlin {
                 implementation(libs.ktor.client.darwin)
             }
         }
+        if (!coreOnly) {
+            androidMain.dependencies {
+                implementation(libs.ktor.client.okhttp)
+            }
+        }
         val desktopMain by getting {
             dependencies { implementation(libs.ktor.client.cio) }
         }
     }
 }
 
-if (!coreOnly) apply(from = "android.gradle.kts")
+if (!coreOnly) {
+    extensions.getByName("android").withGroovyBuilder {
+        setProperty("namespace", "com.jakober.energie.shared")
+        setProperty("compileSdk", 36)
+        "defaultConfig" { setProperty("minSdk", 26) }
+        "compileOptions" {
+            setProperty("sourceCompatibility", JavaVersion.VERSION_17)
+            setProperty("targetCompatibility", JavaVersion.VERSION_17)
+        }
+    }
+}

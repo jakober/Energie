@@ -366,14 +366,17 @@
   const minutesToTime = (m) => String(Math.floor((m || 0) / 60)).padStart(2, "0") + ":" + String((m || 0) % 60).padStart(2, "0");
   const timeToMinutes = (t) => { const [h, m] = (t || "0:0").split(":").map(Number); return (h || 0) * 60 + (m || 0); };
   function formRules() {
-    return {
+    // Felder, die diese Anzeige nicht kennt, bleiben erhalten: sonst setzte Speichern hier
+    // Einstellungen zurueck, die es nur in der App gibt (etwa "Auto vor Hausspeicher").
+    return Object.assign({}, state.rulesFromHub || {}, {
       enabled: $("r-enabled").checked,
       batteryOnPercent: +$("r-on").value, batteryOffPercent: +$("r-off").value, surplusOnW: +$("r-surplus").value,
       nightStartMinutes: timeToMinutes($("r-night-start").value), nightEndMinutes: timeToMinutes($("r-night-end").value),
       carReservePercent: +$("r-reserve").value, minCommandGapMinutes: +$("r-gap").value,
-    };
+    });
   }
   function fillRules(r) {
+    state.rulesFromHub = r || {};
     const d = Object.assign({ enabled: false, batteryOnPercent: 70, batteryOffPercent: 50, surplusOnW: 2000, nightStartMinutes: 0, nightEndMinutes: 0, carReservePercent: 50, minCommandGapMinutes: 15 }, r || {});
     $("r-enabled").checked = !!d.enabled;
     for (const k of ["batteryOnPercent", "batteryOffPercent", "surplusOnW", "carReservePercent", "minCommandGapMinutes"]) $(R[k]).value = d[k];

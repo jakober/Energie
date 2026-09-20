@@ -15,6 +15,13 @@ data class ChargeRules(
     val batteryOffPercent: Int = 50,
     /** Laden auch erlaubt, wenn so viel PV-Ueberschuss da ist (W). */
     val surplusOnW: Int = 2000,
+    /**
+     * Auto vor Hausspeicher: Dann zaehlt auch die Leistung als Ueberschuss, die gerade in den
+     * Hausspeicher laeuft. Die App kann den Speicher nicht abschalten, aber was das Auto aus
+     * dem Haus zieht, bleibt fuer den Speicher uebrig - er laedt also entsprechend langsamer.
+     * Aus: nur die tatsaechliche Einspeisung zaehlt, der Speicher hat Vorrang.
+     */
+    val carBeforeBattery: Boolean = false,
     /** Nachtsperre von ... (Minuten seit Mitternacht). */
     val nightStartMinutes: Int = 0,
     /** ... bis. Gleich = keine Sperre; das ist der Standard, die Speicherregel reicht meist. */
@@ -110,14 +117,18 @@ object ChargeRuleEngine {
         // pausiert nachts nie.
         val carDraw = if (charging) (input.carChargePowerW ?: 0.0) else 0.0
         val discharge = (-(input.houseBatteryPowerW ?: 0.0)).coerceAtLeast(0.0)
-        val available = (carDraw - (input.gridPowerW ?: 0.0) - discharge).coerceAtLeast(0.0)
+        // "Auto vor Speicher": Was gerade in den Hausspeicher laeuft, gilt als verfuegbar.
+        // Das Auto nimmt es ihm weg, sobald es laedt; der Speicher bekommt nur den Rest.
+        val toBattery = if (rules.carBeforeBattery) (input.houseBatteryPowerW ?: 0.0).coerceAtLeast(0.0) else 0.0
+        val available = (carDraw - (input.gridPowerW ?: 0.0) - discharge + toBattery).coerceAtLeast(0.0)
 
         val wantCharge = soc >= rules.batteryOnPercent || available >= rules.surplusOnW
         val wantPause = soc < rules.batteryOffPercent && available < rules.surplusOnW * 0.7
 
         return when {
             wantCharge && !charging -> gated(rules, input, ChargeAction.RESUME,
-                if (soc >= rules.batteryOnPercent) "Speicher ${soc.toInt()} % >= ${rules.batteryOnPercent} %" else "Ueberschuss ${available.toInt()} W >= ${rules.surplusOnW} W")
+                if (soc >= rules.batteryOnPercent) "Speicher ${soc.toInt()} % >= ${rules.batteryOnPercent} %"
+                else "Ueberschuss ${available.toInt()} W >= ${rules.surplusOnW} W" + (if (toBattery > 0) ", davon ${toBattery.toInt()} W bisher in den Speicher" else ""))
             wantPause && charging -> {
                 val reason = "Speicher ${soc.toInt()} % < ${rules.batteryOffPercent} %, Ueberschuss ${available.toInt()} W" +
                     (if (discharge > 0) ", Speicher gibt ${discharge.toInt()} W ab" else "")

@@ -123,4 +123,33 @@ class ChargeRuleEngineTest {
         val retry = ChargeRuleEngine.decide(r, input(charging = false, override = true, last = t0 - 6.minutes))
         assertEquals(ChargeAction.RESUME, retry.action)
     }
+
+    @Test
+    fun autoVorSpeicherZaehltDieSpeicherladungAlsUeberschuss() {
+        // Mittags: PV laedt den Hausspeicher mit 3000 W, nichts geht ins Netz, Auto steht bei 25 %.
+        val r = rules.copy(batteryOnPercent = 90, batteryOffPercent = 85, surplusOnW = 2000, carReservePercent = 10)
+        val lage = input(soc = 60.0, grid = 0.0, carSoc = 25.0, charging = false, battery = 3000.0)
+        // Ohne die Einstellung gilt nur die Einspeisung: kein Ueberschuss, Speicher hat Vorrang.
+        assertEquals(ChargeAction.NONE, ChargeRuleEngine.decide(r, lage).action)
+        // Mit der Einstellung zaehlt die Speicherladung mit -> das Auto faengt an.
+        val d = ChargeRuleEngine.decide(r.copy(carBeforeBattery = true), lage)
+        assertEquals(ChargeAction.RESUME, d.action)
+        assertTrue(d.reason.contains("3000 W"), d.reason)
+    }
+
+    @Test
+    fun autoVorSpeicherHaeltDasLadenDurch() {
+        // Das Auto laedt mit 2200 W, der Speicher bekommt nur noch 800 W: zusammen wieder 3000 W.
+        val r = rules.copy(batteryOnPercent = 90, batteryOffPercent = 85, surplusOnW = 2000, carReservePercent = 10, carBeforeBattery = true)
+        val d = ChargeRuleEngine.decide(r, input(soc = 60.0, grid = 0.0, carSoc = 30.0, charging = true, carPower = 2200.0, battery = 800.0))
+        assertEquals(ChargeAction.NONE, d.action, d.reason)
+    }
+
+    @Test
+    fun autoVorSpeicherPausiertTrotzdem_wennDerSpeicherLiefert() {
+        // Abends gibt der Speicher ab: das ist kein Ueberschuss, auch nicht in dieser Betriebsart.
+        val r = rules.copy(batteryOnPercent = 90, batteryOffPercent = 85, surplusOnW = 2000, carReservePercent = 10, carBeforeBattery = true)
+        val d = ChargeRuleEngine.decide(r, input(soc = 40.0, grid = 0.0, carSoc = 30.0, charging = true, carPower = 2200.0, battery = -2000.0))
+        assertEquals(ChargeAction.PAUSE, d.action, d.reason)
+    }
 }

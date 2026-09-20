@@ -62,6 +62,19 @@ fun ChargeRulesCard(
         SliderRow("Oder laden bei PV-Überschuss ab", "${draft.surplusOnW} W", draft.surplusOnW.toFloat(), 500f..6000f, 21) {
             draft = draft.copy(surplusOnW = (it / 250).roundToInt() * 250)
         }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Auto vor Hausspeicher", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "Dann zählt auch der Strom als Überschuss, der gerade in den Hausspeicher läuft. " +
+                        "Das Auto nimmt ihn ihm weg, der Speicher lädt entsprechend später. " +
+                        "Aus: nur was ins Netz ginge, zählt.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(checked = draft.carBeforeBattery, onCheckedChange = { draft = draft.copy(carBeforeBattery = it) })
+        }
+
         SliderRow("Immer laden, wenn Auto unter", "${draft.carReservePercent} %", draft.carReservePercent.toFloat(), 10f..80f, 13) {
             draft = draft.copy(carReservePercent = it.roundToInt().let { v -> v - v % 5 })
         }
@@ -116,12 +129,13 @@ private fun TimeField(label: String, minutes: Int, modifier: Modifier, onChange:
     )
 }
 
-private val RulesSaver = androidx.compose.runtime.saveable.Saver<ChargeRules, List<String>>(
-    save = { listOf(it.enabled.toString(), it.batteryOnPercent.toString(), it.batteryOffPercent.toString(), it.surplusOnW.toString(), it.nightStartMinutes.toString(), it.nightEndMinutes.toString(), it.carReservePercent.toString(), it.minCommandGapMinutes.toString()) },
-    restore = {
-        ChargeRules(
-            enabled = it[0].toBoolean(), batteryOnPercent = it[1].toInt(), batteryOffPercent = it[2].toInt(), surplusOnW = it[3].toInt(),
-            nightStartMinutes = it[4].toInt(), nightEndMinutes = it[5].toInt(), carReservePercent = it[6].toInt(), minCommandGapMinutes = it[7].toInt(),
-        )
-    },
+private val rulesJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; encodeDefaults = true }
+
+/**
+ * Haelt den Entwurf ueber eine Drehung. Bewusst vollstaendig als JSON: eine Aufzaehlung
+ * einzelner Felder verliert die uebrigen, und Speichern wuerde sie auf Standard zuruecksetzen.
+ */
+private val RulesSaver = androidx.compose.runtime.saveable.Saver<ChargeRules, String>(
+    save = { rulesJson.encodeToString(ChargeRules.serializer(), it) },
+    restore = { runCatching { rulesJson.decodeFromString(ChargeRules.serializer(), it) }.getOrNull() },
 )

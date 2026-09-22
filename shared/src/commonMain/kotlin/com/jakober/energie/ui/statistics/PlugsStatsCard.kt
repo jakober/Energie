@@ -13,6 +13,16 @@ import androidx.compose.ui.unit.dp
 import com.jakober.energie.core.history.DayStatistics
 import com.jakober.energie.core.plugs.PlugTotals
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material3.Icon
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -68,27 +78,53 @@ fun PlugsStatsCard(days: List<DayStatistics>, settings: Settings) {
         }
         // Gleiche Farben wie in der Haus-Karte; der Rest des Hauses bleibt grau.
         StackedBar(segments = rows.map { (id, t) -> BarSegment(colors[id] ?: EnergyColors.neutral, t.energyWh) } + BarSegment(EnergyColors.car, car), total = house ?: measured)
-        rows.forEach { (id, t) ->
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Box(Modifier.size(12.dp).clip(CircleShape).background(colors[id] ?: EnergyColors.neutral))
-                    Column(Modifier.weight(1f)) {
-                        Text(names[id] ?: id, style = MaterialTheme.typography.titleSmall)
-                        Text(
-                            listOfNotNull(
-                                t.maxPowerW?.let { "Spitze ${Format.power(it)}" },
-                                if (days.size > 1) "Ø ${Format.energy(t.energyWh / days.count { it.plugs.containsKey(id) }.coerceAtLeast(1))}/Tag" else null,
-                                if (!t.fromCounter) "geschätzt" else null,
-                            ).joinToString(" · "),
-                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        // Stecker derselben Gruppe stehen als eine Zeile mit ihrer Summe; eine Gruppe mit
+        // nur einem Stecker waere nur ein Zwischenschritt und bleibt deshalb einzeln.
+        val roomOf = settings.plugs.associate { it.id to it.room.trim() }
+        val entries = rows.groupBy { roomOf[it.key].orEmpty() }
+            .flatMap { (room, rs) ->
+                if (room.isBlank() || rs.size < 2) rs.map { StatsEntry(null, listOf(it.key to it.value)) }
+                else listOf(StatsEntry(room, rs.map { it.key to it.value }))
+            }
+            .sortedByDescending { e -> e.parts.sumOf { it.second.energyWh } }
+        var openGroup by rememberSaveable { mutableStateOf<String?>(null) }
+
+        entries.forEach { e ->
+            val group = e.group
+            if (group == null) {
+                val (id, t) = e.parts.first()
+                PlugStatsLine(names[id] ?: id, colors[id] ?: EnergyColors.neutral, t, days, id, house, settings)
+            } else {
+                val sum = e.parts.sumOf { it.second.energyWh }
+                val open = openGroup == group
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Row(
+                        Modifier.fillMaxWidth().clickable { openGroup = if (open) null else group },
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Box(Modifier.size(12.dp).clip(CircleShape).background(colors[e.parts.first().first] ?: EnergyColors.neutral))
+                        Column(Modifier.weight(1f)) {
+                            Text(group, style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                "${e.parts.size} Geräte zusammen",
+                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(Format.energy(sum), style = MaterialTheme.typography.titleMedium, color = EnergyColors.house)
+                            Text(Format.euro(sum / 1000 * settings.pricePerKwh), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Icon(
+                            if (open) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                            if (open) "Zuklappen" else "Aufklappen",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text(Format.energy(t.energyWh), style = MaterialTheme.typography.titleMedium, color = EnergyColors.house)
-                        Text(Format.euro(t.energyWh / 1000 * settings.pricePerKwh), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
+                    if (house != null) ShareBar("Anteil am Haus", sum / house, EnergyColors.house)
                 }
-                if (house != null) ShareBar("Anteil am Haus", t.energyWh / house, EnergyColors.house)
+                if (open) e.parts.forEach { (id, t) ->
+                    PlugStatsLine(names[id] ?: id, colors[id] ?: EnergyColors.neutral, t, days, id, house, settings, indent = true)
+                }
             }
         }
         if (car > 50 && house != null) {
@@ -116,5 +152,37 @@ fun PlugsStatsCard(days: List<DayStatistics>, settings: Settings) {
             "Der Zähler jedes Steckers zählt auch, wenn die App nicht misst; Messlücken verfälschen die Werte darum nicht.",
             style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+/** Eine Zeile der Verbraucherliste: entweder ein einzelner Stecker oder eine Gruppe. */
+private class StatsEntry(val group: String?, val parts: List<Pair<String, PlugTotals>>)
+
+/** Ein Stecker mit Energie, Zusatzangaben und Anteil am Hausverbrauch. */
+@Composable
+private fun PlugStatsLine(
+    name: String, color: androidx.compose.ui.graphics.Color, t: PlugTotals,
+    days: List<DayStatistics>, id: String, house: Double?, settings: Settings, indent: Boolean = false,
+) {
+    Column(Modifier.padding(start = if (indent) 22.dp else 0.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Box(Modifier.size(12.dp).clip(CircleShape).background(color))
+            Column(Modifier.weight(1f)) {
+                Text(name, style = MaterialTheme.typography.titleSmall)
+                Text(
+                    listOfNotNull(
+                        t.maxPowerW?.let { "Spitze ${Format.power(it)}" },
+                        if (days.size > 1) "Ø ${Format.energy(t.energyWh / days.count { it.plugs.containsKey(id) }.coerceAtLeast(1))}/Tag" else null,
+                        if (!t.fromCounter) "geschätzt" else null,
+                    ).joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Text(Format.energy(t.energyWh), style = MaterialTheme.typography.titleMedium, color = EnergyColors.house)
+                Text(Format.euro(t.energyWh / 1000 * settings.pricePerKwh), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        if (house != null) ShareBar("Anteil am Haus", t.energyWh / house, EnergyColors.house)
     }
 }

@@ -51,7 +51,7 @@ fun PlugsCard(
     message: String?,
     onDiscover: () -> Unit,
     onAdd: (host: String, name: String, kind: PlugKind, impulsesPerKwh: Int, offsetKwh: Double) -> Unit,
-    onEdit: (id: String, name: String, type: PlugType, ratedPowerW: Double?, labelKwhPerYear: Double?) -> Unit,
+    onEdit: (id: String, name: String, type: PlugType, ratedPowerW: Double?, labelKwhPerYear: Double?, room: String) -> Unit,
     onRemove: (id: String) -> Unit,
 ) {
     var host by rememberSaveable { mutableStateOf("") }
@@ -75,7 +75,10 @@ fun PlugsCard(
             val err = errors[d.id]
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(d.name + (if (d.isCooling) " · Kühlgerät" else ""), style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        d.name + (if (d.room.isNotBlank()) " · ${d.room}" else "") + (if (d.isCooling) " · Kühlgerät" else ""),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
                     Text(
                         "${d.host} · ${when (d.kind) { PlugKind.SHELLY -> "Shelly"; PlugKind.TASMOTA -> "Tasmota"; PlugKind.SHELLY_S0 -> "Impulszähler ${d.impulsesPerKwh} imp/kWh" }}" +
                             (r?.let { " · jetzt ${Format.power(it.powerW)}" + (it.energyWh?.let { e -> " · Zähler ${Format.energy(e)}" } ?: "") } ?: "") +
@@ -151,6 +154,7 @@ fun PlugsCard(
         val current = plugs.firstOrNull { it.id == id } ?: return@let
         var text by rememberSaveable(id) { mutableStateOf(current.name) }
         var type by rememberSaveable(id) { mutableStateOf(current.type) }
+        var room by rememberSaveable(id) { mutableStateOf(current.room) }
         var rated by rememberSaveable(id) { mutableStateOf(current.ratedPowerW?.let { Format.plain(it) } ?: "") }
         var label by rememberSaveable(id) { mutableStateOf(current.labelKwhPerYear?.let { Format.plain(it) } ?: "") }
         AlertDialog(
@@ -159,6 +163,20 @@ fun PlugsCard(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(value = text, onValueChange = { text = it }, singleLine = true, label = { Text("Name") })
+                    OutlinedTextField(
+                        value = room, onValueChange = { room = it }, singleLine = true,
+                        label = { Text("Gruppe, z. B. Wohnzimmer (optional)") },
+                    )
+                    val andere = plugs.map { it.room.trim() }.filter { it.isNotBlank() && !it.equals(room.trim(), ignoreCase = true) }.distinct()
+                    if (andere.isNotEmpty()) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            andere.take(4).forEach { g -> FilterChip(selected = false, onClick = { room = g }, label = { Text(g) }) }
+                        }
+                    }
+                    Text(
+                        "Stecker mit derselben Gruppe erscheinen in Übersicht und Statistik als eine Zeile mit der Summe; antippen zeigt die einzelnen.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         FilterChip(selected = type == PlugType.OTHER, onClick = { type = PlugType.OTHER }, label = { Text("Sonstiges") })
                         FilterChip(selected = type == PlugType.COOLING, onClick = { type = PlugType.COOLING }, label = { Text("Kühlgerät") })
@@ -181,7 +199,7 @@ fun PlugsCard(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    onEdit(id, text, type, rated.replace(',', '.').toDoubleOrNull(), label.replace(',', '.').toDoubleOrNull())
+                    onEdit(id, text, type, rated.replace(',', '.').toDoubleOrNull(), label.replace(',', '.').toDoubleOrNull(), room)
                     renaming = null
                 }) { Text("Speichern") }
             },

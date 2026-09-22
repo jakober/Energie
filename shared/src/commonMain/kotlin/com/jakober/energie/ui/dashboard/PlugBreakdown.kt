@@ -1,6 +1,16 @@
 package com.jakober.energie.ui.dashboard
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material3.Icon
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -98,7 +108,15 @@ fun PlugBreakdown(live: LiveState, today: DayStatistics?, settings: Settings, co
     val dayRest = dayTotal?.let { (it - dayMeasured - dayCar).coerceAtLeast(0.0) }
 
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
-    val byPower = rows.sortedByDescending { it.nowW ?: -1.0 }
+    val sorted = rows.sortedByDescending { it.nowW ?: -1.0 }
+    // Stecker derselben Gruppe erscheinen als eine Zeile; eine Gruppe mit nur einem
+    // Stecker waere nur ein Zwischenschritt und bleibt deshalb einzeln.
+    val byPower = sorted.groupBy { it.device.room.trim() }
+        .flatMap { (room, rs) ->
+            if (room.isBlank() || rs.size < 2) rs.map { PlugEntry(null, listOf(it)) } else listOf(PlugEntry(room, rs))
+        }
+        .sortedByDescending { e -> e.rows.sumOf { it.nowW ?: -1.0 } }
+    var openGroup by rememberSaveable { mutableStateOf<String?>(null) }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Was gerade Strom zieht", style = MaterialTheme.typography.titleSmall)
@@ -109,7 +127,7 @@ fun PlugBreakdown(live: LiveState, today: DayStatistics?, settings: Settings, co
             Text(Format.power(nowTotal), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = EnergyColors.house)
         }
         StackedBar(
-            segments = byPower.map { BarSegment(it.color, it.nowW ?: 0.0) } + BarSegment(EnergyColors.car, carW),
+            segments = sorted.map { BarSegment(it.color, it.nowW ?: 0.0) } + BarSegment(EnergyColors.car, carW),
             total = nowTotal,
         )
 
@@ -119,36 +137,34 @@ fun PlugBreakdown(live: LiveState, today: DayStatistics?, settings: Settings, co
             Text(Format.energy(dayTotal), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = EnergyColors.house)
         }
         StackedBar(
-            segments = byPower.map { BarSegment(it.color, it.dayWh ?: 0.0) } + BarSegment(EnergyColors.car, dayCar),
+            segments = sorted.map { BarSegment(it.color, it.dayWh ?: 0.0) } + BarSegment(EnergyColors.car, dayCar),
             total = dayTotal,
         )
 
-        // Einzelne Verbraucher
-        byPower.forEach { r ->
-            val status = when {
-                r.reading != null -> null
-                live.plugErrors.containsKey(r.device.id) -> "nicht erreichbar"
-                settings.cloudRole == CloudRole.VIEWER -> "wartet auf Zentrale"
-                else -> "keine Messung"
+        // Einzelne Verbraucher, Gruppen zusammengefasst
+        byPower.forEach { e ->
+            val group = e.group
+            if (group == null) {
+                PlugLine(e.rows.first(), live, settings, cooling, nowTotal, dayTotal)
+            } else {
+                val open = openGroup == group
+                val groupNow = e.rows.sumOf { it.nowW ?: 0.0 }
+                val groupDay = e.rows.sumOf { it.dayWh ?: 0.0 }
+                BreakdownRow(
+                    color = e.rows.first().color,
+                    name = group,
+                    value = Format.power(groupNow),
+                    valueColor = MaterialTheme.colorScheme.onSurface,
+                    detail = listOfNotNull(
+                        "${e.rows.size} Geräte",
+                        share(groupNow, nowTotal)?.let { "$it jetzt" },
+                        groupDay.takeIf { it > 0 }?.let { "heute ${Format.energy(it)}" + (share(it, dayTotal)?.let { p -> " ($p)" } ?: "") },
+                    ).joinToString(" · "),
+                    onClick = { openGroup = if (open) null else group },
+                    expanded = open,
+                )
+                if (open) e.rows.forEach { PlugLine(it, live, settings, cooling, nowTotal, dayTotal, indent = true) }
             }
-            val report = cooling[r.device.id]
-            BreakdownRow(
-                color = r.color,
-                name = r.device.name,
-                value = status ?: (if (r.reading?.on == false && (r.nowW ?: 0.0) < 1) "aus" else Format.power(r.nowW)),
-                valueColor = if (status != null) muted else MaterialTheme.colorScheme.onSurface,
-                detail = listOfNotNull(
-                    share(r.nowW, nowTotal)?.let { "$it jetzt" },
-                    r.dayWh?.let { "heute ${Format.energy(it)}" + (share(it, dayTotal)?.let { p -> " ($p)" } ?: "") },
-                    r.day?.dutyShare?.takeIf { r.device.isCooling }?.let { "lief ${Format.percent(it)} der Zeit" },
-                ).joinToString(" · ").ifBlank { null },
-                note = report?.let { "Kühlgerät: ${it.summary}" },
-                noteColor = when (report?.verdict) {
-                    CoolingVerdict.HIGH -> MaterialTheme.colorScheme.error
-                    CoolingVerdict.OK -> EnergyColors.battery
-                    else -> muted
-                },
-            )
         }
         if (carW > 0 || dayCar > 50) {
             BreakdownRow(
@@ -179,9 +195,18 @@ private fun share(part: Double?, total: Double?): String? {
 }
 
 @Composable
-private fun BreakdownRow(color: Color, name: String, value: String, valueColor: Color, detail: String?, note: String? = null, noteColor: Color = Color.Unspecified) {
+private fun BreakdownRow(
+    color: Color, name: String, value: String, valueColor: Color, detail: String?,
+    note: String? = null, noteColor: Color = Color.Unspecified,
+    onClick: (() -> Unit)? = null, expanded: Boolean = false, indent: Boolean = false,
+) {
     // Name und Zusatz links untereinander, der Wert allein rechts: so bleibt der Name immer lesbar.
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    Row(
+        Modifier.fillMaxWidth().let { m -> if (onClick != null) m.clickable(onClick = onClick) else m }
+            .padding(start = if (indent) 22.dp else 0.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
         Box(Modifier.size(12.dp).clip(CircleShape).background(color))
         Column(Modifier.weight(1f)) {
             Text(name, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -189,5 +214,49 @@ private fun BreakdownRow(color: Color, name: String, value: String, valueColor: 
             if (note != null) Text(note, style = MaterialTheme.typography.labelSmall, color = noteColor)
         }
         Text(value, style = MaterialTheme.typography.titleMedium, color = valueColor, maxLines = 1)
+        if (onClick != null) {
+            Icon(
+                if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                if (expanded) "Zuklappen" else "Aufklappen",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
+}
+
+/** Eine Zeile der Aufteilung: entweder ein einzelner Stecker oder eine Gruppe. */
+private class PlugEntry(val group: String?, val rows: List<PlugRow>)
+
+/** Ein Stecker als Zeile, mit Status, Anteilen und Kuehlgeraet-Hinweis. */
+@Composable
+private fun PlugLine(
+    r: PlugRow, live: LiveState, settings: Settings, cooling: Map<String, CoolingReport>,
+    nowTotal: Double?, dayTotal: Double?, indent: Boolean = false,
+) {
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    val status = when {
+        r.reading != null -> null
+        live.plugErrors.containsKey(r.device.id) -> "nicht erreichbar"
+        settings.cloudRole == CloudRole.VIEWER -> "wartet auf Zentrale"
+        else -> "keine Messung"
+    }
+    val report = cooling[r.device.id]
+    BreakdownRow(
+        color = r.color,
+        name = r.device.name,
+        value = status ?: (if (r.reading?.on == false && (r.nowW ?: 0.0) < 1) "aus" else Format.power(r.nowW)),
+        valueColor = if (status != null) muted else MaterialTheme.colorScheme.onSurface,
+        detail = listOfNotNull(
+            share(r.nowW, nowTotal)?.let { "$it jetzt" },
+            r.dayWh?.let { "heute ${Format.energy(it)}" + (share(it, dayTotal)?.let { p -> " ($p)" } ?: "") },
+            r.day?.dutyShare?.takeIf { r.device.isCooling }?.let { "lief ${Format.percent(it)} der Zeit" },
+        ).joinToString(" · ").ifBlank { null },
+        note = report?.let { "Kühlgerät: ${it.summary}" },
+        noteColor = when (report?.verdict) {
+            CoolingVerdict.HIGH -> MaterialTheme.colorScheme.error
+            CoolingVerdict.OK -> EnergyColors.battery
+            else -> muted
+        },
+        indent = indent,
+    )
 }

@@ -28,6 +28,12 @@ data class PlugDevice(
     val offsetWh: Double = 0.0,
     /** Kuehlgeraet: Kompressorzyklen werden ueberwacht. */
     val type: PlugType = PlugType.OTHER,
+    /**
+     * Gruppe, etwa "Wohnzimmer". Mehrere Stecker mit derselben Gruppe erscheinen in den
+     * Anzeigen als eine Zeile mit ihrer Summe und lassen sich dort aufklappen. Leer =
+     * eigene Zeile wie bisher.
+     */
+    val room: String = "",
     /** Nennleistung laut Typenschild in W, optional. */
     val ratedPowerW: Double? = null,
     /** Jahresverbrauch laut Energielabel in kWh, optional. */

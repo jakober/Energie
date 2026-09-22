@@ -595,10 +595,10 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
     fun renamePlug(id: String, name: String) = savePlugs(settings.value.plugs.map { if (it.id == id) it.copy(name = name.trim().ifBlank { it.name }) else it })
 
     /** Name, Geraetetyp und Herstellerangaben eines Steckers aendern. */
-    fun editPlug(id: String, name: String, type: com.jakober.energie.core.plugs.PlugType, ratedPowerW: Double?, labelKwhPerYear: Double?) =
+    fun editPlug(id: String, name: String, type: com.jakober.energie.core.plugs.PlugType, ratedPowerW: Double?, labelKwhPerYear: Double?, room: String = "") =
         savePlugs(settings.value.plugs.map {
             if (it.id == id) it.copy(
-                name = name.trim().ifBlank { it.name }, type = type,
+                name = name.trim().ifBlank { it.name }, type = type, room = room.trim(),
                 ratedPowerW = ratedPowerW?.takeIf { v -> v > 0 }, labelKwhPerYear = labelKwhPerYear?.takeIf { v -> v > 0 },
             ) else it
         })

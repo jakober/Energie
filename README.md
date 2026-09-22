@@ -68,7 +68,10 @@ pro Tag unter `files/verlauf/`. Alles Weitere rechnet sie daraus.
   (lokal, ohne Cloud), je Stecker ein Verbraucher; dazu Impulszähler über
   Shelly Plus Uni am S0-Ausgang eines Zwischenzählers (Wärmepumpe). Statistik zeigt, wer wie viel
   verbraucht, mit Anteil am Haus, Kosten und nicht gemessenem Rest. Die Haus-Karte
-  zeigt als Stapelbalken, was gerade und heute den Strom zieht.
+  zeigt als Stapelbalken, was gerade und heute den Strom zieht. Mehrere Stecker
+  lassen sich einer Gruppe zuordnen (etwa „Wohnzimmer“): Sie stehen dann als eine
+  Zeile mit ihrer Summe und klappen auf Tippen zu den einzelnen Geräten auf; die
+  Stapelbalken zeigen weiterhin jedes Gerät mit eigener Farbe.
 - **Kühlgeräte:** Ein Stecker vom Typ „Kühlgerät“ wird auf Kompressorläufe
   überwacht (Laufanteil, Zyklen, kWh je Tag). Nach fünf vollen Tagen gilt der
   Median als Normalwert; liegt der Median der letzten drei Tage 30 % darüber

@@ -20,6 +20,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonObject
@@ -41,6 +42,8 @@ data class HubStatus(
     val pvPeakEstimateKw: Double?,
     val lastUpdate: Instant?,
     val hubSeenAt: Instant?,
+    /** Stand des Handschalters "Jetzt voll laden" auf der Zentrale; null = nicht gemeldet. */
+    val chargeOverride: Boolean?,
 )
 
 /**
@@ -59,6 +62,8 @@ class CloudSync(
     private var lastSettingsHash: Int = 0
     /** Bis dahin nimmt die Anzeige keine Einstellungen der Zentrale an: sie hat gerade eigene geschickt. */
     private var settingsHoldUntil: Instant? = null
+    /** Bis dahin gilt der eigene Handschalter, nicht der Stand der Zentrale: der Auftrag ist unterwegs. */
+    private var overrideHoldUntil: Instant? = null
 
     private fun client(s: Settings): SupabaseClient {
         val key = s.cloudUrl + "|" + s.cloudAnonKey
@@ -207,6 +212,7 @@ class CloudSync(
             pvPeakEstimateKw = (live["pvPeakEstimateKw"] as? JsonPrimitive)?.doubleOrNull,
             lastUpdate = str("lastUpdate")?.let { runCatching { Instant.parse(it) }.getOrNull() },
             hubSeenAt = seen,
+            chargeOverride = (live["chargeOverride"] as? JsonPrimitive)?.booleanOrNull,
         )
     }
 
@@ -308,6 +314,24 @@ class CloudSync(
 
     suspend fun sendCommand(s: Settings, kind: String, payload: JsonObject = JsonObject(emptyMap())) = withSession(s) { c, sess -> c.addCommand(sess, kind, payload) }
 
+    /**
+     * Handschalter an die Zentrale geben und den eigenen Stand kurz festhalten: bis die
+     * Zentrale den Auftrag verarbeitet und neu hochgeladen hat, wuerde ihr alter Stand den
+     * eben umgelegten Schalter sofort wieder zuruecksetzen.
+     */
+    suspend fun sendOverride(s: Settings, on: Boolean) {
+        sendCommand(s, CMD_OVERRIDE, buildJsonObject { put("on", on) })
+        overrideHoldUntil = Clock.System.now() + OVERRIDE_HOLD
+    }
+
+    /** Ob der Stand der Zentrale gerade zu uebernehmen ist. */
+    fun overrideFromHubAllowed(now: Instant): Boolean {
+        val until = overrideHoldUntil ?: return true
+        if (now < until) return false
+        overrideHoldUntil = null
+        return true
+    }
+
     suspend fun recentCommands(s: Settings): List<Pair<CloudCommand, String?>> = withSession(s) { c, sess -> c.recentCommands(sess) }
 
     companion object {
@@ -331,6 +355,8 @@ class CloudSync(
         val HUB_STATE_KEYS = setOf("chargeLastCommandAt", "chargeLog", "carLearnedPowerW")
         /** So lange nach dem Senden eigener Einstellungen nimmt die Anzeige keine von der Zentrale an. */
         val SETTINGS_HOLD = 3.minutes
+        /** So lange nach dem Umlegen gilt der eigene Handschalter, nicht der Stand der Zentrale. */
+        val OVERRIDE_HOLD = 3.minutes
         const val CMD_REFRESH = "REFRESH"
 
         fun payloadString(o: JsonObject, key: String): String? = (o[key] as? JsonPrimitive)?.contentOrNull

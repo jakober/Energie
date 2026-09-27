@@ -331,6 +331,12 @@ class EnergyRepository(
         }
         result.onSuccess { (pulled, status, rest) ->
             val (alerts, settingsChanged) = rest
+            // Der Handschalter gehoert der Zentrale: sie schaltet ihn ab, sobald abgesteckt wird.
+            // Ohne diesen Abgleich stand er auf der Anzeige noch tagelang auf "an".
+            val hubOverride = status?.chargeOverride
+            if (hubOverride != null && hubOverride != s.chargeOverride && cs.overrideFromHubAllowed(now)) {
+                settings.saveChargeOverride(hubOverride)
+            }
             if (pulled > 0) { dayCache.remove(today()); drivingCache = null }
             val latest = if (pulled > 0) history.latest() else _state.value.sample ?: history.latest()
             _state.update {

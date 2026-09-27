@@ -647,7 +647,7 @@ class EnergieViewModel(private val container: AppContainer) : ViewModel() {
             container.settings.saveChargeOverride(on)
             val s = container.settings.current()
             if (s.cloudRole == CloudRole.VIEWER && s.cloudConfigured) {
-                runCatching { container.cloud.sendCommand(s, CloudSync.CMD_OVERRIDE, buildJsonObject { put("on", on) }) }
+                runCatching { container.cloud.sendOverride(s, on) }
                     .onFailure { _cloudMessage.value = "Handschalter nicht an die Zentrale übergeben: ${it.message}" }
             }
             runCatching { repo.refresh() }

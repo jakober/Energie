@@ -166,6 +166,8 @@ class EnergyRepository(
             carChargePowerW = carPowerW,
             carOdometerKm = carForSample?.extra?.odometerKm,
             carEnergyKwh = carForSample?.extra?.energyRemainingKwh,
+            carIgnitionOn = carForSample?.extra?.ignition?.let { it.trim().uppercase() !in IGNITION_OFF },
+            carSpeedKmh = carForSample?.extra?.speedKmh,
             background = background,
             plugs = plugReadings,
         )
@@ -969,6 +971,8 @@ class EnergyRepository(
         /** Anzeige meldet, wenn die Zentrale so lange nichts geschrieben hat. */
         val HUB_SILENT = 30.minutes
         val CAR_INTERVAL = 5.minutes
+        /** Werte von Ford, die "Zuendung aus" bedeuten; alles andere gilt als an. */
+        val IGNITION_OFF = setOf("OFF", "UNKNOWN", "")
         /** So lange bekommt ein Ladebefehl Zeit, bis die Wirkung geprueft wird. */
         val COMMAND_EFFECT_DELAY = 3.minutes
         /** Laenger wartet die Kontrolle nicht auf frische Ford-Daten, dann gilt der Befehl als wirkungslos. */

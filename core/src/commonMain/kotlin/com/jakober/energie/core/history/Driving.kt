@@ -157,6 +157,19 @@ object Driving {
     private fun EnergySample.energyWh(): Double? = carEnergyKwh?.let { it * 1000.0 }
     private fun EnergySample.charging() = (carChargePowerW ?: 0.0) > 0
 
+    /**
+     * Was das Fahrzeug selbst meldet: true = unterwegs, false = steht, null = sagt nichts.
+     * Aeltere Messpunkte kennen diese Felder nicht; dann entscheidet das Bewegungsfenster.
+     */
+    private fun EnergySample.drivingFlag(): Boolean? {
+        val speed = carSpeedKmh
+        if (speed != null && speed > 0.5) return true
+        val ignition = carIgnitionOn
+        if (ignition == true) return true
+        if (ignition == false || speed != null) return false
+        return null
+    }
+
     fun of(samples: List<EnergySample>, state: DrivingState = DrivingState(), zone: TimeZone = TimeZone.currentSystemDefault()): Pair<List<DriveDay>, DrivingState> {
         val days = LinkedHashMap<LocalDate, Acc>()
         var mix = state.mix
@@ -202,7 +215,19 @@ object Driving {
                     if (abs(pending) >= MIN_STEP_WH) {
                         // Hat sich der Kilometerstand bewegt, war das Auto zwischen beiden
                         // Messpunkten unterwegs. Das entscheidet, wie die Aenderung zu lesen ist.
-                        val moved = movedNear(b.at)
+                        // Was das Auto selbst sagt, zaehlt mehr als jede Vermutung aus dem
+                        // Kilometerstand. Nur wenn es nichts sagt, hilft das Bewegungsfenster.
+                        val flagA = a.drivingFlag()
+                        val flagB = b.drivingFlag()
+                        val flagged = if (flagA == null && flagB == null) null else (flagA == true || flagB == true)
+                        val prevKm = a.carOdometerKm
+                        val nowKm = b.carOdometerKm
+                        val odoMoved = prevKm != null && nowKm != null && nowKm > prevKm && nowKm - prevKm < MAX_KM_STEP
+                        val moved = when {
+                            flagged == true || odoMoved -> true
+                            flagged == false -> false
+                            else -> movedNear(b.at)
+                        }
                         if (pending > 0) {
                             val home = a.charging() || b.charging()
                             val charged = home || pending >= REGEN_MAX_WH || (!moved && pending >= PUBLIC_MIN_WH)

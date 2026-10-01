@@ -44,6 +44,10 @@ data class EnergySample(
     val carOdometerKm: Double? = null,
     /** Energie im Fahrakku in kWh laut Fahrzeug. */
     val carEnergyKwh: Double? = null,
+    /** Zuendung an, laut Fahrzeug; null = nicht gemeldet (aeltere Messpunkte). */
+    val carIgnitionOn: Boolean? = null,
+    /** Geschwindigkeit in km/h, laut Fahrzeug; null = nicht gemeldet. */
+    val carSpeedKmh: Double? = null,
     /** True, wenn der Hintergrund-Worker gemessen hat; null bei alten Punkten. */
     val background: Boolean? = null,
     /** Messstecker im Heimnetz, Schluessel = Geraetekennung. */

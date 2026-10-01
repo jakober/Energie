@@ -170,4 +170,23 @@ class DrivingTest {
         assertEquals(0.0, standtag.costEur(0.32, 0.59), 1e-9)
         assertEquals(0.16, standtag.standingCostEur(0.32, 0.59), 1e-9)
     }
+
+    @Test
+    fun `das Fahrzeug selbst entscheidet ueber Fahren und Stehen`() {
+        fun sample(min: Int, km: Double, kwh: Double, speed: Double?, ignition: Boolean?) = EnergySample(
+            at = t0 + min.minutes, carOdometerKm = km, carEnergyKwh = kwh, carSpeedKmh = speed, carIgnitionOn = ignition,
+        )
+        // Erst Vorklimatisieren im Stand, dann die Fahrt; der Kilometerstand kommt erst am Ende.
+        val samples = listOf(
+            sample(0, 1000.0, 50.0, 0.0, false),
+            sample(10, 1000.0, 48.0, 0.0, false),   // 2 kWh im Stand, trotz spaeterer Fahrt
+            sample(20, 1000.0, 44.0, 80.0, true),   // 4 kWh gefahren
+            sample(30, 1040.0, 41.0, 0.0, false),   // 3 kWh gefahren, jetzt meldet Ford 40 km
+        )
+        val d = Driving.of(samples, zone = utc).first.single()
+        assertEquals(40.0, d.drivenKm, 1e-9)
+        assertEquals(2000.0, d.standingWh, 1e-6)
+        assertEquals(7000.0, d.drivingWh, 1e-6)
+        assertEquals(17.5, d.kwhPer100Km!!, 1e-9)
+    }
 }

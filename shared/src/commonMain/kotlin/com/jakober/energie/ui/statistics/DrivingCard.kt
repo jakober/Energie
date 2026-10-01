@@ -54,11 +54,26 @@ fun DrivingCard(period: List<DriveDay>, all: List<DriveDay>, settings: Settings,
         } else {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 BigValue(km(sum.drivenKm), "Gefahren", EnergyColors.car, Modifier.weight(1f))
-                BigValue(Format.energy(sum.usedWh), "Verbraucht", EnergyColors.car, Modifier.weight(1f))
+                BigValue(Format.energy(sum.drivingWh), "Fürs Fahren", EnergyColors.car, Modifier.weight(1f))
                 BigValue(Format.euro(sum.costEur(price, pub)), "Bezahlt", EnergyColors.grid, Modifier.weight(1f))
             }
             MixBar(sum)
-            ValueRow("Verbrauch", kwh100(sum.kwhPer100Km))
+            ValueRow("Verbrauch", kwh100(sum.kwhPer100Km), detail = "nur das Fahren, ohne Standverbrauch")
+            if (sum.standingWh > 100) {
+                ValueRow(
+                    "Im Stand verbraucht", Format.energy(sum.standingWh),
+                    detail = "Vorklimatisieren, Bordnetz, Selbstentladung; ohne gefahrene Kilometer",
+                    color = EnergyColors.neutral,
+                )
+            }
+            if (sum.regenWh > 100) {
+                ValueRow(
+                    "Zurückgewonnen", Format.energy(sum.regenWh),
+                    detail = "Rekuperation beim Bremsen und bergab, schon abgezogen",
+                    color = EnergyColors.battery,
+                )
+            }
+            ValueRow("Aus dem Akku gesamt", Format.energy(sum.usedWh), detail = "Fahren und Stand zusammen")
             ValueRow("Kosten je 100 km", eur100(sum.costPer100Km(price, pub)), detail = "Netzstrom ${Format.euro(price)} · unterwegs ${Format.euro(pub)} je kWh")
             ValueRow("Sonnenstrom", Format.energy(sum.used.solarWh), detail = "entgangene Einspeisung ${Format.euro(sum.solarValueEur(settings.feedInPerKwh))}", color = EnergyColors.sun)
             if (sum.used.gridWh > 50) ValueRow("Netzstrom von zu Hause", Format.energy(sum.used.gridWh), detail = Format.euro(sum.used.gridWh / 1000 * price), color = EnergyColors.grid)

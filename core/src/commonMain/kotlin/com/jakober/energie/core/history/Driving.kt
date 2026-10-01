@@ -65,12 +65,22 @@ data class DriveDay(
     val chargedHomeWh: Double,
     /** Unterwegs nachgeladen. */
     val chargedPublicWh: Double,
+    /** Teil von [used], der ohne gefahrene Kilometer wegging: Standverbrauch, Vorklimatisieren. */
+    val standing: BatteryMix = BatteryMix(),
+    /** Beim Fahren zurueckgewonnen (Rekuperation); schon von [used] abgezogen. */
+    val regenWh: Double = 0.0,
 ) {
     val usedWh: Double get() = used.totalWh
+    /** Was das Fahren gekostet hat: alles Entnommene ohne den Standverbrauch. */
+    val drivingWh: Double get() = (usedWh - standing.totalWh).coerceAtLeast(0.0)
+    val standingWh: Double get() = standing.totalWh
     val solarShare: Double? get() = if (usedWh > 0) (used.solarWh / usedWh).coerceIn(0.0, 1.0) else null
     val unknownShare: Double? get() = if (usedWh > 0) (used.unknownWh / usedWh).coerceIn(0.0, 1.0) else null
-    /** kWh je 100 km, erst ab einem Kilometer sinnvoll. */
-    val kwhPer100Km: Double? get() = if (drivenKm >= 1.0) usedWh / 1000.0 / drivenKm * 100.0 else null
+    /**
+     * kWh je 100 km, erst ab einem Kilometer sinnvoll. Gerechnet wird mit dem Fahranteil:
+     * Standverbrauch hat keine Kilometer erzeugt und wuerde den Wert sonst aufblaehen.
+     */
+    val kwhPer100Km: Double? get() = if (drivenKm >= 1.0) drivingWh / 1000.0 / drivenKm * 100.0 else null
     /** Bezahlter Strom: Netz zum Haustarif, unterwegs zum Fremdpreis. */
     fun costEur(pricePerKwh: Double, publicPricePerKwh: Double): Double = used.gridWh / 1000.0 * pricePerKwh + used.publicWh / 1000.0 * publicPricePerKwh
     /** Wert des Sonnenstroms: die entgangene Einspeisung. */
@@ -90,6 +100,8 @@ data class DriveDay(
                 used = days.fold(BatteryMix()) { acc, d -> acc + d.used },
                 chargedHomeWh = days.sumOf { it.chargedHomeWh },
                 chargedPublicWh = days.sumOf { it.chargedPublicWh },
+                standing = days.fold(BatteryMix()) { acc, d -> acc + d.standing },
+                regenWh = days.sumOf { it.regenWh },
             )
         }
     }
@@ -115,6 +127,13 @@ object Driving {
     const val MIN_STEP_WH = 100.0
     /** Ein Sprung darueber ist ein Fehler der Quelle, nicht gefahren. */
     const val MAX_KM_STEP = 2000.0
+    /**
+     * Steigt der Akkuinhalt, waehrend das Auto faehrt, ist das Rekuperation und kein Laden.
+     * Darueber passt es in keinen Messabstand mehr und gilt als Ladevorgang.
+     */
+    const val REGEN_MAX_WH = 3000.0
+    /** Unter diesem Anstieg im Stand ist es Messrauschen des Fahrzeugs, kein Ladevorgang. */
+    const val PUBLIC_MIN_WH = 500.0
 
     private fun EnergySample.energyWh(): Double? = carEnergyKwh?.let { it * 1000.0 }
     private fun EnergySample.charging() = (carChargePowerW ?: 0.0) > 0
@@ -149,21 +168,44 @@ object Driving {
                 } else {
                     pending += eb - ea
                     if (abs(pending) >= MIN_STEP_WH) {
+                        // Hat sich der Kilometerstand bewegt, war das Auto zwischen beiden
+                        // Messpunkten unterwegs. Das entscheidet, wie die Aenderung zu lesen ist.
+                        val prevKm = a.carOdometerKm
+                        val nowKm = b.carOdometerKm
+                        val moved = prevKm != null && nowKm != null && nowKm > prevKm && nowKm - prevKm < MAX_KM_STEP
                         if (pending > 0) {
                             val home = a.charging() || b.charging()
-                            if (home) {
-                                val gridShare = gridShare(a, b)
-                                val grid = pending * gridShare
-                                mix = mix + BatteryMix(solarWh = pending - grid, gridWh = grid)
-                                day.chargedHomeWh += pending
-                            } else {
-                                mix = mix + BatteryMix(publicWh = pending)
-                                day.chargedPublicWh += pending
+                            val charged = home || pending >= REGEN_MAX_WH || (!moved && pending >= PUBLIC_MIN_WH)
+                            when {
+                                home -> {
+                                    val gridShare = gridShare(a, b)
+                                    val grid = pending * gridShare
+                                    mix = mix + BatteryMix(solarWh = pending - grid, gridWh = grid)
+                                    day.chargedHomeWh += pending
+                                }
+                                charged -> {
+                                    mix = mix + BatteryMix(publicWh = pending)
+                                    day.chargedPublicWh += pending
+                                }
+                                else -> {
+                                    // Rekuperation: Die Energie kommt aus dem Fahren zurueck. Sie als
+                                    // Ladung zu zaehlen haette den Verbrauch um genau diesen Betrag
+                                    // zu hoch ausgewiesen und nebenbei Fremdstrom erfunden.
+                                    val (rest, back) = day.used.draw(pending)
+                                    day.used = rest
+                                    mix = mix + back
+                                    day.regenWh += pending
+                                    // Steht das Auto, gehoert der Zuwachs zum Standverbrauch zurueck.
+                                    if (!moved) day.standing = day.standing.draw(pending).first
+                                }
                             }
                         } else {
                             val (rest, taken) = mix.draw(-pending)
                             mix = rest
                             day.used = day.used + taken
+                            // Ohne gefahrene Kilometer ist es Standverbrauch: Vorklimatisieren,
+                            // Bordnetz, Selbstentladung. Er zaehlt nicht in den Verbrauch je 100 km.
+                            if (!moved) day.standing = day.standing + taken
                         }
                         pending = 0.0
                         mix = mix.fitTo(eb)
@@ -190,6 +232,8 @@ object Driving {
         var used = BatteryMix()
         var chargedHomeWh = 0.0
         var chargedPublicWh = 0.0
-        fun toDay() = DriveDay(date, startKm, endKm, drivenKm, used, chargedHomeWh, chargedPublicWh)
+        var standing = BatteryMix()
+        var regenWh = 0.0
+        fun toDay() = DriveDay(date, startKm, endKm, drivenKm, used, chargedHomeWh, chargedPublicWh, standing, regenWh)
     }
 }

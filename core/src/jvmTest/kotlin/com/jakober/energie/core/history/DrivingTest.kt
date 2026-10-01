@@ -75,7 +75,9 @@ class DrivingTest {
         assertEquals(-50.0, state.pendingWh, 1e-6)
         // Der Sprung um 4000 km zaehlt nicht, der Kilometer danach schon.
         assertEquals(1.0, d.drivenKm, 1e-9)
-        assertEquals(10.0, d.kwhPer100Km!!, 1e-9)
+        // Die 100 Wh gingen ohne gefahrene Kilometer weg: Standverbrauch, nicht Fahrverbrauch.
+        assertEquals(100.0, d.standingWh, 1e-6)
+        assertEquals(0.0, d.kwhPer100Km!!, 1e-9)
     }
 
     @Test
@@ -88,5 +90,47 @@ class DrivingTest {
         assertEquals(1070.0, s.endKm)
         assertEquals(12000.0, s.usedWh, 1e-6)
         assertEquals(7000.0 / 12000.0, s.solarShare!!, 1e-9)
+    }
+
+    @Test
+    fun `Rekuperation zaehlt nicht als Laden und nicht als Verbrauch`() {
+        // Bergab kommt Energie zurueck, waehrend der Kilometerstand weiterlaeuft.
+        val samples = listOf(
+            s(0, 1000.0, 50.0),
+            s(10, 1020.0, 46.0),   // 20 km, 4 kWh raus
+            s(20, 1030.0, 47.0),   // 10 km, 1 kWh zurueck: Rekuperation
+            s(30, 1050.0, 44.0),   // 20 km, 3 kWh raus
+        )
+        val d = Driving.of(samples, zone = utc).first.single()
+        assertEquals(50.0, d.drivenKm, 1e-9)
+        // Netto 6 kWh, nicht 7 kWh entnommen und 1 kWh "unterwegs geladen".
+        assertEquals(6000.0, d.usedWh, 1e-6)
+        assertEquals(0.0, d.chargedPublicWh, 1e-9)
+        assertEquals(1000.0, d.regenWh, 1e-6)
+        assertEquals(12.0, d.kwhPer100Km!!, 1e-9)
+    }
+
+    @Test
+    fun `Standverbrauch zaehlt nicht in den Verbrauch je 100 km`() {
+        val samples = listOf(
+            s(0, 1000.0, 50.0),
+            s(60, 1100.0, 32.0),        // 100 km, 18 kWh gefahren
+            s(600, 1100.0, 31.0),       // steht den Tag ueber, 1 kWh weg
+        )
+        val d = Driving.of(samples, zone = utc).first.first()
+        assertEquals(100.0, d.drivenKm, 1e-9)
+        assertEquals(19000.0, d.usedWh, 1e-6)
+        assertEquals(1000.0, d.standingWh, 1e-6)
+        assertEquals(18000.0, d.drivingWh, 1e-6)
+        assertEquals(18.0, d.kwhPer100Km!!, 1e-9)
+    }
+
+    @Test
+    fun `Laden im Stand bleibt ein Ladevorgang`() {
+        // Gleiche Lage wie Rekuperation, aber ohne gefahrene Kilometer und ueber der Schwelle.
+        val samples = listOf(s(0, 1000.0, 20.0), s(60, 1000.0, 30.0))
+        val d = Driving.of(samples, zone = utc).first.single()
+        assertEquals(10000.0, d.chargedPublicWh, 1e-6)
+        assertEquals(0.0, d.regenWh, 1e-9)
     }
 }

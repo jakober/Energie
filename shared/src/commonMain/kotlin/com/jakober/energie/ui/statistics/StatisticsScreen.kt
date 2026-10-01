@@ -112,6 +112,14 @@ fun StatisticsContent(data: StatisticsData, actions: StatisticsActions, contentP
     val liveForUpgrade = data.live
     val gridMonths = data.gridMonths
     var showSamples by rememberSaveable { mutableStateOf(false) }
+    // Derselbe Text wie in der Datumszeile; die Karten unten tragen ihn im Titel,
+    // damit nie unklar ist, worauf sich ihre Zahlen beziehen.
+    val periodLabel = when (range) {
+        Range.DAY -> Format.dateLong(date)
+        Range.WEEK -> Range.bounds(date, Range.WEEK).let { (a, b) -> "${Format.dateNum(a)} – ${Format.dateShort(b)}" }
+        Range.MONTH -> Format.month(date)
+        Range.YEAR -> date.year.toString()
+    }
 
     // Links die Auswahl und die Verlaufsdiagramme des Zeitraums.
     val left: LazyListScope.() -> Unit = {
@@ -130,12 +138,7 @@ fun StatisticsContent(data: StatisticsData, actions: StatisticsActions, contentP
         }
 
         item {
-            val title = when (range) {
-                Range.DAY -> Format.dateLong(date)
-                Range.WEEK -> Range.bounds(date, Range.WEEK).let { (a, b) -> "${Format.dateNum(a)} – ${Format.dateShort(b)}" }
-                Range.MONTH -> Format.month(date)
-                Range.YEAR -> date.year.toString()
-            }
+            val title = periodLabel
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { actions.shift(-1) }) { Icon(Icons.Rounded.ChevronLeft, "Zurück") }
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -196,12 +199,12 @@ fun StatisticsContent(data: StatisticsData, actions: StatisticsActions, contentP
         }
 
         if (settings.carConnected || settings.fordConnected || (lifetime?.carChargeWh ?: 0.0) > 0) {
-            item { CarStatsCard(periodTotals, lifetime, settings, sessions.size) }
+            item { CarStatsCard(periodTotals, lifetime, settings, sessions.size, periodLabel) }
         }
 
         if (driving.isNotEmpty()) {
             val (from, to) = Range.bounds(date, range)
-            item { DrivingCard(driving.filter { it.date in from..to }, driving, settings, range) }
+            item { DrivingCard(driving.filter { it.date in from..to }, driving, settings, range, periodLabel) }
         }
     }
 
@@ -438,18 +441,28 @@ private fun androidx.compose.foundation.lazy.LazyListScope.rangeItems(r: RangeSt
 }
 
 @Composable
-private fun CarStatsCard(period: EnergyTotals?, lifetime: EnergyTotals?, settings: Settings, sessionCount: Int) {
-    EnergieCard(title = "Auto laden", accent = EnergyColors.car) {
+private fun CarStatsCard(period: EnergyTotals?, lifetime: EnergyTotals?, settings: Settings, sessionCount: Int, periodLabel: String) {
+    // Die Gesamtrechnung aendert sich mit dem Zeitraum nicht; eingeklappt steht sie
+    // nicht mehr unter den Zahlen des Zeitraums und wird nicht mehr mit ihnen verwechselt.
+    var showLifetime by rememberSaveable { mutableStateOf(false) }
+    EnergieCard(title = "Auto laden · $periodLabel", accent = EnergyColors.car) {
         if (period != null && period.carChargeWh > 50) {
-            Text(if (sessionCount > 0) "Dieser Zeitraum, $sessionCount Ladevorgänge" else "Dieser Zeitraum", style = MaterialTheme.typography.titleSmall)
+            if (sessionCount > 0) {
+                Text("$sessionCount Ladevorgänge", style = MaterialTheme.typography.titleSmall)
+            }
             CarStatsBlock(period, settings)
-            Spacer(Modifier.height(8.dp))
         } else {
             Text("In diesem Zeitraum wurde zu Hause nicht geladen.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         if (lifetime != null && lifetime.carChargeWh > 50) {
-            Text("Seit Beginn der Aufzeichnung", style = MaterialTheme.typography.titleSmall)
-            CarStatsBlock(lifetime, settings)
+            TextButton(onClick = { showLifetime = !showLifetime }) {
+                Text(if (showLifetime) "Gesamtrechnung ausblenden" else "Seit Beginn der Aufzeichnung anzeigen")
+            }
+            if (showLifetime) {
+                Spacer(Modifier.height(4.dp))
+                Text("Seit Beginn der Aufzeichnung, unabhängig vom Zeitraum", style = MaterialTheme.typography.titleSmall)
+                CarStatsBlock(lifetime, settings)
+            }
         }
     }
 }

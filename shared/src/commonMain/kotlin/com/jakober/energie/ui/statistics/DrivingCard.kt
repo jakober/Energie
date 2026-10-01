@@ -38,14 +38,17 @@ private fun eur100(v: Double?): String = if (v == null) "–" else "${Format.num
  * Herkunft aus dem Tank-Mix (Sonne, Netz, unterwegs, unbekannt).
  */
 @Composable
-fun DrivingCard(period: List<DriveDay>, all: List<DriveDay>, settings: Settings, range: Range) {
+fun DrivingCard(period: List<DriveDay>, all: List<DriveDay>, settings: Settings, range: Range, periodLabel: String) {
     val sum = DriveDay.sum(period)
     val life = DriveDay.sum(all)
     val price = settings.pricePerKwh
     val pub = settings.carPublicPricePerKwh
     var expanded by rememberSaveable { mutableStateOf(false) }
+    // Die Gesamtzeile aendert sich mit dem Zeitraum nicht; eingeklappt steht sie nicht
+    // mehr unter den Zahlen des Zeitraums und wird nicht mehr mit ihnen verwechselt.
+    var showLifetime by rememberSaveable { mutableStateOf(false) }
 
-    EnergieCard(title = "Fahrten", accent = EnergyColors.car) {
+    EnergieCard(title = "Fahrten · $periodLabel", accent = EnergyColors.car) {
         if (sum == null || (sum.drivenKm < 0.5 && sum.usedWh < 100)) {
             Text("Im gewählten Zeitraum keine Fahrt erkannt.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         } else {
@@ -79,10 +82,16 @@ fun DrivingCard(period: List<DriveDay>, all: List<DriveDay>, settings: Settings,
         }
 
         if (life != null && life.drivenKm >= 1) {
-            Text(
-                "Seit Beginn: ${km(life.drivenKm)} · ${Format.energy(life.usedWh)} · ${Format.euro(life.costEur(price, pub))} bezahlt · ${kwh100(life.kwhPer100Km)}",
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            TextButton(onClick = { showLifetime = !showLifetime }) {
+                Text(if (showLifetime) "Gesamtstrecke ausblenden" else "Seit Beginn der Aufzeichnung anzeigen")
+            }
+            if (showLifetime) {
+                Text(
+                    "Seit Beginn, unabhängig vom Zeitraum: ${km(life.drivenKm)} · ${Format.energy(life.usedWh)} · " +
+                        "${Format.euro(life.costEur(price, pub))} bezahlt · ${kwh100(life.kwhPer100Km)}",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
         Text(
             "Kilometer und Akkuinhalt meldet Ford alle paar Minuten. Der Akku zählt als Tank: Laden zu Hause füllt ihn mit dem Sonnen-/Netzmix des Moments, Fahren entnimmt anteilig.",

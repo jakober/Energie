@@ -49,7 +49,9 @@ workflows:
         recipients:
           - mat.jakober@gmail.com
         notify:
-          success: true
+          # Gelungene Builds melden sich schon ueber TestFlight; eine zweite Mail je Build
+          # ist nur Laerm. Fehlschlaege muessen dagegen auffallen.
+          success: false
           failure: true
 
   ios-check:

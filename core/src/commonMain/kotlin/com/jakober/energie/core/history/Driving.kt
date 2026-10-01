@@ -7,6 +7,7 @@ import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.Serializable
 import kotlin.math.abs
 import kotlin.math.max
+import kotlin.time.Duration.Companion.minutes
 
 /**
  * Woher der Strom im Fahrakku stammt, in Wh. Der Akku ist ein Tank: Laden
@@ -36,6 +37,14 @@ data class BatteryMix(
     }
 
     operator fun plus(o: BatteryMix) = BatteryMix(solarWh + o.solarWh, gridWh + o.gridWh, publicWh + o.publicWh, unknownWh + o.unknownWh)
+
+    /** Was uebrig bleibt, wenn `o` ein Teil davon ist; nie unter null. */
+    operator fun minus(o: BatteryMix) = BatteryMix(
+        (solarWh - o.solarWh).coerceAtLeast(0.0),
+        (gridWh - o.gridWh).coerceAtLeast(0.0),
+        (publicWh - o.publicWh).coerceAtLeast(0.0),
+        (unknownWh - o.unknownWh).coerceAtLeast(0.0),
+    )
 
     /** Passt den Tank an den gemessenen Inhalt an: zu viel wird anteilig gekuerzt, zu wenig gilt als unbekannt. */
     fun fitTo(measuredWh: Double): BatteryMix {
@@ -71,20 +80,23 @@ data class DriveDay(
     val regenWh: Double = 0.0,
 ) {
     val usedWh: Double get() = used.totalWh
-    /** Was das Fahren gekostet hat: alles Entnommene ohne den Standverbrauch. */
-    val drivingWh: Double get() = (usedWh - standing.totalWh).coerceAtLeast(0.0)
+    /** Nur das Fahren: alles Entnommene ohne den Standverbrauch, nach Herkunft aufgeteilt. */
+    val driving: BatteryMix get() = used - standing
+    val drivingWh: Double get() = driving.totalWh
     val standingWh: Double get() = standing.totalWh
-    val solarShare: Double? get() = if (usedWh > 0) (used.solarWh / usedWh).coerceIn(0.0, 1.0) else null
-    val unknownShare: Double? get() = if (usedWh > 0) (used.unknownWh / usedWh).coerceIn(0.0, 1.0) else null
+    val solarShare: Double? get() = driving.totalWh.takeIf { it > 0 }?.let { (driving.solarWh / it).coerceIn(0.0, 1.0) }
+    val unknownShare: Double? get() = driving.totalWh.takeIf { it > 0 }?.let { (driving.unknownWh / it).coerceIn(0.0, 1.0) }
     /**
      * kWh je 100 km, erst ab einem Kilometer sinnvoll. Gerechnet wird mit dem Fahranteil:
      * Standverbrauch hat keine Kilometer erzeugt und wuerde den Wert sonst aufblaehen.
      */
     val kwhPer100Km: Double? get() = if (drivenKm >= 1.0) drivingWh / 1000.0 / drivenKm * 100.0 else null
     /** Bezahlter Strom: Netz zum Haustarif, unterwegs zum Fremdpreis. */
-    fun costEur(pricePerKwh: Double, publicPricePerKwh: Double): Double = used.gridWh / 1000.0 * pricePerKwh + used.publicWh / 1000.0 * publicPricePerKwh
-    /** Wert des Sonnenstroms: die entgangene Einspeisung. */
-    fun solarValueEur(feedInPerKwh: Double): Double = used.solarWh / 1000.0 * feedInPerKwh
+    fun costEur(pricePerKwh: Double, publicPricePerKwh: Double): Double = driving.gridWh / 1000.0 * pricePerKwh + driving.publicWh / 1000.0 * publicPricePerKwh
+    /** Was der Standverbrauch gekostet hat, getrennt ausgewiesen. */
+    fun standingCostEur(pricePerKwh: Double, publicPricePerKwh: Double): Double = standing.gridWh / 1000.0 * pricePerKwh + standing.publicWh / 1000.0 * publicPricePerKwh
+    /** Wert des Sonnenstroms beim Fahren: die entgangene Einspeisung. */
+    fun solarValueEur(feedInPerKwh: Double): Double = driving.solarWh / 1000.0 * feedInPerKwh
     fun costPer100Km(pricePerKwh: Double, publicPricePerKwh: Double): Double? =
         if (drivenKm >= 1.0) costEur(pricePerKwh, publicPricePerKwh) / drivenKm * 100.0 else null
 
@@ -134,6 +146,13 @@ object Driving {
     const val REGEN_MAX_WH = 3000.0
     /** Unter diesem Anstieg im Stand ist es Messrauschen des Fahrzeugs, kein Ladevorgang. */
     const val PUBLIC_MIN_WH = 500.0
+    /**
+     * Ford meldet den Kilometerstand nicht zu jedem Messpunkt, oft erst nach der Fahrt. Wer
+     * eine Entnahme nur danach beurteilt, ob genau in diesem Abstand Kilometer dazukamen,
+     * schiebt halbe Fahrten in den Standverbrauch. Darum zaehlt jede Entnahme als Fahren,
+     * wenn in diesem Zeitfenster um sie herum Kilometer dazugekommen sind.
+     */
+    val MOVE_WINDOW = 30.minutes
 
     private fun EnergySample.energyWh(): Double? = carEnergyKwh?.let { it * 1000.0 }
     private fun EnergySample.charging() = (carChargePowerW ?: 0.0) > 0
@@ -145,7 +164,20 @@ object Driving {
         var pending = state.pendingWh
         fun acc(date: LocalDate) = days.getOrPut(date) { Acc(date) }
 
-        for (b in samples.sortedBy { it.at }) {
+        val sorted = samples.sortedBy { it.at }
+        // Zeitpunkte, zu denen Kilometer dazukamen; daran haengt die Unterscheidung
+        // zwischen Fahren und Stehen.
+        val moves = ArrayList<kotlinx.datetime.Instant>()
+        var prevOdo = state.last?.carOdometerKm
+        for (x in sorted) {
+            val odo = x.carOdometerKm ?: continue
+            val p = prevOdo
+            if (p != null && odo > p && odo - p < MAX_KM_STEP) moves += x.at
+            prevOdo = odo
+        }
+        fun movedNear(t: kotlinx.datetime.Instant) = moves.any { m -> (if (m > t) m - t else t - m) <= MOVE_WINDOW }
+
+        for (b in sorted) {
             if (b.carOdometerKm == null && b.energyWh() == null) continue
             val date = b.at.toLocalDateTime(zone).date
             val a = last
@@ -170,9 +202,7 @@ object Driving {
                     if (abs(pending) >= MIN_STEP_WH) {
                         // Hat sich der Kilometerstand bewegt, war das Auto zwischen beiden
                         // Messpunkten unterwegs. Das entscheidet, wie die Aenderung zu lesen ist.
-                        val prevKm = a.carOdometerKm
-                        val nowKm = b.carOdometerKm
-                        val moved = prevKm != null && nowKm != null && nowKm > prevKm && nowKm - prevKm < MAX_KM_STEP
+                        val moved = movedNear(b.at)
                         if (pending > 0) {
                             val home = a.charging() || b.charging()
                             val charged = home || pending >= REGEN_MAX_WH || (!moved && pending >= PUBLIC_MIN_WH)

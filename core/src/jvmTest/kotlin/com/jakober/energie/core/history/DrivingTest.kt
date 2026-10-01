@@ -75,9 +75,9 @@ class DrivingTest {
         assertEquals(-50.0, state.pendingWh, 1e-6)
         // Der Sprung um 4000 km zaehlt nicht, der Kilometer danach schon.
         assertEquals(1.0, d.drivenKm, 1e-9)
-        // Die 100 Wh gingen ohne gefahrene Kilometer weg: Standverbrauch, nicht Fahrverbrauch.
-        assertEquals(100.0, d.standingWh, 1e-6)
-        assertEquals(0.0, d.kwhPer100Km!!, 1e-9)
+        // Kurz darauf kam ein Kilometer dazu: die Entnahme gehoert zum Fahren, nicht zum Stand.
+        assertEquals(0.0, d.standingWh, 1e-6)
+        assertEquals(10.0, d.kwhPer100Km!!, 1e-9)
     }
 
     @Test
@@ -132,5 +132,42 @@ class DrivingTest {
         val d = Driving.of(samples, zone = utc).first.single()
         assertEquals(10000.0, d.chargedPublicWh, 1e-6)
         assertEquals(0.0, d.regenWh, 1e-9)
+    }
+
+    @Test
+    fun `Entnahme kurz vor der gemeldeten Fahrt zaehlt zum Fahren`() {
+        // Ford meldet den Kilometerstand erst am Ende der Fahrt: Energie faellt schon vorher.
+        val samples = listOf(
+            s(0, 1000.0, 50.0),
+            s(10, 1000.0, 45.0),   // 5 kWh weg, Kilometerstand noch alt
+            s(20, 1000.0, 41.0),   // 4 kWh weg
+            s(25, 1050.0, 41.0),   // jetzt erst meldet Ford die 50 km
+        )
+        val d = Driving.of(samples, zone = utc).first.single()
+        assertEquals(50.0, d.drivenKm, 1e-9)
+        assertEquals(0.0, d.standingWh, 1e-6)
+        assertEquals(9000.0, d.drivingWh, 1e-6)
+        assertEquals(18.0, d.kwhPer100Km!!, 1e-9)
+    }
+
+    @Test
+    fun `Kosten und Anteile beziehen sich auf das Fahren`() {
+        // 10 kWh zu Hause laden (ein Viertel Netz), 4 kWh fahren, am naechsten Tag 2 kWh im Stand.
+        val samples = listOf(
+            s(0, 1000.0, 0.0, cons = 2000.0, grid = 500.0),
+            s(60, 1000.0, 10.0, car = 2000.0, cons = 2000.0, grid = 500.0),
+            s(120, 1010.0, 6.0),
+            s(2 * 24 * 60, 1010.0, 4.0),
+        )
+        val days = Driving.of(samples, zone = utc).first
+        val fahrtag = days.first()
+        assertEquals(4000.0, fahrtag.drivingWh, 1e-6)
+        assertEquals(0.0, fahrtag.standingWh, 1e-6)
+        val standtag = days.last()
+        assertEquals(2000.0, standtag.standingWh, 1e-6)
+        assertEquals(0.0, standtag.drivingWh, 1e-6)
+        // Der Standtag kostet Netzstrom, faellt aber nicht in den Verbrauch je 100 km.
+        assertEquals(0.0, standtag.costEur(0.32, 0.59), 1e-9)
+        assertEquals(0.16, standtag.standingCostEur(0.32, 0.59), 1e-9)
     }
 }

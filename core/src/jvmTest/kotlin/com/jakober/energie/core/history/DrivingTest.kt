@@ -122,7 +122,8 @@ class DrivingTest {
         assertEquals(19000.0, d.usedWh, 1e-6)
         assertEquals(1000.0, d.standingWh, 1e-6)
         assertEquals(18000.0, d.drivingWh, 1e-6)
-        assertEquals(18.0, d.kwhPer100Km!!, 1e-9)
+        assertEquals(18.0, d.drivingKwhPer100Km!!, 1e-9)
+        assertEquals(19.0, d.kwhPer100Km!!, 1e-9)
     }
 
     @Test
@@ -147,11 +148,11 @@ class DrivingTest {
         assertEquals(50.0, d.drivenKm, 1e-9)
         assertEquals(0.0, d.standingWh, 1e-6)
         assertEquals(9000.0, d.drivingWh, 1e-6)
-        assertEquals(18.0, d.kwhPer100Km!!, 1e-9)
+        assertEquals(18.0, d.drivingKwhPer100Km!!, 1e-9)
     }
 
     @Test
-    fun `Kosten und Anteile beziehen sich auf das Fahren`() {
+    fun `Kosten und Anteile beziehen sich auf alles Entnommene`() {
         // 10 kWh zu Hause laden (ein Viertel Netz), 4 kWh fahren, am naechsten Tag 2 kWh im Stand.
         val samples = listOf(
             s(0, 1000.0, 0.0, cons = 2000.0, grid = 500.0),
@@ -166,8 +167,8 @@ class DrivingTest {
         val standtag = days.last()
         assertEquals(2000.0, standtag.standingWh, 1e-6)
         assertEquals(0.0, standtag.drivingWh, 1e-6)
-        // Der Standtag kostet Netzstrom, faellt aber nicht in den Verbrauch je 100 km.
-        assertEquals(0.0, standtag.costEur(0.32, 0.59), 1e-9)
+        // Der Standtag kostet Netzstrom; er zaehlt im Gesamtverbrauch mit, nicht im Fahranteil.
+        assertEquals(0.16, standtag.costEur(0.32, 0.59), 1e-9)
         assertEquals(0.16, standtag.standingCostEur(0.32, 0.59), 1e-9)
     }
 
@@ -187,6 +188,7 @@ class DrivingTest {
         assertEquals(40.0, d.drivenKm, 1e-9)
         assertEquals(2000.0, d.standingWh, 1e-6)
         assertEquals(7000.0, d.drivingWh, 1e-6)
-        assertEquals(17.5, d.kwhPer100Km!!, 1e-9)
+        assertEquals(17.5, d.drivingKwhPer100Km!!, 1e-9)
+        assertEquals(22.5, d.kwhPer100Km!!, 1e-9)
     }
 }

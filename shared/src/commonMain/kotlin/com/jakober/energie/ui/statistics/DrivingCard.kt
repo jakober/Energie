@@ -54,17 +54,27 @@ fun DrivingCard(period: List<DriveDay>, all: List<DriveDay>, settings: Settings,
         } else {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 BigValue(km(sum.drivenKm), "Gefahren", EnergyColors.car, Modifier.weight(1f))
-                BigValue(Format.energy(sum.drivingWh), "Fürs Fahren", EnergyColors.car, Modifier.weight(1f))
+                BigValue(Format.energy(sum.usedWh), "Aus dem Akku", EnergyColors.car, Modifier.weight(1f))
                 BigValue(Format.euro(sum.costEur(price, pub)), "Bezahlt", EnergyColors.grid, Modifier.weight(1f))
             }
             MixBar(sum)
-            ValueRow("Verbrauch", kwh100(sum.kwhPer100Km))
-            ValueRow("Kosten je 100 km", eur100(sum.costPer100Km(price, pub)), detail = "Netzstrom ${Format.euro(price)} · unterwegs ${Format.euro(pub)} je kWh")
-            val d = sum.driving
-            ValueRow("Sonnenstrom", Format.energy(d.solarWh), detail = "entgangene Einspeisung ${Format.euro(sum.solarValueEur(settings.feedInPerKwh))}", color = EnergyColors.sun)
-            if (d.gridWh > 50) ValueRow("Netzstrom von zu Hause", Format.energy(d.gridWh), detail = Format.euro(d.gridWh / 1000 * price), color = EnergyColors.grid)
-            if (d.publicWh > 50) ValueRow("Unterwegs geladen", Format.energy(d.publicWh), detail = Format.euro(d.publicWh / 1000 * pub), color = EnergyColors.house)
-            if (d.unknownWh > 50) ValueRow("Herkunft unbekannt", Format.energy(d.unknownWh), detail = "war schon im Akku, bevor die App mitzählte", color = EnergyColors.neutral)
+            ValueRow(
+                "Verbrauch", kwh100(sum.kwhPer100Km),
+                detail = "alles, was der Akku abgegeben hat; dieser Wert bestimmt die Reichweite",
+            )
+            if (sum.standingWh > 100) {
+                ValueRow(
+                    "davon beim Fahren", "${Format.energy(sum.drivingWh)} · ${kwh100(sum.drivingKwhPer100Km)}",
+                    detail = "zum Vergleich mit der Anzeige im Auto",
+                    color = EnergyColors.car,
+                )
+                ValueRow(
+                    "davon im Stand", Format.energy(sum.standingWh),
+                    detail = "Vorklimatisieren, Bordnetz, Selbstentladung" +
+                        (sum.standingCostEur(price, pub).takeIf { it >= 0.01 }?.let { " · ${Format.euro(it)}" } ?: ""),
+                    color = EnergyColors.neutral,
+                )
+            }
             if (sum.regenWh > 100) {
                 ValueRow(
                     "Zurückgewonnen", Format.energy(sum.regenWh),
@@ -72,16 +82,11 @@ fun DrivingCard(period: List<DriveDay>, all: List<DriveDay>, settings: Settings,
                     color = EnergyColors.battery,
                 )
             }
-            if (sum.standingWh > 100) {
-                Text("Daneben, ohne gefahrene Kilometer", style = MaterialTheme.typography.titleSmall)
-                ValueRow(
-                    "Im Stand verbraucht", Format.energy(sum.standingWh),
-                    detail = "Vorklimatisieren, Bordnetz, Selbstentladung" +
-                        (sum.standingCostEur(price, pub).takeIf { it >= 0.01 }?.let { " · ${Format.euro(it)}" } ?: ""),
-                    color = EnergyColors.neutral,
-                )
-                ValueRow("Aus dem Akku gesamt", Format.energy(sum.usedWh), detail = "Fahren und Stand zusammen")
-            }
+            ValueRow("Kosten je 100 km", eur100(sum.costPer100Km(price, pub)), detail = "Netzstrom ${Format.euro(price)} · unterwegs ${Format.euro(pub)} je kWh")
+            ValueRow("Sonnenstrom", Format.energy(sum.used.solarWh), detail = "entgangene Einspeisung ${Format.euro(sum.solarValueEur(settings.feedInPerKwh))}", color = EnergyColors.sun)
+            if (sum.used.gridWh > 50) ValueRow("Netzstrom von zu Hause", Format.energy(sum.used.gridWh), detail = Format.euro(sum.used.gridWh / 1000 * price), color = EnergyColors.grid)
+            if (sum.used.publicWh > 50) ValueRow("Unterwegs geladen", Format.energy(sum.used.publicWh), detail = Format.euro(sum.used.publicWh / 1000 * pub), color = EnergyColors.house)
+            if (sum.used.unknownWh > 50) ValueRow("Herkunft unbekannt", Format.energy(sum.used.unknownWh), detail = "war schon im Akku, bevor die App mitzählte", color = EnergyColors.neutral)
             val startKm = sum.startKm
             val endKm = sum.endKm
             if (startKm != null && endKm != null) {
@@ -120,7 +125,7 @@ fun DrivingCard(period: List<DriveDay>, all: List<DriveDay>, settings: Settings,
 
 @Composable
 private fun MixBar(d: DriveDay) {
-    val mix = d.driving
+    val mix = d.used
     val total = mix.totalWh
     if (total <= 0) return
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {

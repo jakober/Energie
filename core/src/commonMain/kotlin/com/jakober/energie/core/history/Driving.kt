@@ -84,19 +84,22 @@ data class DriveDay(
     val driving: BatteryMix get() = used - standing
     val drivingWh: Double get() = driving.totalWh
     val standingWh: Double get() = standing.totalWh
-    val solarShare: Double? get() = driving.totalWh.takeIf { it > 0 }?.let { (driving.solarWh / it).coerceIn(0.0, 1.0) }
-    val unknownShare: Double? get() = driving.totalWh.takeIf { it > 0 }?.let { (driving.unknownWh / it).coerceIn(0.0, 1.0) }
+    val solarShare: Double? get() = if (usedWh > 0) (used.solarWh / usedWh).coerceIn(0.0, 1.0) else null
+    val unknownShare: Double? get() = if (usedWh > 0) (used.unknownWh / usedWh).coerceIn(0.0, 1.0) else null
     /**
-     * kWh je 100 km, erst ab einem Kilometer sinnvoll. Gerechnet wird mit dem Fahranteil:
-     * Standverbrauch hat keine Kilometer erzeugt und wuerde den Wert sonst aufblaehen.
+     * kWh je 100 km aus allem, was der Akku abgegeben hat. Das ist der Wert, der die
+     * Reichweite bestimmt: Standverbrauch erzeugt zwar keine Kilometer, geht aber vom
+     * selben Akku ab und fehlt bei der naechsten Fahrt.
      */
-    val kwhPer100Km: Double? get() = if (drivenKm >= 1.0) drivingWh / 1000.0 / drivenKm * 100.0 else null
+    val kwhPer100Km: Double? get() = if (drivenKm >= 1.0) usedWh / 1000.0 / drivenKm * 100.0 else null
+    /** Nur das Fahren, zum Vergleich mit der Anzeige im Auto. */
+    val drivingKwhPer100Km: Double? get() = if (drivenKm >= 1.0) drivingWh / 1000.0 / drivenKm * 100.0 else null
     /** Bezahlter Strom: Netz zum Haustarif, unterwegs zum Fremdpreis. */
-    fun costEur(pricePerKwh: Double, publicPricePerKwh: Double): Double = driving.gridWh / 1000.0 * pricePerKwh + driving.publicWh / 1000.0 * publicPricePerKwh
+    fun costEur(pricePerKwh: Double, publicPricePerKwh: Double): Double = used.gridWh / 1000.0 * pricePerKwh + used.publicWh / 1000.0 * publicPricePerKwh
     /** Was der Standverbrauch gekostet hat, getrennt ausgewiesen. */
     fun standingCostEur(pricePerKwh: Double, publicPricePerKwh: Double): Double = standing.gridWh / 1000.0 * pricePerKwh + standing.publicWh / 1000.0 * publicPricePerKwh
-    /** Wert des Sonnenstroms beim Fahren: die entgangene Einspeisung. */
-    fun solarValueEur(feedInPerKwh: Double): Double = driving.solarWh / 1000.0 * feedInPerKwh
+    /** Wert des Sonnenstroms: die entgangene Einspeisung. */
+    fun solarValueEur(feedInPerKwh: Double): Double = used.solarWh / 1000.0 * feedInPerKwh
     fun costPer100Km(pricePerKwh: Double, publicPricePerKwh: Double): Double? =
         if (drivenKm >= 1.0) costEur(pricePerKwh, publicPricePerKwh) / drivenKm * 100.0 else null
 

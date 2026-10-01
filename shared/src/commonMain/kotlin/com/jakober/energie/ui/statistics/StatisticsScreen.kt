@@ -114,40 +114,14 @@ fun StatisticsContent(data: StatisticsData, actions: StatisticsActions, contentP
     var showSamples by rememberSaveable { mutableStateOf(false) }
     // Derselbe Text wie in der Datumszeile; die Karten unten tragen ihn im Titel,
     // damit nie unklar ist, worauf sich ihre Zahlen beziehen.
-    val periodLabel = when (range) {
-        Range.DAY -> Format.dateLong(date)
-        Range.WEEK -> Range.bounds(date, Range.WEEK).let { (a, b) -> "${Format.dateNum(a)} – ${Format.dateShort(b)}" }
-        Range.MONTH -> Format.month(date)
-        Range.YEAR -> date.year.toString()
-    }
+    val periodLabel = periodLabelOf(date, range)
 
     // Links die Auswahl und die Verlaufsdiagramme des Zeitraums.
     val left: LazyListScope.() -> Unit = {
         item { Text("Statistik", style = MaterialTheme.typography.displaySmall) }
 
-        item {
-            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                Range.entries.forEachIndexed { i, r ->
-                    SegmentedButton(
-                        selected = range == r,
-                        onClick = { actions.setRange(r) },
-                        shape = SegmentedButtonDefaults.itemShape(i, Range.entries.size),
-                    ) { Text(when (r) { Range.DAY -> "Tag"; Range.WEEK -> "Woche"; Range.MONTH -> "Monat"; Range.YEAR -> "Jahr" }) }
-                }
-            }
-        }
-
-        item {
-            val title = periodLabel
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { actions.shift(-1) }) { Icon(Icons.Rounded.ChevronLeft, "Zurück") }
-                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(title, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
-                    if (!data.isToday) TextButton(onClick = actions.goToday) { Text("Heute") }
-                }
-                IconButton(onClick = { actions.shift(1) }) { Icon(Icons.Rounded.ChevronRight, "Weiter") }
-            }
-        }
+        item { RangePicker(range, actions) }
+        item { PeriodNav(periodLabel, data.isToday, actions) }
 
         when (range) {
             Range.DAY -> {
@@ -261,7 +235,7 @@ private fun SavingsCard(period: EnergyTotals, lifetime: EnergyTotals?, storedDay
 }
 
 @Composable
-private fun ChargeSessionsCard(sessions: List<ChargeSession>, settings: Settings) {
+internal fun ChargeSessionsCard(sessions: List<ChargeSession>, settings: Settings) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     val shown = if (expanded) sessions.asReversed() else sessions.asReversed().take(5)
     val total = sessions.sumOf { it.energyWh }
@@ -441,7 +415,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.rangeItems(r: RangeSt
 }
 
 @Composable
-private fun CarStatsCard(period: EnergyTotals?, lifetime: EnergyTotals?, settings: Settings, sessionCount: Int, periodLabel: String) {
+internal fun CarStatsCard(period: EnergyTotals?, lifetime: EnergyTotals?, settings: Settings, sessionCount: Int, periodLabel: String) {
     // Die Gesamtrechnung aendert sich mit dem Zeitraum nicht; eingeklappt steht sie
     // nicht mehr unter den Zahlen des Zeitraums und wird nicht mehr mit ihnen verwechselt.
     var showLifetime by rememberSaveable { mutableStateOf(false) }
@@ -599,4 +573,39 @@ private fun androidx.compose.foundation.lazy.LazyListScope.yearItems(r: RangeSta
             r.averageConsumptionWh?.let { ValueRow("Verbrauch je Tag", Format.energy(it), "Durchschnitt über ${r.daysWithData.size} Tage") }
         }
     }
+}
+
+/** Tag, Woche, Monat, Jahr; dieselbe Auswahl auf der Statistik- und der Auto-Seite. */
+@Composable
+internal fun RangePicker(range: Range, actions: StatisticsActions) {
+    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+        Range.entries.forEachIndexed { i, r ->
+            SegmentedButton(
+                selected = range == r,
+                onClick = { actions.setRange(r) },
+                shape = SegmentedButtonDefaults.itemShape(i, Range.entries.size),
+            ) { Text(when (r) { Range.DAY -> "Tag"; Range.WEEK -> "Woche"; Range.MONTH -> "Monat"; Range.YEAR -> "Jahr" }) }
+        }
+    }
+}
+
+/** Zurueck, Zeitraumname, Weiter; darunter "Heute", solange etwas anderes gewaehlt ist. */
+@Composable
+internal fun PeriodNav(title: String, isToday: Boolean, actions: StatisticsActions) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        IconButton(onClick = { actions.shift(-1) }) { Icon(Icons.Rounded.ChevronLeft, "Zurück") }
+        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(title, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+            if (!isToday) TextButton(onClick = actions.goToday) { Text("Heute") }
+        }
+        IconButton(onClick = { actions.shift(1) }) { Icon(Icons.Rounded.ChevronRight, "Weiter") }
+    }
+}
+
+/** Derselbe Zeitraumname wie in der Datumszeile, auch fuer die Auto-Seite. */
+internal fun periodLabelOf(date: kotlinx.datetime.LocalDate, range: Range): String = when (range) {
+    Range.DAY -> Format.dateLong(date)
+    Range.WEEK -> Range.bounds(date, Range.WEEK).let { (a, b) -> "${Format.dateNum(a)} – ${Format.dateShort(b)}" }
+    Range.MONTH -> Format.month(date)
+    Range.YEAR -> date.year.toString()
 }

@@ -33,6 +33,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Dashboard
+import androidx.compose.material.icons.rounded.ElectricCar
 import androidx.compose.material.icons.rounded.Insights
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Icon
@@ -63,6 +64,7 @@ import com.jakober.energie.ui.theme.EnergieTheme
 private enum class Tab(val route: String, val label: String, val icon: ImageVector) {
     DASHBOARD("uebersicht", "Übersicht", Icons.Rounded.Dashboard),
     STATISTICS("statistik", "Statistik", Icons.Rounded.Insights),
+    CAR("auto", "Auto", Icons.Rounded.ElectricCar),
     SETTINGS("einstellungen", "Einstellungen", Icons.Rounded.Settings),
 }
 
@@ -155,6 +157,7 @@ private fun EnergieRoot(container: AppContainer, connectReturns: Int) {
                 DashboardScreen(vm, onOpenSettings = { nav.navigate(Tab.SETTINGS.route) { launchSingleTop = true } }, contentPadding = padding)
             }
             composable(Tab.STATISTICS.route) { StatisticsScreen(vm, contentPadding = padding) }
+            composable(Tab.CAR.route) { com.jakober.energie.ui.car.CarScreen(vm, contentPadding = padding) }
             composable(Tab.SETTINGS.route) { SettingsScreen(vm, contentPadding = padding) }
         }
     }

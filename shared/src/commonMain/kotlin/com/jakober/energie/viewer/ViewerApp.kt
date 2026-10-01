@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.Dashboard
 import androidx.compose.material.icons.rounded.ElectricCar
 import androidx.compose.material.icons.rounded.Insights
@@ -50,11 +51,12 @@ import com.jakober.energie.ui.dashboard.DashboardActions
 import com.jakober.energie.ui.dashboard.DashboardContent
 import com.jakober.energie.ui.settings.ChargeRulesCard
 import com.jakober.energie.ui.statistics.StatisticsActions
+import com.jakober.energie.ui.statistics.CarContent
 import com.jakober.energie.ui.statistics.StatisticsContent
 import com.jakober.energie.ui.theme.EnergieTheme
 import kotlinx.coroutines.delay
 
-private enum class ViewerTab(val label: String) { OVERVIEW("Übersicht"), STATISTICS("Statistik"), AUTOMATION("Automatik") }
+private enum class ViewerTab(val label: String) { OVERVIEW("Übersicht"), STATISTICS("Statistik"), CAR("Auto"), AUTOMATION("Automatik") }
 
 /** Die ganze Anzeige-App: Anmeldung, drei Reiter, dieselben Karten wie auf Android. */
 @Composable
@@ -122,7 +124,17 @@ private fun ViewerScaffold(store: ViewerStore, state: ViewerState) {
                 ViewerTab.entries.forEach { t ->
                     NavigationBarItem(
                         selected = tab == t, onClick = { tab = t }, label = { Text(t.label) },
-                        icon = { Icon(when (t) { ViewerTab.OVERVIEW -> Icons.Rounded.Dashboard; ViewerTab.STATISTICS -> Icons.Rounded.Insights; ViewerTab.AUTOMATION -> Icons.Rounded.ElectricCar }, t.label) },
+                        icon = {
+                            Icon(
+                                when (t) {
+                                    ViewerTab.OVERVIEW -> Icons.Rounded.Dashboard
+                                    ViewerTab.STATISTICS -> Icons.Rounded.Insights
+                                    ViewerTab.CAR -> Icons.Rounded.ElectricCar
+                                    ViewerTab.AUTOMATION -> Icons.Rounded.Bolt
+                                },
+                                t.label,
+                            )
+                        },
                     )
                 }
             }
@@ -137,6 +149,10 @@ private fun ViewerScaffold(store: ViewerStore, state: ViewerState) {
             ViewerTab.STATISTICS -> {
                 val data = remember(state) { store.statisticsData(state) }
                 StatisticsContent(data, statisticsActions, contentPadding = padding)
+            }
+            ViewerTab.CAR -> {
+                val data = remember(state) { store.statisticsData(state) }
+                CarContent(data, statisticsActions, contentPadding = padding)
             }
             ViewerTab.AUTOMATION -> AutomationScreen(store, state, padding)
         }

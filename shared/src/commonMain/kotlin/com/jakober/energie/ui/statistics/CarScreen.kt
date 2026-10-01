@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import com.jakober.energie.ui.EnergieCard
 import com.jakober.energie.ui.Range
 import com.jakober.energie.ui.TwoPane
 
@@ -35,16 +34,6 @@ fun CarContent(data: StatisticsData, actions: StatisticsActions, contentPadding:
         }
         if (data.driving.isNotEmpty()) {
             item { DrivingCard(drivingInPeriod, data.driving, settings, data.range, label) }
-        }
-        if (data.sessions.isEmpty() && drivingInPeriod.isEmpty() && (period?.carChargeWh ?: 0.0) <= 50) {
-            item {
-                EnergieCard(title = "Nichts zu zeigen") {
-                    Text(
-                        "Für $label liegen weder Ladevorgänge noch Fahrten vor.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
         }
     }
 

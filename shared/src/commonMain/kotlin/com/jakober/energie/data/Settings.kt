@@ -92,6 +92,8 @@ data class Settings(
     val cloudSettingsAppliedAt: Long = 0,
     /** Zentrale: bis zu welchem Tag (ISO) die Tageszusammenfassungen in der Cloud liegen, und wann heute zuletzt geschrieben wurde. */
     val cloudDaysUploadedThrough: String = "",
+    /** Fassung der zuletzt hochgeladenen Tageszusammenfassungen; aendert sie sich, werden alle neu geschrieben. */
+    val cloudDaysVersion: Int = 0,
     val cloudTodayUploadedAt: Long = 0,
     /** Firebase-Token dieses Geraets und das zuletzt in der Cloud eingetragene. */
     val pushToken: String = "",

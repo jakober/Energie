@@ -27,7 +27,12 @@ data class DaySummary(
     val version: Int = VERSION,
 ) {
     companion object {
-        const val VERSION = 1
+        /**
+         * Erhoehen, sobald sich die Rechnung aendert: Die Zentrale schreibt dann alle
+         * vergangenen Tage neu in die Cloud, damit die Anzeigen nicht auf alten Werten sitzen.
+         * 2: Fahrtage trennen Fahr- und Standverbrauch und verbuchen Rekuperation.
+         */
+        const val VERSION = 2
 
         /** Baut die Zusammenfassung aus den Messpunkten des Tages; Fahrtage kommen von aussen, weil sie den Vortag brauchen. */
         fun of(

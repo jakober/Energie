@@ -85,6 +85,7 @@ class AppSettings(private val context: Context) {
             cloudSyncedAt = p[CLOUD_SYNCED_AT] ?: 0L,
             cloudSettingsAppliedAt = p[CLOUD_SETTINGS_APPLIED_AT] ?: 0L,
             cloudDaysUploadedThrough = p[CLOUD_DAYS_THROUGH] ?: "",
+            cloudDaysVersion = p[CLOUD_DAYS_VERSION] ?: 0,
             cloudTodayUploadedAt = p[CLOUD_TODAY_UPLOADED_AT] ?: 0L,
             pushToken = p[PUSH_TOKEN] ?: "",
             pushRegisteredToken = p[PUSH_REGISTERED] ?: "",
@@ -113,6 +114,7 @@ class AppSettings(private val context: Context) {
     suspend fun saveCloudSyncedAt(epochSeconds: Long) { context.dataStore.edit { it[CLOUD_SYNCED_AT] = epochSeconds } }
     suspend fun saveCloudSettingsAppliedAt(epochSeconds: Long) { context.dataStore.edit { it[CLOUD_SETTINGS_APPLIED_AT] = epochSeconds } }
     suspend fun saveCloudDaysUploadedThrough(isoDate: String) { context.dataStore.edit { it[CLOUD_DAYS_THROUGH] = isoDate } }
+    suspend fun saveCloudDaysVersion(v: Int) { context.dataStore.edit { it[CLOUD_DAYS_VERSION] = v } }
     suspend fun saveCloudTodayUploadedAt(epochSeconds: Long) { context.dataStore.edit { it[CLOUD_TODAY_UPLOADED_AT] = epochSeconds } }
     suspend fun saveCloudRole(role: CloudRole) { context.dataStore.edit { it[CLOUD_ROLE] = role.name } }
     suspend fun savePushToken(token: String) { context.dataStore.edit { it[PUSH_TOKEN] = token } }
@@ -324,6 +326,7 @@ class AppSettings(private val context: Context) {
         val CLOUD_SYNCED_AT = longPreferencesKey("cloud_synced_at")
         val CLOUD_SETTINGS_APPLIED_AT = longPreferencesKey("cloud_settings_applied_at")
         val CLOUD_DAYS_THROUGH = stringPreferencesKey("cloud_days_through")
+        val CLOUD_DAYS_VERSION = intPreferencesKey("cloud_days_version")
         val CLOUD_TODAY_UPLOADED_AT = longPreferencesKey("cloud_today_uploaded_at")
         val PUSH_TOKEN = stringPreferencesKey("push_token")
         val PUSH_REGISTERED = stringPreferencesKey("push_registered")

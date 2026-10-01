@@ -125,7 +125,16 @@ class CloudSync(
      */
     suspend fun uploadDays(s: Settings, today: LocalDate, summaryOf: (LocalDate) -> DaySummary): Int = withSession(s) { c, sess ->
         var sent = 0
-        val through = s.cloudDaysUploadedThrough.takeIf { it.isNotBlank() }?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+        // Rechnet die Zentrale Tage anders als beim letzten Hochladen, sind die Werte in der
+        // Cloud veraltet. Vergangene Tage werden sonst nie wieder angefasst; deshalb faengt
+        // das Hochladen nach einer neuen Fassung von vorne an.
+        val stale = s.cloudDaysVersion != DaySummary.VERSION
+        if (stale) {
+            settings.saveCloudDaysUploadedThrough("")
+            settings.saveCloudDaysVersion(DaySummary.VERSION)
+        }
+        val through = if (stale) null
+        else s.cloudDaysUploadedThrough.takeIf { it.isNotBlank() }?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
         val pending = history.days().filter { it < today && (through == null || it > through) }.sorted().take(DAYS_BATCH)
         if (pending.isNotEmpty()) {
             c.upsertDays(sess, pending.map(summaryOf))

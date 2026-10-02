@@ -3,6 +3,7 @@ package com.jakober.energie.data
 import com.jakober.energie.core.fritz.FritzBoxClient
 import com.jakober.energie.core.fritz.FritzDevice
 import com.jakober.energie.core.fritz.SmartMeterReading
+import com.jakober.energie.core.history.BatteryMix
 import com.jakober.energie.core.history.DayStatistics
 import com.jakober.energie.core.history.DriveDay
 import com.jakober.energie.core.history.Driving

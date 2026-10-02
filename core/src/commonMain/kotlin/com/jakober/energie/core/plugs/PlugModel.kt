@@ -48,6 +48,11 @@ data class PlugReading(
     val powerW: Double? = null,
     val energyWh: Double? = null,
     val on: Boolean? = null,
+    /**
+     * Wer zuletzt geschaltet hat, laut Shelly: "init" (Neustart), "timer", "button",
+     * "overpower", "overtemp", "cloud", "WS_in", "http". Tasmota meldet das nicht.
+     */
+    val source: String? = null,
 )
 
 /** Was ein Shelly ueber sich sagt. */

@@ -462,6 +462,10 @@ class EnergyRepository(
             coolingPlugs = s.plugs.filter { it.isCooling }.map { d ->
                 com.jakober.energie.core.alerts.CoolingLive(d.id, d.name, live.sample?.plugs?.get(d.id)?.powerW, d.ratedPowerW)
             },
+            plugs = s.plugs.mapNotNull { d ->
+                val r = live.sample?.plugs?.get(d.id) ?: return@mapNotNull null
+                com.jakober.energie.core.alerts.PlugSwitch(d.id, d.name, r.on, r.source)
+            },
             coolingWarnings = if (s.alerts.cooling && s.plugs.any { it.isCooling }) {
                 coolingReports(s).values.mapNotNull { r -> r.warning?.let { w -> com.jakober.energie.core.alerts.CoolingWarning(r.deviceId, s.plugs.first { it.id == r.deviceId }.name, w) } }
             } else emptyList(),

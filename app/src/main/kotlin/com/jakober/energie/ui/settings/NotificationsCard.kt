@@ -85,6 +85,11 @@ fun NotificationsCard(saved: AlertSettings, onSave: (AlertSettings) -> Unit) {
             SliderRow("Stille ab", "${draft.hubSilentMinutes} min", draft.hubSilentMinutes.toFloat(), 15f..120f, 6) { draft = draft.copy(hubSilentMinutes = (it / 15).roundToInt() * 15) }
         }
         ToggleRow(
+            "Steckdose hat sich ausgeschaltet",
+            "Wenn ein Messstecker von an auf aus springt, mit dem Grund, den der Stecker nennt (Neustart, Timer, Überlast, Befehl von außen).",
+            draft.plugOff,
+        ) { draft = draft.copy(plugOff = it) }
+        ToggleRow(
             "Kühlgeräte",
             "Steckdosen vom Typ „Kühlgerät“: Kompressor läuft seit ${draft.coolingStuckHours} h durch, seit ${draft.coolingSilentHours} h kein Lauf, dauerhaft über der Nennleistung, oder seit Tagen deutlich mehr Verbrauch als üblich.",
             draft.cooling,

@@ -82,6 +82,8 @@ fun PlugsCard(
                     Text(
                         "${d.host} · ${when (d.kind) { PlugKind.SHELLY -> "Shelly"; PlugKind.TASMOTA -> "Tasmota"; PlugKind.SHELLY_S0 -> "Impulszähler ${d.impulsesPerKwh} imp/kWh" }}" +
                             (r?.let { " · jetzt ${Format.power(it.powerW)}" + (it.energyWh?.let { e -> " · Zähler ${Format.energy(e)}" } ?: "") } ?: "") +
+                            (r?.takeIf { it.on == false }?.let { " · AUS" } ?: "") +
+                            (r?.source?.let { " · zuletzt geschaltet: $it" } ?: "") +
                             (err?.let { " · nicht erreichbar" } ?: ""),
                         style = MaterialTheme.typography.bodySmall,
                         color = if (err != null && r == null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,

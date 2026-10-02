@@ -33,6 +33,8 @@ data class AlertSettings(
     /** Die Anzeige meldet, wenn die Zentrale nichts mehr liefert. */
     val hubSilent: Boolean = true,
     val hubSilentMinutes: Int = 30,
+    /** Eine Steckdose hat sich ausgeschaltet, ohne dass jemand im Haus geschaltet hat. */
+    val plugOff: Boolean = true,
     /** Kuehlgeraete an Messsteckern: Dauerlauf, Stillstand, Mehrverbrauch. */
     val cooling: Boolean = true,
     val coolingStuckHours: Int = 3,
@@ -40,7 +42,7 @@ data class AlertSettings(
 )
 
 enum class AlertKind {
-    CAR_UNLOCKED_HOME, CAR_LOW_UNPLUGGED, CAR_SURPLUS_UNPLUGGED, SURPLUS_UNUSED, AUTOMATION_ACTED, SOURCE_DOWN, SOURCE_BACK, BACKUP_FAILED, CHARGE_STARTED, CHARGE_STOPPED,
+    CAR_UNLOCKED_HOME, CAR_LOW_UNPLUGGED, CAR_SURPLUS_UNPLUGGED, SURPLUS_UNUSED, PLUG_OFF, AUTOMATION_ACTED, SOURCE_DOWN, SOURCE_BACK, BACKUP_FAILED, CHARGE_STARTED, CHARGE_STOPPED,
     COOLING_STUCK_ON, COOLING_SILENT, COOLING_BACK, COOLING_OVERLOAD, COOLING_TREND,
     HUB_SILENT, HUB_BACK,
 }
@@ -85,7 +87,12 @@ data class AlertState(
     val plugOverloadReported: List<String> = emptyList(),
     /** Letzte Trendmeldung je Stecker (Unix-Sekunden). */
     val coolingWarnedAt: Map<String, Long> = emptyMap(),
+    /** Zuletzt gesehener Schaltzustand je Stecker, um den Wechsel auf "aus" zu erkennen. */
+    val plugSwitchedOn: Map<String, Boolean> = emptyMap(),
 )
+
+/** Ein Messstecker im aktuellen Durchlauf: Schaltzustand und wer zuletzt geschaltet hat. */
+data class PlugSwitch(val id: String, val name: String, val on: Boolean?, val source: String?)
 
 /** Ein Kuehlgeraet im aktuellen Durchlauf. `powerW` null = Stecker nicht erreichbar. */
 data class CoolingLive(val id: String, val name: String, val powerW: Double?, val ratedPowerW: Double? = null)
@@ -117,6 +124,8 @@ data class AlertInput(
     val carChargingAtHome: Boolean = false,
     /** Kuehlgeraete mit aktueller Leistung. */
     val coolingPlugs: List<CoolingLive> = emptyList(),
+    /** Alle erreichbaren Messstecker mit ihrem Schaltzustand. */
+    val plugs: List<PlugSwitch> = emptyList(),
     /** Auffaellige Kuehlgeraete laut Tagesauswertung. */
     val coolingWarnings: List<CoolingWarning> = emptyList(),
     /**
@@ -293,10 +302,42 @@ object AlertEngine {
             )
         }
 
+        // --- Steckdose hat sich ausgeschaltet ---
+        if (input.plugs.isNotEmpty()) {
+            val seen = HashMap(s.plugSwitchedOn)
+            input.plugs.forEach { p ->
+                val on = p.on ?: return@forEach
+                val before = seen[p.id]
+                if (settings.plugOff && before == true && !on) {
+                    alerts += Alert(
+                        AlertKind.PLUG_OFF, "${p.name} ist aus",
+                        "Die Steckdose hat sich ausgeschaltet. ${switchReason(p.source)}",
+                    )
+                }
+                seen[p.id] = on
+            }
+            s = s.copy(plugSwitchedOn = seen)
+        }
+
         // --- Kuehlgeraete ---
         if (settings.cooling) s = cooling(input, s, settings, alerts)
 
         return AlertResult(alerts, s)
+    }
+
+    /** Was der Shelly als Quelle der letzten Schaltung meldet, in Klartext. */
+    fun switchReason(source: String?): String = when (source?.lowercase()) {
+        null, "" -> "Grund unbekannt."
+        "init" -> "Grund: Das Gerät ist neu gestartet und steht auf „aus\" als Einschaltzustand (Stromausfall oder Firmware-Update)."
+        "timer" -> "Grund: ein Timer im Stecker."
+        "button" -> "Grund: der Knopf am Stecker."
+        "overpower" -> "Grund: Überlastschutz, der Stecker hat zu viel Strom gemessen."
+        "overtemp" -> "Grund: Überhitzungsschutz."
+        "overvoltage", "undervoltage" -> "Grund: Schutzabschaltung wegen der Netzspannung."
+        "cloud", "ws_in", "mqtt" -> "Grund: ein Befehl von aussen (Shelly-App, Szene, Sprachassistent)."
+        "http" -> "Grund: ein Befehl im Heimnetz."
+        "schedule" -> "Grund: ein Zeitplan im Stecker."
+        else -> "Grund laut Stecker: $source."
     }
 
     private fun fmtDuration(seconds: Long): String {

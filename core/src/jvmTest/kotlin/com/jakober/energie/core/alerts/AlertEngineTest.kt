@@ -219,4 +219,35 @@ class AlertEngineTest {
         val ohneStrom = settings.copy(carSurplusUnplugged = false)
         assertTrue(AlertEngine.evaluate(input(grid = -3000.0, carSoc = 70.0), AlertState(), ohneStrom).alerts.isEmpty())
     }
+
+    @Test
+    fun `Steckdose die von an auf aus springt meldet sich mit Grund`() {
+        val kuehl = listOf(PlugSwitch("shelly-1", "Gefriertruhe", true, "init"))
+        // Erster Durchlauf lernt nur den Zustand.
+        var r = AlertEngine.evaluate(input().copy(plugs = kuehl), AlertState(), settings)
+        assertTrue(r.alerts.isEmpty())
+        // Jetzt ist sie aus: Meldung mit dem Grund des Steckers.
+        r = AlertEngine.evaluate(input().copy(plugs = listOf(PlugSwitch("shelly-1", "Gefriertruhe", false, "init"))), r.state, settings)
+        assertEquals(listOf(AlertKind.PLUG_OFF), r.alerts.map { it.kind })
+        assertTrue(r.alerts[0].title.contains("Gefriertruhe"), r.alerts[0].title)
+        assertTrue(r.alerts[0].text.contains("neu gestartet"), r.alerts[0].text)
+        // Bleibt sie aus, kommt nichts mehr.
+        r = AlertEngine.evaluate(input().copy(plugs = listOf(PlugSwitch("shelly-1", "Gefriertruhe", false, "init"))), r.state, settings)
+        assertTrue(r.alerts.isEmpty())
+    }
+
+    @Test
+    fun `ausgeschaltete Steckdose laesst sich abschalten und unbekannter Zustand meldet nichts`() {
+        val an = listOf(PlugSwitch("p", "Lampe", true, null))
+        val aus = listOf(PlugSwitch("p", "Lampe", false, "button"))
+        val ohne = settings.copy(plugOff = false)
+        var r = AlertEngine.evaluate(input().copy(plugs = an), AlertState(), ohne)
+        r = AlertEngine.evaluate(input().copy(plugs = aus), r.state, ohne)
+        assertTrue(r.alerts.isEmpty())
+        // Nicht erreichbar (on = null) aendert den gemerkten Zustand nicht.
+        var t = AlertEngine.evaluate(input().copy(plugs = an), AlertState(), settings)
+        t = AlertEngine.evaluate(input().copy(plugs = listOf(PlugSwitch("p", "Lampe", null, null))), t.state, settings)
+        assertTrue(t.alerts.isEmpty())
+        assertEquals(true, t.state.plugSwitchedOn["p"])
+    }
 }

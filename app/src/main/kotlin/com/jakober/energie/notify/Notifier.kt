@@ -44,6 +44,8 @@ class Notifier(private val context: Context) {
             AlertKind.COOLING_SILENT, AlertKind.COOLING_STUCK_ON, AlertKind.COOLING_OVERLOAD -> CHANNEL_CAR
             // Schweigt die Zentrale, sammelt niemand mehr Daten: das soll auffallen.
             AlertKind.HUB_SILENT, AlertKind.HUB_BACK -> CHANNEL_CAR
+            // Eine Steckdose, die von selbst ausgeht, kann eine Gefriertruhe abtauen lassen.
+            AlertKind.PLUG_OFF -> CHANNEL_CAR
             else -> CHANNEL_INFO
         }
         val open = PendingIntent.getActivity(

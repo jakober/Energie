@@ -81,7 +81,11 @@ class PlugClient(private val http: HttpClient) {
         val o = runCatching { json.parseToJsonElement(text).jsonObject }.getOrNull() ?: return null
         val power = (o["apower"] as? JsonPrimitive)?.doubleOrNull ?: return null
         val total = ((o["aenergy"] as? JsonObject)?.get("total") as? JsonPrimitive)?.doubleOrNull
-        return PlugReading(powerW = power, energyWh = total, on = (o["output"] as? JsonPrimitive)?.booleanOrNull)
+        return PlugReading(
+            powerW = power, energyWh = total,
+            on = (o["output"] as? JsonPrimitive)?.booleanOrNull,
+            source = (o["source"] as? JsonPrimitive)?.contentOrNull,
+        )
     }
 
     fun parseTasmotaStatus(text: String): PlugReading? {

@@ -13,6 +13,7 @@ import com.jakober.energie.core.history.ChargeSessions
 import com.jakober.energie.core.history.DayStatistics
 import com.jakober.energie.core.history.DaySummary
 import com.jakober.energie.core.history.DriveDay
+import com.jakober.energie.core.history.Driving
 import com.jakober.energie.core.history.EnergyTotals
 import com.jakober.energie.core.history.GridMonth
 import com.jakober.energie.core.history.GridMonths
@@ -460,7 +461,12 @@ class ViewerStore(
             carChargeWh = all.sumOf { it.totals.carChargeWh }, carFromGridWh = all.sumOf { it.totals.carFromGridWh },
             meterImportWh = null, meterExportWh = null,
         )
-        val driving: List<DriveDay> = past.flatMap { it.drive }
+        // Vergangene Tage kommen fertig von der Zentrale; den heutigen rechnet die Anzeige
+        // selbst aus den Messpunkten, sonst stuende hier bis Mitternacht "keine Fahrt".
+        // Woher der Strom im Akku stammt, weiss sie fuer heute nur, soweit heute geladen
+        // wurde; was vorher drin war, gilt als unbekannter Herkunft.
+        val todayDrive = runCatching { Driving.of(s.samples[today].orEmpty(), zone = zone).first }.getOrDefault(emptyList())
+        val driving: List<DriveDay> = past.flatMap { it.drive } + todayDrive
         return StatisticsData(
             range = s.range, date = s.selectedDate, isToday = s.selectedDate == today, todayDate = today,
             day = dayStatistics(s.selectedDate, s), rangeStats = if (s.range == Range.DAY) null else rangeStatistics(s.selectedDate, s.range, s, today),

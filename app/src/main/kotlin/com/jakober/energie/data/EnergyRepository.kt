@@ -245,7 +245,9 @@ class EnergyRepository(
                 val done = cs.processCommands(s) { cmd -> executeCommand(cmd) }
                 val live = _state.value
                 val sent = cs.uploadPending(s)
-                cs.putStatus(s, live)
+                // Der Tank-Mix wird aus den Verlaufsdateien gerechnet: nicht auf dem Hauptthread.
+                val mix = runCatching { withContext(Dispatchers.Default) { carMixAtMidnight() } }.getOrNull()
+                cs.putStatus(s, live, mix)
                 cs.uploadSettingsIfChanged(settings.current())
                 // Tageszusammenfassungen rechnen ist teuer (Verlaufsdateien lesen): nie auf dem Hauptthread.
                 val days = runCatching { withContext(Dispatchers.Default) { cs.uploadDays(s, today()) { d -> daySummary(d) } } }.getOrElse { 0 }
@@ -954,6 +956,17 @@ class EnergyRepository(
         }
         val (todayDays, _) = Driving.of(history.day(today), state, zone)
         return days + todayDays
+    }
+
+    /**
+     * Der Tank-Mix des Autoakkus zu Beginn des heutigen Tages: Sonne, Netz, Fremdstrom und
+     * Unbekanntes. Die Anzeige auf dem iPhone rechnet den heutigen Fahrtag selbst und braucht
+     * diesen Anfangsstand, sonst gilt ihr alles als Herkunft unbekannt.
+     */
+    @Synchronized
+    fun carMixAtMidnight(zone: TimeZone = TimeZone.currentSystemDefault()): BatteryMix? {
+        driving(zone)
+        return drivingCache?.state?.mix
     }
 
     /** Nach einer Wiederherstellung: Statistik neu rechnen und die Ansicht anstossen. */

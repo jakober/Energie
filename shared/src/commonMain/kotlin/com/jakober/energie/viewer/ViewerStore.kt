@@ -13,7 +13,9 @@ import com.jakober.energie.core.history.ChargeSessions
 import com.jakober.energie.core.history.DayStatistics
 import com.jakober.energie.core.history.DaySummary
 import com.jakober.energie.core.history.DriveDay
+import com.jakober.energie.core.history.BatteryMix
 import com.jakober.energie.core.history.Driving
+import com.jakober.energie.core.history.DrivingState
 import com.jakober.energie.core.history.EnergyTotals
 import com.jakober.energie.core.history.GridMonth
 import com.jakober.energie.core.history.GridMonths
@@ -277,6 +279,10 @@ class ViewerStore(
     private fun applyStatus(live: LiveState, o: JsonObject): LiveState {
         fun str(k: String) = (o[k] as? JsonPrimitive)?.contentOrNull
         (o["chargeOverride"] as? JsonPrimitive)?.booleanOrNull?.let { overrideFromStatus = it }
+        // Tank-Mix des Autoakkus zu Tagesbeginn, von der Zentrale gerechnet.
+        (o["carMix"] as? JsonObject)?.let { m ->
+            runCatching { json.decodeFromJsonElement(BatteryMix.serializer(), m) }.getOrNull()?.let { carMixAtMidnight = it }
+        }
         return live.copy(
             car = (o["car"] as? JsonObject)?.let { runCatching { json.decodeFromJsonElement(CarState.serializer(), it) }.getOrNull() } ?: live.car,
             senec = (o["senec"] as? JsonObject)?.let { runCatching { json.decodeFromJsonElement(SenecSystem.serializer(), it) }.getOrNull() } ?: live.senec,
@@ -292,6 +298,9 @@ class ViewerStore(
     /** Handschalter laut Zentrale; aeltere Zentralen melden ihn nicht, dann aus dem Automatik-Text. */
     fun chargeOverride(s: ViewerState): Boolean = overrideFromStatus ?: (s.live.automationStatus?.contains("Handschalter") == true)
     private var overrideFromStatus: Boolean? = null
+
+    /** Womit der Autoakku heute Nacht gefuellt war, laut Zentrale; null = aeltere Zentrale. */
+    private var carMixAtMidnight: BatteryMix? = null
 
     private suspend fun loadDaySamples(date: LocalDate): List<EnergySample> {
         val from = date.atStartOfDayIn(zone)
@@ -318,9 +327,23 @@ class ViewerStore(
         if (date == today() || _state.value.samples.containsKey(date)) return
         scope.launch {
             val s = runCatching { loadDaySamples(date) }.getOrNull() ?: return@launch
-            _state.update { it.copy(samples = it.samples + (date to s)) }
+            loadedDays.remove(date)
+            loadedDays.addLast(date)
+            _state.update { st ->
+                var samples = st.samples + (date to s)
+                // Ein Tag sind rund 1400 Messpunkte. Wer lange blaettert, haette sonst
+                // irgendwann den halben Verlauf im Arbeitsspeicher.
+                while (loadedDays.size > KEEP_DAY_SAMPLES) {
+                    val drop = loadedDays.removeFirst()
+                    if (drop != today()) samples = samples - drop
+                }
+                st.copy(samples = samples)
+            }
         }
     }
+
+    /** Reihenfolge der nachgeladenen Tage, aelteste zuerst. */
+    private val loadedDays = ArrayDeque<LocalDate>()
 
     private suspend fun refreshForecast() {
         val s = _state.value.settings
@@ -387,7 +410,7 @@ class ViewerStore(
 
     fun setRange(r: Range) { _state.update { it.copy(range = r) }; ensureSelected() }
     fun shift(steps: Int) { _state.update { it.copy(selectedDate = Range.shift(it.selectedDate, it.range, steps)) }; ensureSelected() }
-    fun goToday() { _state.update { it.copy(selectedDate = today()) } }
+    fun goToday() { _state.update { it.copy(selectedDate = today()) }; ensureSelected() }
     fun setUpgradeModuleKwh(v: Double) = _state.update { it.copy(upgradeModuleKwh = v) }
     fun setUpgradeCost(v: Double) = _state.update { it.copy(upgradeCostEur = v) }
     private fun ensureSelected() { val s = _state.value; if (s.range == Range.DAY) ensureDay(s.selectedDate) }
@@ -465,7 +488,8 @@ class ViewerStore(
         // selbst aus den Messpunkten, sonst stuende hier bis Mitternacht "keine Fahrt".
         // Woher der Strom im Akku stammt, weiss sie fuer heute nur, soweit heute geladen
         // wurde; was vorher drin war, gilt als unbekannter Herkunft.
-        val todayDrive = runCatching { Driving.of(s.samples[today].orEmpty(), zone = zone).first }.getOrDefault(emptyList())
+        val start = DrivingState(mix = carMixAtMidnight ?: BatteryMix())
+        val todayDrive = runCatching { Driving.of(s.samples[today].orEmpty(), start, zone).first }.getOrDefault(emptyList())
         val driving: List<DriveDay> = past.flatMap { it.drive } + todayDrive
         return StatisticsData(
             range = s.range, date = s.selectedDate, isToday = s.selectedDate == today, todayDate = today,
@@ -485,6 +509,8 @@ class ViewerStore(
         /** Alle Zusammenfassungen so oft komplett neu laden, sonst nur die letzten Tage. */
         val SUMMARIES_FULL_INTERVAL = 6.hours
         const val SUMMARY_DAYS = 400
+        /** So viele nachgeladene Tage mit Messpunkten bleiben im Speicher. */
+        const val KEEP_DAY_SAMPLES = 5
         const val KEY_SESSION = "session"
         const val KEY_EMAIL = "email"
         const val KEY_FORECAST = "forecast"

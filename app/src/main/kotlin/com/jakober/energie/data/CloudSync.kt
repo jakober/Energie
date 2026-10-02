@@ -7,6 +7,7 @@ import com.jakober.energie.core.cloud.CloudCommand
 import com.jakober.energie.core.cloud.CloudException
 import com.jakober.energie.core.cloud.CloudSession
 import com.jakober.energie.core.cloud.SupabaseClient
+import com.jakober.energie.core.history.BatteryMix
 import com.jakober.energie.core.history.DaySummary
 import com.jakober.energie.core.history.HistoryStore
 import com.jakober.energie.core.model.EnergySample
@@ -150,7 +151,7 @@ class CloudSync(
         sent
     }
 
-    suspend fun putStatus(s: Settings, live: LiveState) = withSession(s) { c, sess ->
+    suspend fun putStatus(s: Settings, live: LiveState, carMix: BatteryMix? = null) = withSession(s) { c, sess ->
         val obj = buildJsonObject {
             live.car?.let { put("car", json.encodeToJsonElement(CarState.serializer(), it)) }
             live.senec?.let { put("senec", json.encodeToJsonElement(SenecSystem.serializer(), it)) }
@@ -163,6 +164,9 @@ class CloudSync(
             live.lastUpdate?.let { put("lastUpdate", it.toString()) }
             // Fuer die Web-Anzeige, die keine eigene Kopie der Einstellungen hat.
             put("chargeOverride", s.chargeOverride)
+            // Tank-Mix des Autoakkus zu Tagesbeginn: Die Anzeige rechnet den heutigen Fahrtag
+            // selbst und wuesste sonst nicht, woher der Strom im Akku stammt.
+            carMix?.let { put("carMix", json.encodeToJsonElement(BatteryMix.serializer(), it)) }
         }
         c.putStatus(sess, obj)
     }

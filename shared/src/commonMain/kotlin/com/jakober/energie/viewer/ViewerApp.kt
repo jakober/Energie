@@ -8,15 +8,13 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.only
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -31,7 +29,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -73,6 +70,9 @@ private enum class ViewerTab(val label: String) { OVERVIEW("Übersicht"), STATIS
  * gewoehnlichen iPhone bleibt alles wie bisher.
  */
 private val RailFrom = 600.dp
+
+/** Breite der seitlichen Leiste. So schmal wie die Spalte, in der die Uhrzeit steht. */
+private val RailWidth = 88.dp
 
 @Composable
 private fun TabIcon(t: ViewerTab) {
@@ -183,21 +183,24 @@ private fun ViewerScaffold(store: ViewerStore, state: ViewerState) {
                     }
                 }
                 if (rail) {
-                    // Kein Abstand zur rechten Seite: Die Reiter sollen in derselben schmalen
-                    // Spalte stehen wie Uhrzeit und Empfangsanzeige, nicht daneben. Oben und
-                    // unten bleibt der Abstand, damit nichts unter der Leiste des Geraets liegt.
-                    NavigationRail(
-                        windowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Vertical),
+                    // Eine schlichte Spalte statt des fertigen Leisten-Bausteins: Der bringt
+                    // eigene Abstaende und eine eigene Anordnung mit und hat sich ueber beide
+                    // Vorgaben hinweggesetzt - die Reiter standen oben und nach links
+                    // geschoben. Hier bestimmen Breite, Ausrichtung und Abstand nur wir.
+                    Column(
+                        Modifier.fillMaxHeight().width(RailWidth),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Bottom,
                     ) {
-                        // Schiebt die Reiter ans untere Ende. Oben steht in dieser Spalte die
-                        // Uhrzeit, und unten liegen sie naeher am Daumen.
-                        Spacer(Modifier.weight(1f))
                         ViewerTab.entries.forEach { t ->
                             NavigationRailItem(
                                 selected = tab == t, onClick = { tab = t },
                                 label = { Text(t.label) }, icon = { TabIcon(t) },
                             )
                         }
+                        // Platz fuer den Balken am unteren Rand des Geraets. Derselbe Wert,
+                        // mit dem auch die Karten rechnen.
+                        Spacer(Modifier.height(padding.calculateBottomPadding() + 12.dp))
                     }
                 }
             }

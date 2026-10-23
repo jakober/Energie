@@ -41,5 +41,20 @@ jobs:
           cd iosApp
           xcodebuild -project Energie.xcodeproj -scheme Energie -configuration Debug \
             -sdk iphonesimulator -destination "generic/platform=iOS Simulator" \
+            -derivedDataPath build \
             ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build | tail -n 60
           test ${PIPESTATUS[0]} -eq 0
+      - name: Was die fertige App anmeldet
+        # Ob die App auf grossen Schirmen das ganze Bild bekommt oder in einem kleinen
+        # Fenster landet, entscheidet iOS an diesen Eintraegen. Sie stehen nicht in der
+        # Quelle, sondern entstehen erst beim Bauen - darum hier nachsehen statt raten.
+        run: |
+          cd iosApp
+          PLIST="$(find build/Build/Products -name Info.plist -path '*Energie.app*' | head -n 1)"
+          echo "Info.plist: $PLIST"
+          for k in UIDeviceFamily UISupportedInterfaceOrientations UILaunchScreen \
+                   UIApplicationSceneManifest UIRequiresFullScreen MinimumOSVersion DTPlatformVersion DTSDKName; do
+            printf '%s = ' "$k"
+            /usr/libexec/PlistBuddy -c "Print :$k" "$PLIST" 2>/dev/null | tr '\n' ' ' || true
+            echo
+          done

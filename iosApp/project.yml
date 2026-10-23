@@ -26,7 +26,10 @@ targets:
         CFBundleShortVersionString: "1.0"
         CFBundleVersion: "1"
         UILaunchScreen: {}
-        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+        # Freie Fenstergroessen setzen alle vier Lagen voraus. Fehlt der Kopfstand, zeigt iOS
+        # die App auf grossen Schirmen in einem kleinen, gedrehten Fenster. Geraete mit
+        # Gesichtserkennung drehen trotzdem nicht auf den Kopf, hier aendert sich also nichts.
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         ITSAppUsesNonExemptEncryption: false
         # Compose Multiplatform verlangt diesen Eintrag und beendet sonst beim Start die App.

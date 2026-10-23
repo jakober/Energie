@@ -3,9 +3,15 @@ package com.jakober.energie.viewer
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,6 +31,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -57,6 +65,27 @@ import com.jakober.energie.ui.theme.EnergieTheme
 import kotlinx.coroutines.delay
 
 private enum class ViewerTab(val label: String) { OVERVIEW("Übersicht"), STATISTICS("Statistik"), CAR("Auto"), AUTOMATION("Automatik") }
+
+/**
+ * Ab dieser Breite steht die Leiste rechts an der Seite statt unten. Der aufgeklappte
+ * innere Schirm des Falt-iPhones ist so breit, dass eine Leiste ueber die ganze Breite
+ * weit vom Daumen weg liegt; an der Seite sind die vier Reiter beieinander. Auf einem
+ * gewoehnlichen iPhone bleibt alles wie bisher.
+ */
+private val RailFrom = 600.dp
+
+@Composable
+private fun TabIcon(t: ViewerTab) {
+    Icon(
+        when (t) {
+            ViewerTab.OVERVIEW -> Icons.Rounded.Dashboard
+            ViewerTab.STATISTICS -> Icons.Rounded.Insights
+            ViewerTab.CAR -> Icons.Rounded.ElectricCar
+            ViewerTab.AUTOMATION -> Icons.Rounded.Bolt
+        },
+        t.label,
+    )
+}
 
 /** Die ganze Anzeige-App: Anmeldung, drei Reiter, dieselben Karten wie auf Android. */
 @Composable
@@ -118,43 +147,59 @@ private fun ViewerScaffold(store: ViewerStore, state: ViewerState) {
         StatisticsActions(setRange = store::setRange, shift = store::shift, goToday = store::goToday, setUpgradeModuleKwh = store::setUpgradeModuleKwh, setUpgradeCost = store::setUpgradeCost)
     }
 
-    Scaffold(
-        bottomBar = {
-            NavigationBar {
-                ViewerTab.entries.forEach { t ->
-                    NavigationBarItem(
-                        selected = tab == t, onClick = { tab = t }, label = { Text(t.label) },
-                        icon = {
-                            Icon(
-                                when (t) {
-                                    ViewerTab.OVERVIEW -> Icons.Rounded.Dashboard
-                                    ViewerTab.STATISTICS -> Icons.Rounded.Insights
-                                    ViewerTab.CAR -> Icons.Rounded.ElectricCar
-                                    ViewerTab.AUTOMATION -> Icons.Rounded.Bolt
-                                },
-                                t.label,
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val rail = maxWidth >= RailFrom
+        Scaffold(
+            bottomBar = {
+                if (!rail) {
+                    NavigationBar {
+                        ViewerTab.entries.forEach { t ->
+                            NavigationBarItem(
+                                selected = tab == t, onClick = { tab = t },
+                                label = { Text(t.label) }, icon = { TabIcon(t) },
                             )
-                        },
-                    )
+                        }
+                    }
+                }
+            },
+            snackbarHost = { state.message?.let { Snackbar(Modifier.padding(12.dp)) { Text(it) } } },
+        ) { padding ->
+            Row(Modifier.fillMaxSize()) {
+                Box(Modifier.weight(1f)) {
+                    when (tab) {
+                        ViewerTab.OVERVIEW -> {
+                            val data = remember(state) { store.dashboardData(state) }
+                            DashboardContent(data, dashboardActions, onOpenSettings = { tab = ViewerTab.AUTOMATION }, contentPadding = padding)
+                        }
+                        ViewerTab.STATISTICS -> {
+                            val data = remember(state) { store.statisticsData(state) }
+                            StatisticsContent(data, statisticsActions, contentPadding = padding)
+                        }
+                        ViewerTab.CAR -> {
+                            val data = remember(state) { store.statisticsData(state) }
+                            CarContent(data, statisticsActions, contentPadding = padding)
+                        }
+                        ViewerTab.AUTOMATION -> AutomationScreen(store, state, padding)
+                    }
+                }
+                if (rail) {
+                    // Die Leiste haelt selbst Abstand zum Rand: oben, unten und rechts, wo
+                    // beim aufgeklappten Geraet die Aussparungen sitzen. Die Abstaende sind
+                    // dort nicht spiegelgleich, darum nicht die der linken Seite nehmen.
+                    NavigationRail(
+                        windowInsets = WindowInsets.safeDrawing.only(
+                            WindowInsetsSides.End + WindowInsetsSides.Vertical,
+                        ),
+                    ) {
+                        ViewerTab.entries.forEach { t ->
+                            NavigationRailItem(
+                                selected = tab == t, onClick = { tab = t },
+                                label = { Text(t.label) }, icon = { TabIcon(t) },
+                            )
+                        }
+                    }
                 }
             }
-        },
-        snackbarHost = { state.message?.let { Snackbar(Modifier.padding(12.dp)) { Text(it) } } },
-    ) { padding ->
-        when (tab) {
-            ViewerTab.OVERVIEW -> {
-                val data = remember(state) { store.dashboardData(state) }
-                DashboardContent(data, dashboardActions, onOpenSettings = { tab = ViewerTab.AUTOMATION }, contentPadding = padding)
-            }
-            ViewerTab.STATISTICS -> {
-                val data = remember(state) { store.statisticsData(state) }
-                StatisticsContent(data, statisticsActions, contentPadding = padding)
-            }
-            ViewerTab.CAR -> {
-                val data = remember(state) { store.statisticsData(state) }
-                CarContent(data, statisticsActions, contentPadding = padding)
-            }
-            ViewerTab.AUTOMATION -> AutomationScreen(store, state, padding)
         }
     }
 }

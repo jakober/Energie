@@ -10,10 +10,13 @@ name: iOS an TestFlight
 on:
   push:
     branches: [main]
+  # Von Hand ausloesbar, damit ein Stand erst gruen sein kann und dann aufs iPhone geht.
+  # Ueber [ios] geht beides gleichzeitig los, und ein Fehler faellt erst in Codemagic auf.
+  workflow_dispatch:
 
 jobs:
   start:
-    if: contains(github.event.head_commit.message, '[ios]')
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[ios]')
     runs-on: ubuntu-latest
     steps:
       - name: Codemagic-Build starten

@@ -54,7 +54,10 @@ jobs:
           echo "Info.plist: $PLIST"
           for k in UIDeviceFamily UISupportedInterfaceOrientations UILaunchScreen \
                    UIApplicationSceneManifest UIRequiresFullScreen MinimumOSVersion DTPlatformVersion DTSDKName; do
-            printf '%s = ' "$k"
-            /usr/libexec/PlistBuddy -c "Print :$k" "$PLIST" 2>/dev/null | tr '\n' ' ' || true
-            echo
+            V="$(/usr/libexec/PlistBuddy -c "Print :$k" "$PLIST" 2>/dev/null | tr '\n' ' ')"
+            # Als Annotation, sonst steht es nur im Rohprotokoll und ist schwer herauszuholen.
+            echo "::notice title=$k::${V:-(fehlt)}"
           done
+          # Ohne Tablet-Klasse zeigt iOS die App auf grossen Schirmen in einem kleinen Fenster.
+          /usr/libexec/PlistBuddy -c "Print :UIDeviceFamily" "$PLIST" | grep -q 2 \
+            || { echo "::error::UIDeviceFamily enthaelt keine 2 - die App gilt als reine iPhone-App"; exit 1; }

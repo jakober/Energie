@@ -16,9 +16,9 @@ on:
 
 jobs:
   start:
-    # In geschweiften Klammern, sonst gilt die Zeile als nicht leerer Text und damit
-    # als wahr: In dieser Form lief der Job auch ohne [ios] und stiess einen Build an.
-    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[ios]') }}
+    # Nur der Titel zaehlt, nicht die ganze Beschreibung: Wer im Fliesstext ueber das
+    # Stichwort schreibt, loest sonst ungewollt einen Build aus. Genau das ist passiert.
+    if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, '[ios]') }}
     runs-on: ubuntu-latest
     steps:
       - name: Codemagic-Build starten
@@ -29,12 +29,17 @@ jobs:
           # Text von aussen und hat in einer Kommandozeile nichts verloren.
           GRUND: ${{ github.event_name }}
           NACHRICHT: ${{ github.event.head_commit.message }}
+          STICHWORT: "[ios]"
         run: |
-          # Zweite Sperre. Die Bedingung oben hat schon einmal versagt, und ein Fehler
-          # dort kostet hier einen Build und eine Mail an den Nutzer.
-          if [ "$GRUND" != "workflow_dispatch" ] && ! printf '%s' "$NACHRICHT" | grep -qF '[ios]'; then
-            echo "Weder von Hand gestartet noch [ios] in der Beschreibung - kein Build."
-            exit 0
+          # Zweite Sperre, mit derselben Regel: nur die erste Zeile, und nur ihr Anfang.
+          # Das Stichwort steht in Anfuehrungszeichen, sonst liest die Schale die eckigen
+          # Klammern als Auswahl einzelner Zeichen statt als den Text, der sie sind.
+          if [ "$GRUND" != "workflow_dispatch" ]; then
+            TITEL="$(printf '%s' "$NACHRICHT" | head -n 1)"
+            case "$TITEL" in
+              "$STICHWORT"*) ;;
+              *) echo "Kein Stichwort am Titelanfang - kein Build."; exit 0 ;;
+            esac
           fi
           if [ -z "$TOKEN" ] || [ -z "$APP_ID" ]; then
             echo "Kein Codemagic-Zugang hinterlegt. Build bitte von Hand starten."

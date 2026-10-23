@@ -183,14 +183,15 @@ private fun ViewerScaffold(store: ViewerStore, state: ViewerState) {
                     }
                 }
                 if (rail) {
-                    // Die Leiste haelt selbst Abstand zum Rand: oben, unten und rechts, wo
-                    // beim aufgeklappten Geraet die Aussparungen sitzen. Die Abstaende sind
-                    // dort nicht spiegelgleich, darum nicht die der linken Seite nehmen.
+                    // Kein Abstand zur rechten Seite: Die Reiter sollen in derselben schmalen
+                    // Spalte stehen wie Uhrzeit und Empfangsanzeige, nicht daneben. Oben und
+                    // unten bleibt der Abstand, damit nichts unter der Leiste des Geraets liegt.
                     NavigationRail(
-                        windowInsets = WindowInsets.safeDrawing.only(
-                            WindowInsetsSides.End + WindowInsetsSides.Vertical,
-                        ),
+                        windowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Vertical),
                     ) {
+                        // Schiebt die Reiter ans untere Ende. Oben steht in dieser Spalte die
+                        // Uhrzeit, und unten liegen sie naeher am Daumen.
+                        Spacer(Modifier.weight(1f))
                         ViewerTab.entries.forEach { t ->
                             NavigationRailItem(
                                 selected = tab == t, onClick = { tab = t },

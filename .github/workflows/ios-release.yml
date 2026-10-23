@@ -16,14 +16,26 @@ on:
 
 jobs:
   start:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[ios]')
+    # In geschweiften Klammern, sonst gilt die Zeile als nicht leerer Text und damit
+    # als wahr: In dieser Form lief der Job auch ohne [ios] und stiess einen Build an.
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[ios]') }}
     runs-on: ubuntu-latest
     steps:
       - name: Codemagic-Build starten
         env:
           TOKEN: ${{ secrets.CODEMAGIC_API_TOKEN }}
           APP_ID: ${{ secrets.CODEMAGIC_APP_ID }}
+          # Ueber die Umgebung, nicht in den Befehl hinein: Eine Commit-Beschreibung ist
+          # Text von aussen und hat in einer Kommandozeile nichts verloren.
+          GRUND: ${{ github.event_name }}
+          NACHRICHT: ${{ github.event.head_commit.message }}
         run: |
+          # Zweite Sperre. Die Bedingung oben hat schon einmal versagt, und ein Fehler
+          # dort kostet hier einen Build und eine Mail an den Nutzer.
+          if [ "$GRUND" != "workflow_dispatch" ] && ! printf '%s' "$NACHRICHT" | grep -qF '[ios]'; then
+            echo "Weder von Hand gestartet noch [ios] in der Beschreibung - kein Build."
+            exit 0
+          fi
           if [ -z "$TOKEN" ] || [ -z "$APP_ID" ]; then
             echo "Kein Codemagic-Zugang hinterlegt. Build bitte von Hand starten."
             exit 0

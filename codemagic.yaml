@@ -10,7 +10,11 @@ workflows:
     integrations:
       app_store_connect: energie-asc
     environment:
-      xcode: latest
+      # Welche SDK die App sieht, entscheidet beim Falt-iPhone darueber, wie viel Bild sie
+      # bekommt: altes SDK = kleines Fenster im iPhone-Format, 27.0 = bis neben die
+      # Statusleiste, 27.1 = das ganze Bild. Darum fest auf 27.1 statt "latest", damit
+      # nicht eine spaetere Verschiebung der Voreinstellung die App unbemerkt zurueckwirft.
+      xcode: 27.1
       java: 17
       vars:
         BUNDLE_ID: de.jakober.energie
@@ -20,6 +24,10 @@ workflows:
         distribution_type: app_store
         bundle_identifier: de.jakober.energie
     scripts:
+      - name: Womit gebaut wird
+        script: |
+          xcodebuild -version
+          xcodebuild -showsdks | grep -i iphoneos || true
       - name: Xcode-Projekt erzeugen
         script: |
           brew install xcodegen

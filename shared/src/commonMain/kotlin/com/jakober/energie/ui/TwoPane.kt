@@ -4,6 +4,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
@@ -11,14 +15,23 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.dp
 
 /**
- * Nebeneinander nur im Querformat und nur, wenn wirklich Platz da ist. Das aufgeklappte
- * Falt-Handy im Hochformat ist zwar breit, aber noch hoeher: dort bleibt alles untereinander,
- * sonst werden die Spalten schmal und die Kacheln brechen um.
+ * Nebeneinander nur, wenn wirklich Platz da ist. Das aufgeklappte Falt-Handy von Samsung im
+ * Hochformat ist zwar breit, aber noch hoeher: dort bleibt alles untereinander, sonst werden
+ * die Spalten schmal und die Kacheln brechen um.
  */
 private val TwoPaneFrom = 640.dp
+
+/**
+ * Das Falt-iPhone ist die Ausnahme von dieser Regel. Sein innerer Schirm meldet gar keine
+ * Lage - Apple rat ausdruecklich davon ab, dort nach Hoch- und Querformat zu entscheiden -
+ * und er ist fast quadratisch, also nie "breiter als hoch". Zu erkennen ist das Geraet an
+ * der Spalte, die es sich am rechten Rand nimmt; gibt es die, zaehlt allein die Breite.
+ */
+private val SideColumnFrom = 40.dp
 
 /**
  * Eine Liste, die sich im Querformat in zwei Spalten teilt: links das Bewegte (Energiefluss,
@@ -40,7 +53,10 @@ fun TwoPane(
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val top = contentPadding.calculateTopPadding() + 8.dp
         val bottom = contentPadding.calculateBottomPadding() + 24.dp
-        val sideBySide = maxWidth >= TwoPaneFrom && maxWidth > maxHeight
+        val sideColumn = WindowInsets.safeDrawing.asPaddingValues()
+            .calculateEndPadding(LocalLayoutDirection.current)
+        val sideBySide = maxWidth >= TwoPaneFrom &&
+            (maxWidth > maxHeight || sideColumn >= SideColumnFrom)
         if (!sideBySide) {
             LazyColumn(
                 Modifier.fillMaxSize(),

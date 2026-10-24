@@ -21,7 +21,10 @@ concurrency:
 jobs:
   ios:
     name: iOS-Simulator
-    runs-on: macos-15
+    # Abbild nach Xcode-Fassung statt nach Betriebssystem. Vorher lief die
+    # Pruefung mit der iOS-18-SDK, waehrend Codemagic mit 27.1 ausliefert - ein
+    # Fehler, den es nur unter der neuen SDK gibt, waere hier durchgerutscht.
+    runs-on: xcode-27
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
@@ -30,6 +33,19 @@ jobs:
           distribution: temurin
           java-version: "17"
       - uses: gradle/actions/setup-gradle@v4
+      - name: Womit gebaut wird
+        run: |
+          LATEST=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          sudo xcode-select -s "$LATEST"
+          echo "::notice title=Xcode::$(xcodebuild -version | head -n 1)"
+          SDK="$(xcodebuild -showsdks | grep -o 'iphoneos[0-9.]*' | sort -V | tail -1)"
+          echo "::notice title=iOS-SDK::${SDK:-unbekannt}"
+          # Der Reihe nach vergleichen, nicht nach Muster: 27.2 ist neuer als
+          # 27.1, faellt aber durch jedes auf 27.1 zugeschnittene Muster.
+          NEUSTE="$(printf '%s\niphoneos27.1\n' "$SDK" | sort -V | tail -1)"
+          [ "$NEUSTE" = "$SDK" ] \
+            || echo "::warning::Mit $SDK gebaut. Fuer das ganze Bild auf dem Falt-iPhone braucht es iphoneos27.1 oder neuer."
+
       - name: Kotlin-Framework fuer den Simulator
         run: ./gradlew -PwithIos :shared:linkDebugFrameworkIosSimulatorArm64 --stacktrace
       - name: Xcode-Projekt erzeugen

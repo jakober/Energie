@@ -1,0 +1,4 @@
+Commit:  18dd254f8cb3c51777804e9f93275dbf851d02e1
+Lauf:    144
+Zeit:    2026-10-24 19:30 UTC
+Zwei Spalten auch auf dem Falt-iPhone, Pruefbau mit Xcode 27

@@ -9,6 +9,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -47,6 +51,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -64,15 +69,21 @@ import kotlinx.coroutines.delay
 private enum class ViewerTab(val label: String) { OVERVIEW("Übersicht"), STATISTICS("Statistik"), CAR("Auto"), AUTOMATION("Automatik") }
 
 /**
- * Ab dieser Breite steht die Leiste rechts an der Seite statt unten. Der aufgeklappte
- * innere Schirm des Falt-iPhones ist so breit, dass eine Leiste ueber die ganze Breite
- * weit vom Daumen weg liegt; an der Seite sind die vier Reiter beieinander. Auf einem
- * gewoehnlichen iPhone bleibt alles wie bisher.
+ * Das Falt-iPhone legt Uhrzeit, Empfangsanzeige und die Leisten einer App in eine
+ * senkrechte Spalte am rechten Rand - zugeklappt wie aufgeklappt, unabhaengig von der
+ * Breite. Bei uns meldet sich diese Spalte als Abstand an der rechten Seite. Ab diesem
+ * Wert gehen wir davon aus, dass es sie gibt, und stellen die Reiter hinein.
+ */
+private val SideColumnFrom = 40.dp
+
+/** Schmaler als das wird die Leiste nicht, sonst passen Sinnbild und Wort nicht mehr. */
+private val RailMinWidth = 72.dp
+
+/**
+ * Ohne solche Spalte bleibt es beim Alten: nebeneinander erst, wenn der Schirm breit und
+ * quer ist, sonst die Leiste unten.
  */
 private val RailFrom = 600.dp
-
-/** Breite der seitlichen Leiste. So schmal wie die Spalte, in der die Uhrzeit steht. */
-private val RailWidth = 88.dp
 
 @Composable
 private fun TabIcon(t: ViewerTab) {
@@ -147,8 +158,13 @@ private fun ViewerScaffold(store: ViewerStore, state: ViewerState) {
         StatisticsActions(setRange = store::setRange, shift = store::shift, goToday = store::goToday, setUpgradeModuleKwh = store::setUpgradeModuleKwh, setUpgradeCost = store::setUpgradeCost)
     }
 
+    // Breite der Spalte, die sich das Geraet am rechten Rand nimmt. Auf einem
+    // gewoehnlichen iPhone ist sie null, auf dem Falt-iPhone rund achtzig Punkte.
+    val sideColumn = WindowInsets.safeDrawing.asPaddingValues()
+        .calculateEndPadding(LocalLayoutDirection.current)
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val rail = maxWidth >= RailFrom
+        val rail = sideColumn >= SideColumnFrom || (maxWidth >= RailFrom && maxWidth > maxHeight)
+        val railWidth = if (sideColumn < RailMinWidth) RailMinWidth else sideColumn
         Scaffold(
             bottomBar = {
                 if (!rail) {
@@ -183,12 +199,13 @@ private fun ViewerScaffold(store: ViewerStore, state: ViewerState) {
                     }
                 }
                 if (rail) {
-                    // Eine schlichte Spalte statt des fertigen Leisten-Bausteins: Der bringt
-                    // eigene Abstaende und eine eigene Anordnung mit und hat sich ueber beide
-                    // Vorgaben hinweggesetzt - die Reiter standen oben und nach links
-                    // geschoben. Hier bestimmen Breite, Ausrichtung und Abstand nur wir.
+                    // Eine schlichte Spalte statt des fertigen Leisten-Bausteins: Dessen
+                    // eigene Abstaende haben die Reiter aus der Systemspalte heraus nach
+                    // links geschoben. Hier bestimmen Breite, Ausrichtung und Abstand nur
+                    // wir - und die Breite ist genau die Spalte des Geraets, damit die
+                    // Reiter unter Uhrzeit und Empfangsanzeige sitzen statt daneben.
                     Column(
-                        Modifier.fillMaxHeight().width(RailWidth),
+                        Modifier.fillMaxHeight().width(railWidth),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Bottom,
                     ) {

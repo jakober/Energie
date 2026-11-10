@@ -17,7 +17,8 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Waechter der Anzeige: schaut regelmaessig nach, wann die Zentrale zuletzt
- * gesehen wurde, und meldet es, wenn sie schweigt. Das muss die Anzeige
+ * gesehen wurde, und meldet es, wenn sie schweigt - oder wenn die Cloud selbst
+ * nicht antwortet und sich deshalb gar nichts mehr sagen laesst. Das muss die Anzeige
  * uebernehmen, denn eine haengende oder abgestuerzte Zentrale kann sich nicht
  * selbst melden. Der Hinweis kommt lokal auf diesem Geraet, also auch dann,
  * wenn der Push-Weg ueber die Cloud nicht funktioniert.
@@ -30,7 +31,16 @@ class HubWatchWorker(context: Context, params: WorkerParameters) : CoroutineWork
         if (s.cloudRole != CloudRole.VIEWER || !s.cloudConfigured || !s.alerts.hubSilent) return Result.success()
         val cloud = app.container.cloud ?: return Result.success()
 
-        val seen = runCatching { cloud.pullStatus(s)?.hubSeenAt }.getOrElse { return Result.success() }
+        val pulled = runCatching { cloud.pullStatus(s)?.hubSeenAt }
+        // Antwortet die Cloud gar nicht oder lehnt sie ab, laesst sich ueber die Zentrale nichts
+        // sagen. Frueher endete der Waechter hier wortlos - und schwieg so drei Tage lang,
+        // waehrend die Cloud jede Anfrage abwies. Jetzt zaehlt er mit und meldet es.
+        val error = pulled.exceptionOrNull()?.let { it.message ?: it.toString() }
+        runCatching {
+            app.container.repository.watchCloud(error, s.alerts.hubSilentMinutes, hub = false)
+                ?.let { app.container.notifier.show(it) }
+        }
+        val seen = pulled.getOrElse { return Result.success() }
         val now = Clock.System.now()
         val silentFor = seen?.let { (now - it).inWholeMinutes }
         val limit = s.alerts.hubSilentMinutes.toLong()

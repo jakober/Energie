@@ -44,6 +44,8 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import com.jakober.energie.core.alerts.Alert
+import com.jakober.energie.core.alerts.CloudWatch
+import com.jakober.energie.core.alerts.CloudWatchState
 import com.jakober.energie.core.forecast.OpenMeteoClient
 import com.jakober.energie.core.forecast.PvCalibration
 import com.jakober.energie.core.forecast.PvForecast
@@ -254,6 +256,11 @@ class EnergyRepository(
                 val days = runCatching { withContext(Dispatchers.Default) { cs.uploadDays(s, today()) { d -> daySummary(d) } } }.getOrElse { 0 }
                 _state.update { it.copy(cloudError = null, cloudInfo = "Cloud: ${clockLabel(clock.now())} · $sent Messpunkte hochgeladen" + (if (done > 0) " · $done Aufträge" else "") + (if (days > 0) " · $days Tage" else "")) }
             }.onFailure { e -> _state.update { it.copy(cloudError = "Cloud: ${e.message ?: e}") } }
+            // Scheitert das Hochladen laenger, soll es hier am Geraet auffallen: Ueber die Cloud
+            // kann der Hinweis nicht kommen, und sonst merkt es tagelang niemand.
+            if (s.alerts.sourceDown) runCatching {
+                watchCloud(_state.value.cloudError, CLOUD_DOWN_MINUTES, hub = true)?.let { onAlerts?.invoke(listOf(it)) }
+            }
         }
         // Nie auf dem Hauptthread: die Tagesauswertungen lesen Verlaufsdateien.
         withContext(Dispatchers.Default) {
@@ -440,6 +447,18 @@ class EnergyRepository(
 
     /** Wer die Hinweise anzeigt (Benachrichtigungen); ohne Empfaenger passiert nichts. */
     var onAlerts: ((List<Alert>) -> Unit)? = null
+
+    /**
+     * Fuehrt Buch, seit wann die Cloud nicht geht, und liefert den Hinweis, sobald einer faellig
+     * ist. [error] ist die Meldung des letzten Versuchs, null wenn er gelang.
+     */
+    suspend fun watchCloud(error: String?, limitMinutes: Int, hub: Boolean): Alert? {
+        val cur = settings.current()
+        val before = CloudWatchState(cur.cloudFailSince.takeIf { it > 0 }, cur.cloudDownReported)
+        val (alert, after) = CloudWatch.step(clock.now(), error, before, limitMinutes, hub)
+        if (after != before) settings.saveCloudWatch(after.failingSince ?: 0, after.reported)
+        return alert
+    }
 
     private suspend fun runAlerts(live: LiveState, automationLine: String?) {
         val sink = onAlerts ?: return
@@ -988,6 +1007,8 @@ class EnergyRepository(
         val MIN_STORE_INTERVAL = 55.seconds
         /** Anzeige meldet, wenn die Zentrale so lange nichts geschrieben hat. */
         val HUB_SILENT = 30.minutes
+        /** So lange darf das Hochladen scheitern, bevor die Zentrale es meldet. */
+        const val CLOUD_DOWN_MINUTES = 60
         val CAR_INTERVAL = 5.minutes
         /** Werte von Ford, die "Zuendung aus" bedeuten; alles andere gilt als an. */
         val IGNITION_OFF = setOf("OFF", "UNKNOWN", "")

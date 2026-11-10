@@ -72,6 +72,8 @@ class AppSettings(private val context: Context) {
             alerts = p[ALERTS]?.let { runCatching { rulesJson.decodeFromString(AlertSettings.serializer(), it) }.getOrNull() } ?: AlertSettings(),
             alertState = p[ALERT_STATE]?.let { runCatching { rulesJson.decodeFromString(AlertState.serializer(), it) }.getOrNull() } ?: AlertState(),
             hubSilentReported = p[HUB_SILENT_REPORTED] ?: false,
+            cloudFailSince = p[CLOUD_FAIL_SINCE] ?: 0,
+            cloudDownReported = p[CLOUD_DOWN_REPORTED] ?: false,
             places = p[PLACES]?.let { runCatching { rulesJson.decodeFromString(placesSerializer, it) }.getOrNull() } ?: emptyList(),
             plugs = p[PLUGS]?.let { runCatching { rulesJson.decodeFromString(plugsSerializer, it) }.getOrNull() } ?: emptyList(),
             // Vorgaben aus dem Build: URL und Schluessel immer, E-Mail und Passwort nur, wenn beim Bauen hinterlegt.
@@ -123,6 +125,10 @@ class AppSettings(private val context: Context) {
     suspend fun saveAlerts(a: AlertSettings) { context.dataStore.edit { it[ALERTS] = rulesJson.encodeToString(AlertSettings.serializer(), a) } }
 
     suspend fun saveHubSilentReported(v: Boolean) { context.dataStore.edit { it[HUB_SILENT_REPORTED] = v } }
+
+    suspend fun saveCloudWatch(failSince: Long, reported: Boolean) {
+        context.dataStore.edit { it[CLOUD_FAIL_SINCE] = failSince; it[CLOUD_DOWN_REPORTED] = reported }
+    }
 
     suspend fun saveAlertState(s: AlertState) { context.dataStore.edit { it[ALERT_STATE] = rulesJson.encodeToString(AlertState.serializer(), s) } }
 
@@ -314,6 +320,8 @@ class AppSettings(private val context: Context) {
         val ALERT_STATE = stringPreferencesKey("alert_state")
         val CAR_STATE = stringPreferencesKey("car_state")
         val HUB_SILENT_REPORTED = booleanPreferencesKey("hub_silent_reported")
+        val CLOUD_FAIL_SINCE = longPreferencesKey("cloud_fail_since")
+        val CLOUD_DOWN_REPORTED = booleanPreferencesKey("cloud_down_reported")
         val PLACES = stringPreferencesKey("places")
         val PLUGS = stringPreferencesKey("plugs")
         val CLOUD_URL = stringPreferencesKey("cloud_url")

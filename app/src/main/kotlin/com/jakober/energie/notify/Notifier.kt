@@ -44,6 +44,8 @@ class Notifier(private val context: Context) {
             AlertKind.COOLING_SILENT, AlertKind.COOLING_STUCK_ON, AlertKind.COOLING_OVERLOAD -> CHANNEL_CAR
             // Schweigt die Zentrale, sammelt niemand mehr Daten: das soll auffallen.
             AlertKind.HUB_SILENT, AlertKind.HUB_BACK -> CHANNEL_CAR
+            // Lehnt die Cloud ab, sieht die Anzeige nur noch Altes und die Zentrale laedt nichts hoch.
+            AlertKind.CLOUD_DOWN, AlertKind.CLOUD_BACK -> CHANNEL_CAR
             // Eine Steckdose, die von selbst ausgeht, kann eine Gefriertruhe abtauen lassen.
             AlertKind.PLUG_OFF -> CHANNEL_CAR
             else -> CHANNEL_INFO
@@ -83,6 +85,7 @@ class Notifier(private val context: Context) {
         AlertKind.CHARGE_STOPPED -> AlertKind.CHARGE_STARTED.ordinal + 100
         AlertKind.COOLING_BACK -> AlertKind.COOLING_SILENT.ordinal + 100
         AlertKind.HUB_BACK -> AlertKind.HUB_SILENT.ordinal + 100
+        AlertKind.CLOUD_BACK -> AlertKind.CLOUD_DOWN.ordinal + 100
         else -> kind.ordinal + 100
     }
 

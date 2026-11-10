@@ -74,6 +74,9 @@ data class Settings(
     val alertState: AlertState = AlertState(),
     /** Die Anzeige hat gemeldet, dass die Zentrale schweigt (damit es nur einmal kommt). */
     val hubSilentReported: Boolean = false,
+    /** Seit wann der Abgleich mit der Cloud scheitert (Unix-Sekunden, 0 = geht) und ob das gemeldet ist. */
+    val cloudFailSince: Long = 0,
+    val cloudDownReported: Boolean = false,
     /** Vom Nutzer benannte Orte (Arbeit, Oma, ...), an denen das Auto erkannt wird. */
     val places: List<NamedPlace> = emptyList(),
     /** Messstecker im Heimnetz (Shelly, Tasmota). */

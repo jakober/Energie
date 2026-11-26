@@ -59,7 +59,18 @@ fun SettingsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
     val storedDays by vm.storedDays.collectAsStateWithLifecycle()
 
     // Ein Entwurf, den der Nutzer bearbeitet; gespeichert wird erst per Knopf.
-    var draft by rememberSaveable(saved, stateSaver = SettingsSaver) { mutableStateOf(saved) }
+    var draft by rememberSaveable(stateSaver = SettingsSaver) { mutableStateOf(saved) }
+    // Die Zentrale schreibt im Hintergrund laufend in die Einstellungen (Abgleichsstand,
+    // Protokoll, Merkzustaende). Frueher begann der Entwurf dann jedes Mal von vorn: Ein
+    // gerade eingefuegter Schluessel sprang unbemerkt auf den alten zurueck, "Speichern"
+    // blieb grau und "pruefen" testete den alten. Jetzt ziehen nur die Hintergrundfelder
+    // nach; was der Nutzer getippt hat, bleibt stehen.
+    var seen by rememberSaveable(stateSaver = SettingsSaver) { mutableStateOf(saved) }
+    LaunchedEffect(saved) {
+        val edited = draft.withBackgroundOf(seen) != seen
+        draft = if (edited) draft.withBackgroundOf(saved) else saved
+        seen = saved
+    }
     var showFritzPw by rememberSaveable { mutableStateOf(false) }
     var showKey by rememberSaveable { mutableStateOf(false) }
     var showRaw by rememberSaveable { mutableStateOf(false) }
@@ -81,14 +92,7 @@ fun SettingsScreen(vm: EnergieViewModel, contentPadding: PaddingValues) {
         }
     }
     val context = LocalContext.current
-    // Nur die hier editierbaren Felder vergleichen; Automatik, Ford-Tokens und Protokoll
-    // aendern sich im Hintergrund und gehoeren nicht zum Entwurf.
-    val dirty = draft.copy(chargeRules = saved.chargeRules, chargeLastCommandAt = saved.chargeLastCommandAt, chargeOverride = saved.chargeOverride, chargeLog = saved.chargeLog,
-        fordTokensJson = saved.fordTokensJson, fordVin = saved.fordVin, fordLocationId = saved.fordLocationId, smartcarVehicleId = saved.smartcarVehicleId, smartcarUserId = saved.smartcarUserId,
-        backupTreeUri = saved.backupTreeUri, backupPassword = saved.backupPassword, backupLastAt = saved.backupLastAt, backupLastResult = saved.backupLastResult,
-        alerts = saved.alerts, alertState = saved.alertState, carLearnedPowerW = saved.carLearnedPowerW, places = saved.places, plugs = saved.plugs,
-        cloudRole = saved.cloudRole, cloudSessionJson = saved.cloudSessionJson, cloudUploadedAt = saved.cloudUploadedAt, cloudSyncedAt = saved.cloudSyncedAt, cloudSettingsAppliedAt = saved.cloudSettingsAppliedAt, pushToken = saved.pushToken, pushRegisteredToken = saved.pushRegisteredToken,
-        pvCalibration = saved.pvCalibration, pvForecast = saved.pvForecast, pvForecastHistory = saved.pvForecastHistory) != saved
+    val dirty = draft.withBackgroundOf(saved) != saved
 
     LaunchedEffect(Unit) { vm.clearTestResult() }
 
@@ -557,4 +561,19 @@ private val SettingsSaver = androidx.compose.runtime.saveable.Saver<Settings, Li
             carBatteryNominalKwh = it.getOrElse(30) { "0.0" }.toDoubleOrNull() ?: 0.0,
         )
     },
+)
+
+/**
+ * Dieselben Einstellungen, aber mit den Feldern von [from], die sich im Hintergrund aendern
+ * und nicht auf dieser Seite bearbeitet werden: Automatik, Ford-Tokens, Protokoll,
+ * Abgleichsstand, Merkzustaende.
+ */
+private fun Settings.withBackgroundOf(from: Settings): Settings = copy(
+    chargeRules = from.chargeRules, chargeLastCommandAt = from.chargeLastCommandAt, chargeOverride = from.chargeOverride, chargeLog = from.chargeLog,
+        fordTokensJson = from.fordTokensJson, fordVin = from.fordVin, fordLocationId = from.fordLocationId, smartcarVehicleId = from.smartcarVehicleId, smartcarUserId = from.smartcarUserId,
+        backupTreeUri = from.backupTreeUri, backupPassword = from.backupPassword, backupLastAt = from.backupLastAt, backupLastResult = from.backupLastResult,
+        alerts = from.alerts, alertState = from.alertState, carLearnedPowerW = from.carLearnedPowerW, places = from.places, plugs = from.plugs,
+        cloudRole = from.cloudRole, cloudSessionJson = from.cloudSessionJson, cloudUploadedAt = from.cloudUploadedAt, cloudSyncedAt = from.cloudSyncedAt, cloudSettingsAppliedAt = from.cloudSettingsAppliedAt, pushToken = from.pushToken, pushRegisteredToken = from.pushRegisteredToken,
+        pvCalibration = from.pvCalibration, pvForecast = from.pvForecast, pvForecastHistory = from.pvForecastHistory,
+    hubSilentReported = from.hubSilentReported, cloudFailSince = from.cloudFailSince, cloudDownReported = from.cloudDownReported,
 )

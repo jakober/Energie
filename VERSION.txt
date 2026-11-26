@@ -1,0 +1,4 @@
+Commit:  d12f9f0f35d3ddb6da3ff1473830881eb805df79
+Lauf:    147
+Zeit:    2026-11-26 19:24 UTC
+Einstellungen: Eingetipptes ueberlebt den Hintergrund-Abgleich

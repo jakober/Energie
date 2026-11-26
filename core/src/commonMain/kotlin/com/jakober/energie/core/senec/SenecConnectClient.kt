@@ -44,11 +44,25 @@ class SenecConnectClient(
         when (response.status) {
             HttpStatusCode.OK -> return body
             HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden ->
-                throw SenecConnectException(response.status.value, "SENEC lehnt den Schluessel ab (${response.status.value}). Stimmt der Abonnementschluessel?")
+                // Mit SENECs eigener Begruendung: "ungueltiger Schluessel" und "Abonnement nicht
+                // aktiv" kommen beide als 401 und sind ohne den Wortlaut nicht zu unterscheiden.
+                throw SenecConnectException(
+                    response.status.value,
+                    "SENEC lehnt den Schluessel ab (${response.status.value})." +
+                        (reason(body)?.let { " SENEC sagt: $it" } ?: " Stimmt der Abonnementschluessel?"),
+                )
             HttpStatusCode.TooManyRequests ->
                 throw SenecConnectException(429, "SENEC-Abfragekontingent erschoepft (429). Abfrageintervall vergroessern.")
             else -> throw SenecConnectException(response.status.value, "SENEC antwortet mit ${response.status.value}: ${body.take(200)}")
         }
+    }
+
+    /** Der Satz, mit dem SENEC eine Ablehnung begruendet, soweit die Antwort einen enthaelt. */
+    private fun reason(body: String): String? {
+        val message = runCatching {
+            (json.parseToJsonElement(body) as? JsonObject)?.get("message")?.toString()?.trim('"')
+        }.getOrNull()
+        return (message ?: body).trim().take(180).takeIf { it.isNotBlank() }
     }
 
     fun parse(body: String): List<SenecSystem> {
